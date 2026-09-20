@@ -75,6 +75,50 @@ def find_device():
     return dev
 
 
+_in_mps = {}
+
+
+def in_max_packet(dev):
+    """wMaxPacketSize of the bulk IN endpoint: 64 at full speed, 512 at high.
+
+    The device decides this (USB_FORCE_FS), so read it rather than assume it.
+    """
+    key = id(dev)
+    if key not in _in_mps:
+        import usb.util
+
+        mps = 0
+        try:
+            intf = dev.get_active_configuration()[(0, 0)]
+            ep = usb.util.find_descriptor(intf, bEndpointAddress=EP_IN)
+            if ep is not None:
+                mps = int(ep.wMaxPacketSize)
+        except Exception:
+            mps = 0
+        _in_mps[key] = mps or 64
+    return _in_mps[key]
+
+
+def drain_zlp(dev):
+    """Consume the zero-length packet that terminates an exact-multiple IN.
+
+    ep_write() on the device appends a ZLP whenever the payload is an exact
+    multiple of wMaxPacketSize, which is the right thing for a host that asks
+    for more bytes than the device sends. This protocol is length-prefixed, so
+    read_exact() asks for exactly the payload and the ZLP is left queued.
+
+    Leaving it queued is not merely untidy: the device blocks in ep_write()
+    until that packet is taken, so it never returns to the command loop and
+    never re-arms bulk OUT. The next command's payload write then NAKs until
+    the host times out -- which looks like a failure of the NEXT transfer
+    size, not of the one that actually sent the ZLP.
+    """
+    try:
+        dev.read(EP_IN, in_max_packet(dev), timeout=200)
+    except usb.core.USBError:
+        pass
+
+
 def send_command(dev, op, name="", length=0, flags=0):
     nb = name.encode("ascii", "replace")[:20]
     nb += b"\0" * (20 - len(nb))
@@ -109,6 +153,8 @@ def read_reply(dev):
     if magic != RSP_MAGIC:
         die(f"bad reply magic 0x{magic:08x}")
     payload = read_exact(dev, length) if length else b""
+    if length and (length % in_max_packet(dev)) == 0:
+        drain_zlp(dev)
     if length and (zlib.crc32(payload) & 0xFFFFFFFF) != crc:
         die(
             f"payload CRC mismatch: got 0x{zlib.crc32(payload) & 0xFFFFFFFF:08x} "
@@ -186,10 +232,14 @@ def run_matrix(dev, args):
     st, listing = do_list(dev)
     if st != 0:
         die(f"LIST: {STATUS_STR.get(st, st)}")
-    names = {n: s for n, s in parse_list(listing)}
-    if args.name not in names:
-        die(f"LIST did not report {args.name}")
-    print(f"LIST -> {names[args.name]} bytes for {args.name}")
+    # HW_BUILD stores on the card's FAT32 through FatFs, which is built
+    # without long-name support, so LIST reports 8.3 names in upper case
+    # ("XFER.BIN"). The QEMU build uses flatfs, which keeps the name as sent.
+    names = {n.upper(): s for n, s in parse_list(listing)}
+    want = args.name.upper()
+    if want not in names:
+        die(f"LIST did not report {args.name} (saw: {', '.join(sorted(names)) or 'nothing'})")
+    print(f"LIST -> {names[want]} bytes for {args.name}")
 
     bps = (2 * total) / dt if dt > 0 else 0
     print(f"round-tripped {total} bytes x2 in {dt:.2f}s ({bps/1e6:.2f} MB/s)")

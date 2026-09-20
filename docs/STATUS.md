@@ -1,6 +1,6 @@
 # Migration status
 
-**Updated:** 2026-09-20 · **Phase:** design approved, migration not started
+**Updated:** 2026-09-20 · **Phase:** design approved (revision 2), migration not started
 
 This file is the cold-start entry point. Read it, then
 `docs/specs/2026-09-20-micro-os-plus-iii-smp-unification-design.md` for the
@@ -47,21 +47,30 @@ micro-os-plus-iii-smp/          <- you are here; origin wired, 2 commits, pushed
 
 ## Decisions — all resolved
 
-Settled 2026-09-20. Spec Section 11 carries the table; nothing is open.
+Revision 1 settled Q1-Q4; revision 2 settled Q5-Q9. Spec Section 11 has the
+table. Nothing is open.
 
-1. **Board naming** — confirmed as proposed.
-2. **`stdcpp-pico2`** — migrates as a board, keeping its 7 applications.
-3. **Duplicate-detection threshold** — 85%.
-4. **"portable" terminology** — retired. Raised in review as ambiguous: the
-   requirement document uses the word to mean *common to all platforms*, while
-   the review note defined it as *specific to one platform*. The spec now uses
-   **common** and **target-specific** only. See spec Section 1.1 before
-   deciding which folder any file belongs in.
+**Revision 2 changed the shape of the project** (`docs/new-modifications.md`):
+
+1. **Architecture-specific, not target-specific.** Four ports — `cortexm`,
+   `aarch32`, `aarch64`, `posix-arch`. A board is a build configuration, never
+   a port folder.
+2. **Multi-repo.** Main repo holds all common code; each architecture is its
+   own Git repo holding only `src/` and `include/`, pinning the main repo as a
+   **submodule**.
+3. **`devices/` and `test/common/` stay in the main repo** — their consumers
+   are now separate repos, and cross-repo copies drift with nothing to catch it.
+4. **`cortexm` must be SMP** — largely already true: pico2/RP2350 is a working
+   dual-core Cortex-M33 SMP port (124 SMP mentions vs 10 in the STM32 port).
+   It becomes the architecture's core; STM32 boards run it at `OS_NCPU=1`.
+5. **`posix-arch` must be SMP** — the only genuinely new implementation. One
+   host thread per CPU; see spec Section 7.6.
 
 ## Next step
 
-Step 1 of the Section 8 sequence — **skeleton plus kernel**. It is mechanical
-and independently verifiable, and is now unblocked:
+Step 1 of the Section 8 sequence — **main repo skeleton plus kernel**. It is
+mechanical, independently verifiable, unchanged by revision 2, and must land
+before any architecture repo exists, since they consume it as a submodule:
 
 - Create `cmake/toolchains/`, `cmake/uos-app.cmake`, top-level `CMakeLists.txt`.
 - Copy `micro-os-plus-iii-smp-old/cortexm/micro-os-plus-iii/` (706 files, zero
@@ -95,3 +104,17 @@ Then step 2, the proving slice: rpi-32b and rpi-64b end to end.
 - `rtk` silently dropped the `-u` flag from `git push -u`. The push succeeded
   but tracking config was not written; it was set with
   `git branch --set-upstream-to`. Expect this on new branches.
+- **The SMP port contract is small.** The whole kernel patch is 379 lines and
+  asks a port for only: `OS_USE_SMP_SCHEDULER`, `OS_NCPU`, `port_cpu_id`,
+  `port::scheduler::switch_stacks`, `port::stack::element_t`, plus a kernel
+  lock and an IPI.
+- **`cortexm` SMP is not from scratch.** pico2's `os-core.cpp` is already a
+  complete dual-core Cortex-M33 SMP port.
+- **`posix-arch` is pristine upstream v1.0.1**, untracked in the old workspace,
+  with its own GitHub remote. Single host thread, `ucontext` coroutines,
+  cooperative only — upstream's `NOTES.md` says so explicitly.
+- **Three POSIX defects to fix when going multi-threaded:** `sigprocmask` is
+  unspecified in a multithreaded process (use `pthread_sigmask`);
+  `setitimer(ITIMER_REAL)` delivers to an arbitrary thread (use `timer_create`
+  with `SIGEV_THREAD_ID`); and `errno`/`thread_local` are host-thread local, so
+  uOS++ thread migration between CPUs corrupts them.

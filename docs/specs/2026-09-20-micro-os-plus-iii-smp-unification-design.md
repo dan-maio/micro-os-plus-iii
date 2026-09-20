@@ -60,9 +60,10 @@ Section 4 records the measurements.
 | D4 | History | Fresh `git init`, patched tree only. No history carried forward. |
 | D5 | Test layout | `test/<board>/{qemu,hwd}/` uniformly across all 11 boards. |
 | D6 | Execution | Vertical slice: skeleton, then rpi-32b/64b end-to-end, then lyra-a7, then pico2 x5, then cortexm x3. |
+| D13 | Devices separate | Drivers and SoC support are their own repository, not part of the kernel. Keeps the kernel merge-clean against upstream (D3) and lets each build take only what it needs. |
 | D7 | Duplication | Near zero. Common code lives once, in a folder, referenced everywhere. |
 | D8 | Organising axis | **Architecture-specific, not target-specific.** Four ports: `cortexm`, `aarch32`, `aarch64`, `posix-arch`. A board is a build configuration, never a port folder. |
-| D9 | Topology | **Multi-repo.** The main repo holds all common code at its root (`src/`, `include/`, `devices/`, `test/`); each architecture is its own Git repository, outside it, holding only `src/` and `include/`. |
+| D9 | Topology | **Six repositories.** `micro-os-plus-iii-smp` is the kernel plus shared tests. `micro-os-plus-iii-devices` holds drivers and SoC support, included by a build only when needed. Four architecture projects hold only `src/` and `include/`. All are independent; dependencies run one way, toward the kernel. |
 | D10 | Linkage | Architecture projects are **independent repositories outside** the main repo. Each pins the main repo as a **Git submodule** and consumes it via `add_subdirectory`. The dependency is one-way: an architecture project uses the main repo, never the reverse, and the main repo contains no `arch/` folder. |
 | D11 | `cortexm` SMP | `cortexm` must be SMP. pico2/RP2350 already is; its core becomes the architecture's SMP implementation and the STM32 boards run it at `OS_NCPU=1`. |
 | D12 | `posix-arch` SMP | `posix-arch` must be SMP, modelled as **one host thread per CPU**. See Section 7.6. |

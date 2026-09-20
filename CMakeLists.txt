@@ -1,9 +1,8 @@
 # -----------------------------------------------------------------------------
 # micro-os-plus-iii-smp — the common half of the unified µOS++ III SMP project.
 #
-# This repository holds everything that is *common* (design spec, Section 1.1):
-# the kernel (src/, include/), the device layer (devices/) and the shared test
-# sources (test/common/).
+# This repository is the RTOS kernel (src/, include/) and the shared test
+# sources (test/common/). Nothing else.
 #
 # Architecture-specific code lives in its own INDEPENDENT repository, outside
 # this one — micro-os-plus-iii-cortexm, -aarch32, -aarch64, -posix-arch. The
@@ -129,10 +128,16 @@ target_sources (
 add_library (micro-os-plus::iii ALIAS micro-os-plus-iii-interface)
 
 # -----------------------------------------------------------------------------
-# The common device layer. Exports micro-os-plus::devices. Added in step 2.
-if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/devices/CMakeLists.txt")
-  add_subdirectory (devices)
-endif ()
+# Drivers and SoC support are NOT part of this repository. They live in
+# micro-os-plus-iii-devices, and an architecture project adds them only when
+# its build needs them:
+#
+#   add_subdirectory (micro-os-plus-iii-smp)        # always
+#   add_subdirectory (micro-os-plus-iii-devices)    # only if needed
+#
+# Keeping them out is what lets this repository stay merge-clean against
+# upstream micro-os-plus-iii (D3): src/ and include/ match upstream
+# path-for-path, so the only conflicts are the six genuine SMP files.
 
 # -----------------------------------------------------------------------------
 # Tests are built by the architecture projects, which know their toolchain and

@@ -1,7 +1,7 @@
 # Migration status
 
-**Updated:** 2026-09-20 · **Phase:** step 2 — the proving slice, builds and
-QEMU suites green on both ARM ports
+**Updated:** 2026-09-20 · **Phase:** step 2 — **complete**. Builds, QEMU
+suites and hardware all green on both ARM ports.
 
 This file is the cold-start entry point. Read it, then
 `docs/specs/2026-09-20-micro-os-plus-iii-smp-unification-design.md` for the
@@ -11,9 +11,9 @@ full design and the measurements behind it.
 
 ## Where things stand
 
-**Step 1 is complete. Step 2 is most of the way through.** Six repositories
-exist; both ARM architecture projects build all 24 of their targets from a
-single copy of every test.
+**Steps 1 and 2 are complete.** Six repositories exist; both ARM architecture
+projects build all 24 of their targets from a single copy of every test, and
+all twelve tests pass on a Raspberry Pi Zero 2 W.
 
 ```
 TMP7/
@@ -66,6 +66,22 @@ neither the kernel nor the devices repo knows an architecture project exists.
    division of labour, and the defines per folder) and
    `docs/building-aarch32-aarch64.md`, both with PDFs, rendered by a single
    `docs/md2pdf.py` that replaces three near-identical copies.
+8. **Hardware green.** All twelve tests pass on a Zero 2 W over a J-Link,
+   `usb_test` included — the one QEMU can never run. `test/run-hw.sh` plus a
+   ~40-line `test/hw.sh` per port replace the predecessor's 48 per-test
+   runner scripts.
+
+## What hardware found that QEMU could not
+
+Five real defects, all in paths the emulator does not reach:
+
+| Defect | Fix |
+|---|---|
+| Every blinking test drove **GPIO16**, so nothing lit | `LED_PIN` is a board fact now, 29 on the Zero 2 W, set once for every test. Only `usb_test` had ever set it — and the predecessor Makefiles had the same hole. |
+| `usb_test` answered a PUT **after** streaming its hexdump and listing | `send_reply` moved to immediately after the store. A completed store looked like a hang. |
+| Console posts **blocked** the USB service thread, so bulk OUT was not re-armed | `try_send`, with `console_dropped` in the tally. Diagnostics must never throttle the protocol. |
+| `LIST` compared file names case-sensitively | FatFs on a boot card has no long names and returns `XFER.BIN`; flatfs under QEMU keeps the name as sent. |
+| **`kOutChunkMax` overflowed `PKTCNT`** — a 1 MiB transfer stored 61440 bytes, silently truncated | `D{I,O}EPTSIZ` is bounded by two fields. `GHWCFG3 = 0x0ff000e8`: XFRSIZ 19 bits but PKTCNT **10 bits = 1023 packets**, so 65472 bytes at full speed. The chunk derives from the packet limit now, with `static_assert`s on both fields. |
 
 ## What made the test deduplication possible
 
@@ -108,20 +124,16 @@ their own repo, `cortexm` and `posix-arch` both to become SMP.
 
 ## Next step
 
-**Finish step 2.** Remaining:
+**Step 2 is done.** *Gate:* all 24 targets build **(met, both ports)**; QEMU
+suites pass **(met, 11/1/0 both ports)**; hardware tests pass on the Pi
+**(met, 12/12 both ports)**; no device or test source exists in more than one
+repo **(met)**.
 
-1. Hardware tests on the Pi — the `hwd` variants build but have not been run
-   on silicon. This is the only open item in the step-2 gate.
-2. Fold the per-test `hw.sh` / `hw-olimex.sh` runners into something shared,
-   the way `run-qemu.sh` replaced `verify-qemu-all.sh` + `run_one_test.sh`.
-   They are ~200-line near-identical scripts, two per test, per ISA.
-
-*Gate:* all 24 targets build **(met, both ports)**; QEMU suites pass
-**(met, 11/1/0 both ports)**; hardware tests pass on the Pi **(not yet run)**;
-no device or test source exists in more than one repo **(met)**.
-
-Then step 3 (`aarch32` gains RK3506), step 4 (`cortexm`), step 5
-(`posix-arch`).
+Next: step 3 (`aarch32` gains RK3506, lyra-a7, 13 apps; gate is
+`exception_handler.cpp` shared unmodified by both SoCs), step 4 (`cortexm` —
+pico2's dual-core SMP core merged with the STM32 boards at `OS_NCPU=1`, 129
+apps), step 5 (`posix-arch` — a new SMP implementation, one host thread per
+CPU).
 
 ## Things a fresh session should not rediscover
 
@@ -139,6 +151,19 @@ Then step 3 (`aarch32` gains RK3506), step 4 (`cortexm`), step 5
 - **A port needs its machine flags at link time too**, not just compile time.
   Without them the driver picks the wrong multilib and every AArch32 link fails
   with "uses VFP register arguments".
+- **A hardware run is one test per power cycle.** It is `load_image` into RAM
+  over the previous test's leftovers, and the Pi has no SRST — the Cortex-A53
+  debug target has no reset method a script can drive. `run-hw.sh` refuses a
+  suite for this reason.
+- **A hardware budget is not the test's own duration.** It is dominated by
+  semihosting traps, which scale with how much a test prints. `smp_test4`
+  reaches its verdict at t=9597 ms of target time and still needs more than
+  120 s of wall clock.
+- **`Invalid ACK (0) in DAP response` is not a firmware fault.** The debug link
+  gave up; once it is gone nothing services the semihosting traps, so every
+  core halts inside one and it reads like a hang. Drop the JTAG clock with
+  `UOS_HW_ADAPTER_KHZ=1000` and check the supply. The runner reports this as
+  DEBUG LINK LOST.
 - **QEMU suites must run one at a time.** Running two four-core suites
   concurrently, or alongside a build, starves a vCPU: `smp_test2` stalled with
   three workers finished and the fourth frozen mid-loop. On an idle host the

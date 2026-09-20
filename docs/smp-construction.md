@@ -203,7 +203,8 @@ The architecture project's `test/CMakeLists.txt`:
 | `SEMIHOST` | both | mirror the console to the semihosting channel and exit through it once a RESULT is printed. **On by default**, as it was in the Makefiles, so no build is silently non-semihosting |
 | `BOARD_RPI3B` | `-DBOARD=rpi3b` | Pi 3 B instead of Pi Zero 2 W: other linker script, other banner |
 | `HW_BUILD` | `hwd` variant | SD tests use the existing FAT32 boot partition through FatFs instead of formatting a blank card |
-| `DEBUG_BOOT` | `hwd` variant | early-boot asm markers from `startup.S`, for bring-up under OpenOCD |
+| `DEBUG_BOOT` | `-DUOS_DEBUG_BOOT=ON` | early-boot asm markers from `startup.S`, for bring-up under OpenOCD. **Off by default**, as the sources assume: each marker is a semihosting trap, and under a JTAG probe a trap costs real time |
+| `LED_PIN` | `BOARD=zero2w` | the GPIO driven as the user LED, 29 by default — the Zero 2 W's onboard green ACT LED. `led.hpp`'s own fallback is GPIO 16, header pin 36, which blinks nothing on a bare board. Which pin it is depends on the **board**, so it is set here for every test rather than per application; `BOARD=rpi3b` does not use it at all, because there the ACT LED is VideoCore expander GPIO 130 behind the mailbox |
 
 ### 5.3 Per-application, from `test/apps.cmake`
 
@@ -211,11 +212,10 @@ Only `usb_test` has knobs:
 
 | Macro | Default | Meaning |
 |---|---|---|
-| `LED_PIN` | 29 | `led.hpp`'s own default is GPIO 16, which blinks nothing on a bare board |
 | `LED_BLINKS` | 3 | blinks per burst |
 | `LED_ON_MS` / `LED_OFF_MS` | 40 / 40 | half-cycles; the tick is 1 ms, so each is clamped to at least that |
 | `LED_GAP_MS` | 300 | dark gap between bursts |
-| `USB_FORCE_FS` | defined | force full speed |
+| `USB_FORCE_FS` | defined | force full speed. It also sets the driver's `kMpsHs` to 64, which is what bounds a bulk transfer: `D{I,O}EPTSIZ.PKTCNT` is 10 bits on this core, so 1023 packets — 65472 bytes at full speed against 523776 at high speed |
 
 Consumed but not set by default:
 

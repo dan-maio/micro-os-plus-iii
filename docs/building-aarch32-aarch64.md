@@ -150,10 +150,106 @@ mode — exactly as the predecessor suite recorded it.
 
 ## 5. Running on hardware
 
+Measured on a Raspberry Pi Zero 2 W over a SEGGER J-Link: **all twelve tests
+pass on silicon**, on both ports.
+
+### Standalone boot
+
 Flash a `*-hwd.bin` as `kernel8.img` (AArch64) or `kernel7.img` (AArch32) on the
-boot partition, with the port's `config.txt` from
-`boards/rpi-zero-2w/`. For a debug-in-RAM run, the OpenOCD configurations for
-J-Link and Olimex are in the same directory.
+boot partition, with the port's `config.txt` from `boards/rpi-zero-2w/`.
+
+### Debug-in-RAM, through OpenOCD
+
+```bash
+cd micro-os-plus-iii-aarch64        # or -aarch32
+test/hw.sh list                     # the tests this build has, and their budgets
+test/hw.sh smp_test2                # run one
+```
+
+`test/hw.sh` holds only what is specific to the ISA — the binutils, the entry
+fallback, the width of `__smp_spin`, whether a core resumes by setting the PC
+(AArch64) or by forcing CPSR first (AArch32), and whether the OpenOCD config
+initialises itself. The session is driven by `test/run-hw.sh` in the kernel
+repository, which every port shares. Together they replace the predecessor's
+`hw.sh` + `hw-olimex.sh` in each test directory of each port: 48 files of about
+200 near-identical lines.
+
+It is **pure OpenOCD** — no GDB, no reset, and it never opens the serial
+device, so it cannot fight the terminal you keep on the console. Keep your own
+`tio -b 115200 /dev/ttyACM0` running; the verdict is read from the semihosted
+console in OpenOCD's log.
+
+> **One test per power cycle.** Every run is `load_image` into RAM over
+> whatever the previous test left there, and the Pi has no SRST — the
+> Cortex-A53 debug target has no reset method a script can drive. So
+> `run-hw.sh` takes exactly one test and refuses a suite. Power-cycle between
+> tests.
+
+| Env | Meaning |
+|---|---|
+| `PROBE` | `jlink` (default) or `olimex` |
+| `BUILD` | the CMake build directory (default `build`) |
+| `UOS_HW_ADAPTER_KHZ` | override the JTAG clock. `board/rpi3.cfg` asks for 4000 kHz, more than jumper wires always carry. A DAP that gives up mid-run prints `Invalid ACK (0) in DAP response` and then fails to re-examine every core; the runner reports that as **DEBUG LINK LOST**, not as a firmware fault. |
+
+The third argument overrides the run budget in seconds. A budget is **not** the
+test's own duration: it is dominated by semihosting traps, and those scale with
+how much a test prints. `smp_test4` reaches its verdict at t=9597 ms of target
+time yet needs well over 120 s of wall clock, because its reporter emits about
+nine lines a second and each is a debug halt and resume over JTAG.
+
+### The boot card
+
+The four SD tests and `usb_test` mount the card's **existing** FAT32 partition
+through FatFs and keep every file under `tests/`. They never format it and
+never touch the root. `boards/rpi-zero-2w/verify-bootcard.py` proves that
+byte-for-byte under QEMU.
+
+FatFs is built without long-name support, so a file arrives on the card as an
+8.3 name in upper case — `xfer.bin` is stored as `XFER.BIN`, and the device
+says so.
+
+### `usb_test` needs a host
+
+It is the only test QEMU cannot run at all, and the only one that needs
+something done on the host while it runs.
+
+Power the board from **`PWR IN`** and run the data cable from the PC to the
+**`USB`** socket — the OTG port. On the wrong socket the board boots and prints
+normally but never enumerates, with no error message.
+
+```bash
+test/hw.sh usb_test 900          # one terminal
+# ~20 s later, in another:
+cd ../micro-os-plus-iii-smp/test/common/usb_test
+sudo ./host_xfer.py
+```
+
+With no arguments `host_xfer.py` runs the size matrix — 0, 1, 511, 512, 513,
+1024, 65536, 1048576 bytes, each written and read back with CRC checks — then a
+`LIST`, then the terminating `PING` that makes the device print its tally and
+`RESULT`. Without that ping the device serves commands for ever and never
+reaches a verdict. `send_file.py` is the single-file demo and terminates only
+with `--terminate`.
+
+The verdict is `crc_errors == 0 && commands != 0 && active >= 3`: at least
+three of the four cores must have run the unpinned load generators, which is
+what makes it an SMP test and not only a USB one.
+
+### Defects this suite found
+
+Hardware exercised paths QEMU cannot, and five of them were real:
+
+| Defect | Why only on hardware |
+|---|---|
+| Every blinking test drove **GPIO16** | `led.hpp` falls back to header pin 36; the Zero 2 W's onboard ACT LED is GPIO29. Only `usb_test` had ever set `LED_PIN`. It is a board fact now, set once for every test. |
+| `usb_test` replied to a PUT **after** its console output | The reply is sent immediately after the store now. The hexdump and listing are queue posts drained one semihosting trap at a time, so a completed store looked like a hang. |
+| Console posts **blocked** the USB service thread | They use `try_send` now and are dropped when the consumer falls behind, with `console_dropped` in the tally. Diagnostics must never throttle the protocol. |
+| `LIST` compared names case-sensitively | flatfs under QEMU keeps the name as sent; FatFs on the card returns `XFER.BIN`. |
+| **`kOutChunkMax` overflowed `PKTCNT`** | `D{I,O}EPTSIZ` is bounded by *two* fields. This core reports `GHWCFG3 = 0x0ff000e8`: XFRSIZ 19 bits (524287 bytes) but PKTCNT **10 bits — 1023 packets**, so 65472 bytes at full speed. The old `0x7F000` was sized against XFRSIZ alone and against 512-byte packets, and asked for 8128 packets in a 10-bit field. A 1 MiB transfer stored 61440 bytes, truncated. 65536 was the last size to pass because it overflows the field by exactly one packet. |
+
+`DEBUG_BOOT` is off by default in the `hwd` builds, as the sources assume —
+each early-boot marker is a semihosting trap. `-DUOS_DEBUG_BOOT=ON` restores
+them for board bring-up.
 
 ## 6. Declaring your own application
 

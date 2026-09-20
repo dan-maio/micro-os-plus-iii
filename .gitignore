@@ -1,0 +1,55 @@
+# ---------------------------------------------------------------------------
+# Build artifacts
+#
+# In the predecessor repository every application compiled the whole kernel
+# into its own private build/ directory, leaving 18,223 .o and 10,519 .d files
+# across 233 build/ and 173 output/ directories. The unified CMake build keeps
+# objects out of the source tree, but these rules stay as a backstop.
+# ---------------------------------------------------------------------------
+build/
+build-*/
+cmake-build*/
+output/
+target/
+
+*.o
+*.obj
+*.d
+*.a
+*.elf
+*.hex
+*.bin
+*.lst
+*.map
+*.su
+
+# ---------------------------------------------------------------------------
+# Hardware run / flash artifacts (hw.sh, OpenOCD, J-Link)
+# ---------------------------------------------------------------------------
+.hw-run*
+.hw-jlink-run*
+
+# ---------------------------------------------------------------------------
+# QEMU fixtures
+#
+# Disk images generated for the SD-backed rpi tests; regenerated on demand.
+# ---------------------------------------------------------------------------
+**/disk*.img
+
+# ---------------------------------------------------------------------------
+# Deliberately NOT ignored
+#
+# *.html  -- the vendored kernel ships doxygen templates as .html
+#            (doxygen/header.html, doxygen/orig/{header,footer}.html).
+#            They are upstream source, not generated output. A blanket
+#            *.html rule silently drops them when the kernel is copied in.
+# *.pdf   -- docs/ carries rendered PDFs alongside their .md sources.
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Editor / OS
+# ---------------------------------------------------------------------------
+.DS_Store
+*.swp
+*.swo
+*~

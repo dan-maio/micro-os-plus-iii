@@ -11,9 +11,10 @@ full design and the measurements behind it.
 
 ## Where things stand
 
-**Steps 1 and 2 are complete.** Six repositories exist; both ARM architecture
-projects build all 24 of their targets from a single copy of every test, and
-all twelve tests pass on a Raspberry Pi Zero 2 W.
+**Step 1 is complete. Step 2 is all but finished.** Six repositories exist;
+both ARM architecture projects build all 24 of their targets from a single copy
+of every test. On a Raspberry Pi Zero 2 W, all twelve AArch64 tests pass, and
+on AArch32 `usb_test` passes with the other eleven not yet run on silicon.
 
 ```
 TMP7/
@@ -66,9 +67,10 @@ neither the kernel nor the devices repo knows an architecture project exists.
    division of labour, and the defines per folder) and
    `docs/building-aarch32-aarch64.md`, both with PDFs, rendered by a single
    `docs/md2pdf.py` that replaces three near-identical copies.
-8. **Hardware green.** All twelve tests pass on a Zero 2 W over a J-Link,
-   `usb_test` included — the one QEMU can never run. `test/run-hw.sh` plus a
-   ~40-line `test/hw.sh` per port replace the predecessor's 48 per-test
+8. **Hardware.** AArch64 passes all twelve on a Zero 2 W over a J-Link,
+   `usb_test` included — the one QEMU can never run. AArch32 has `usb_test`
+   passing; its other eleven are built and pending a run. `test/run-hw.sh`
+   plus a ~40-line `test/hw.sh` per port replace the predecessor's 48 per-test
    runner scripts.
 
 ## What hardware found that QEMU could not
@@ -124,10 +126,13 @@ their own repo, `cortexm` and `posix-arch` both to become SMP.
 
 ## Next step
 
-**Step 2 is done.** *Gate:* all 24 targets build **(met, both ports)**; QEMU
-suites pass **(met, 11/1/0 both ports)**; hardware tests pass on the Pi
-**(met, 12/12 both ports)**; no device or test source exists in more than one
-repo **(met)**.
+*Gate:* all 24 targets build **(met, both ports)**; QEMU suites pass
+**(met, 11/1/0 both ports)**; hardware tests pass on the Pi **(met 12/12 on
+AArch64; AArch32 has `usb_test` only, eleven still to run)**; no device or test
+source exists in more than one repo **(met)**.
+
+To close it: power-cycle and run the remaining eleven AArch32 tests, one per
+cycle, from `micro-os-plus-iii-aarch32`.
 
 Next: step 3 (`aarch32` gains RK3506, lyra-a7, 13 apps; gate is
 `exception_handler.cpp` shared unmodified by both SoCs), step 4 (`cortexm` —
@@ -151,6 +156,10 @@ CPU).
 - **A port needs its machine flags at link time too**, not just compile time.
   Without them the driver picks the wrong multilib and every AArch32 link fails
   with "uses VFP register arguments".
+- **Rebuild the port you are about to test.** A shared test source is still
+  two separate binaries. `usb_test` on AArch32 reproduced a defect that had
+  already been fixed, purely because only the AArch64 target had been rebuilt;
+  the symptom was indistinguishable from the original bug.
 - **A hardware run is one test per power cycle.** It is `load_image` into RAM
   over the previous test's leftovers, and the Pi has no SRST — the Cortex-A53
   debug target has no reset method a script can drive. `run-hw.sh` refuses a

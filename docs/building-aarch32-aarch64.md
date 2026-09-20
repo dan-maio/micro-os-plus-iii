@@ -150,8 +150,17 @@ mode — exactly as the predecessor suite recorded it.
 
 ## 5. Running on hardware
 
-Measured on a Raspberry Pi Zero 2 W over a SEGGER J-Link: **all twelve tests
-pass on silicon**, on both ports.
+Measured on a Raspberry Pi Zero 2 W over a SEGGER J-Link.
+
+| Port | Hardware |
+|---|---|
+| **AArch64** | all twelve tests pass |
+| **AArch32** | `usb_test` passes; the other eleven are built but not yet run on silicon |
+
+Only what has actually been run on the board is recorded here. The AArch32
+figure is not inferred from the AArch64 one — the two ports share every test
+source, but they are separate binaries and a stale build is indistinguishable
+from a bug until you rebuild and re-run.
 
 ### Standalone boot
 

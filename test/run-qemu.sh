@@ -32,6 +32,31 @@ timeout_for () {
   esac
 }
 
+# Tests that talk to the SD card need a card to talk to. sd_test wants a
+# seeded flatfs volume (its own flatfs_tool.py builds one); the others just
+# need a large enough blank image to format. Kept out of git by .gitignore --
+# a 4 GiB sparse file per test.
+COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common"
+
+sd_image_for () {
+  local app="$1" img="${LOGS}/${app}.disk.img"
+  case "$app" in
+    sd_test)
+      if [[ ! -f "$img" ]]; then
+        python3 "${COMMON_DIR}/sd_test/flatfs_tool.py" make-seed "$img" >/dev/null \
+          || { echo "could not seed $img" >&2; return 1; }
+      fi
+      ;;
+    smp-mat-sdcard-test|smp-num-test|smp-pipeline-test)
+      [[ -f "$img" ]] || truncate -s 4G "$img"
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+  echo "$img"
+}
+
 LOGS="${BUILD_DIR}/.qemu-logs"; mkdir -p "$LOGS"
 pass=0; fail=0; declare -a results=()
 
@@ -42,8 +67,14 @@ for img in "${BUILD_DIR}"/*-qemu.bin; do
   log="${LOGS}/${app}.log"
 
   printf '%-24s ' "$app"
+
+  drive=()
+  if sd="$(sd_image_for "$app")"; then
+    drive=(-drive "file=${sd},if=sd,format=raw")
+  fi
+
   timeout "$tmo" "$QEMU" "${MACHINE[@]}" -nographic -serial none \
-      -semihosting-config enable=on,target=native -kernel "$img" \
+      -semihosting-config enable=on,target=native "${drive[@]}" -kernel "$img" \
       > "$log" 2>&1
   rc=$?
 

@@ -1,6 +1,6 @@
 # Migration status
 
-**Updated:** 2026-09-20 · **Phase:** design approved (revision 2), migration not started
+**Updated:** 2026-09-20 · **Phase:** step 1 complete — skeleton and kernel in place
 
 This file is the cold-start entry point. Read it, then
 `docs/specs/2026-09-20-micro-os-plus-iii-smp-unification-design.md` for the
@@ -10,8 +10,8 @@ full design and the measurements behind it.
 
 ## Where things stand
 
-Nothing has been migrated yet. This repository contains the design and the
-build hygiene rules, and nothing else. The old tree is untouched.
+**Step 1 of 5 is complete.** The kernel is vendored once and the build
+skeleton is in place. The old tree is untouched and remains read-only.
 
 ```
 micro-os-plus-iii-smp/          <- you are here; origin wired, 2 commits, pushed
@@ -44,6 +44,12 @@ micro-os-plus-iii-smp/          <- you are here; origin wired, 2 commits, pushed
    governing constraint.
 4. **`.gitignore` committed.** Verified with `git check-ignore` against all
    7,179 tracked files slated to migrate: none are excluded.
+5. **Step 1 — skeleton and kernel** (`2502d93`). Kernel vendored once from
+   `cortexm/micro-os-plus-iii` (706 files, zero litter). Root `CMakeLists.txt`
+   works standalone and as a submodule. Three toolchains share one preamble.
+   `cmake/uos-app.cmake` replaces the 214 Makefiles and carries the `OS_NCPU`
+   knob. Gate passed: all three toolchains configure; **61 of 61** declared
+   kernel sources compile, enforced by `tools/verify-kernel-compiles.sh`.
 
 ## Decisions — all resolved
 
@@ -68,16 +74,21 @@ table. Nothing is open.
 
 ## Next step
 
-Step 1 of the Section 8 sequence — **main repo skeleton plus kernel**. It is
-mechanical, independently verifiable, unchanged by revision 2, and must land
-before any architecture repo exists, since they consume it as a submodule:
+Step 2 of the Section 8 sequence — **`aarch32` + `aarch64` end to end**, the
+proving slice. It migrates rpi-32b and rpi-64b and exercises every hard part at
+once: the `devices/` extraction into this repo, two architecture repos
+consuming it by submodule, shared `test/common/` sources across two ISAs, and
+the only real QEMU coverage in the project. 12 shared app sources, 24 targets.
 
-- Create `cmake/toolchains/`, `cmake/uos-app.cmake`, top-level `CMakeLists.txt`.
-- Copy `micro-os-plus-iii-smp-old/cortexm/micro-os-plus-iii/` (706 files, zero
-  build litter) to `micro-os-plus-iii/`. Do **not** use the `cortex-a7/` copy —
-  it carries 80 stray `.o`/`.d` files. The `pico2/` and `rpi/` copies are
-  byte-identical alternatives.
-- Gate: the kernel compiles standalone.
+*Gate:* all 24 build; QEMU suites pass; hardware tests pass on the Pi; no
+device or test source exists in more than one repo.
+
+Superseded notes from step 1:
+
+- Done in `2502d93`. Note the gate wording was corrected: the kernel can
+  **never** compile standalone, because `os-decls.h:24` includes
+  `<cmsis-plus/rtos/port/os-decls.h>`, which only an architecture repo
+  supplies. Use `tools/verify-kernel-compiles.sh <port-include-dir>` instead.
 
 Then step 2, the proving slice: rpi-32b and rpi-64b end to end.
 

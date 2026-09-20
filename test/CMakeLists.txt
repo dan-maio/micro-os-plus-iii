@@ -10,6 +10,9 @@
 # Exports: micro-os-plus::test-common
 # -----------------------------------------------------------------------------
 
+# Which tests exist and how each is configured.
+include ("${CMAKE_CURRENT_SOURCE_DIR}/apps.cmake")
+
 add_library (micro-os-plus-iii-test-common-interface INTERFACE)
 
 target_include_directories (
@@ -27,4 +30,5 @@ target_sources (
 
 add_library (micro-os-plus::test-common ALIAS micro-os-plus-iii-test-common-interface)
 
-message (STATUS "µOS++ III SMP tests: micro-os-plus::test-common")
+list (LENGTH UOS_TEST_APPS _n)
+message (STATUS "µOS++ III SMP tests: micro-os-plus::test-common, ${_n} shared applications")

@@ -140,6 +140,16 @@ add_library (micro-os-plus::iii ALIAS micro-os-plus-iii-interface)
 # path-for-path, so the only conflicts are the six genuine SMP files.
 
 # -----------------------------------------------------------------------------
+# Optional: the C++ half of the SMP port contract, shared by the ARM ports.
+# Opt-in -- a port links this instead of writing its own os-decls.h. See
+# port/smp-common/README.md.
+add_library (micro-os-plus-iii-port-smp-decls-interface INTERFACE)
+target_include_directories (
+  micro-os-plus-iii-port-smp-decls-interface INTERFACE "port/smp-common"
+)
+add_library (micro-os-plus::port-smp-decls ALIAS micro-os-plus-iii-port-smp-decls-interface)
+
+# -----------------------------------------------------------------------------
 # The test applications live here because they are ISA-neutral, but they are
 # *built* by the architecture projects, which know the toolchain, the linker
 # script and which boards exist. All this exposes is the shared support

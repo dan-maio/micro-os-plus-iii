@@ -1,7 +1,7 @@
 # Migration status
 
-**Updated:** 2026-09-20 · **Phase:** step 2 — the proving slice, builds green,
-QEMU suites running
+**Updated:** 2026-09-20 · **Phase:** step 2 — the proving slice, builds and
+QEMU suites green on both ARM ports
 
 This file is the cold-start entry point. Read it, then
 `docs/specs/2026-09-20-micro-os-plus-iii-smp-unification-design.md` for the
@@ -37,9 +37,12 @@ TMP7/
 | Remotes | `GIT/micro-os-plus-iii-{smp,devices,aarch32,aarch64}.git` |
 | Old remote | `GIT/micro-os-plus-iii-smp-old.git` |
 
-Each architecture project pins the kernel and the devices repo as submodules.
-The dependency runs one way: neither the kernel nor the devices repo knows an
-architecture project exists.
+An architecture project holds **no copy** of the kernel or the devices repo.
+CMake resolves both as sibling directories, overridable with `-DUOS_SMP_DIR=`
+and `-DUOS_DEVICES_DIR=`. Whoever builds one clones what it needs. One working
+copy of the kernel serves every architecture project on the machine, so an
+edit to it is visible to all of them at once. The dependency runs one way:
+neither the kernel nor the devices repo knows an architecture project exists.
 
 ## Done
 
@@ -56,6 +59,13 @@ architecture project exists.
 5. **Step 2b — both ARM architecture projects.** `aarch64` and `aarch32` each
    build all 24 targets (12 applications × {qemu, hwd}) from one loop over
    `test/apps.cmake`; neither names a test itself.
+6. **QEMU suites green.** `11 passed, 1 skipped, 0 failed` on both, with
+   gcc 15 and one suite at a time. `usb_test` skips by design — QEMU emulates
+   no USB device mode — as the predecessor suite also recorded.
+7. **Documentation.** `docs/smp-construction.md` (the port contract, the
+   division of labour, and the defines per folder) and
+   `docs/building-aarch32-aarch64.md`, both with PDFs, rendered by a single
+   `docs/md2pdf.py` that replaces three near-identical copies.
 
 ## What made the test deduplication possible
 
@@ -100,17 +110,15 @@ their own repo, `cortexm` and `posix-arch` both to become SMP.
 
 **Finish step 2.** Remaining:
 
-1. QEMU suites green on both ports (running; the four SD tests needed the
-   runner to provision a card image, which it now does).
-2. Hardware tests on the Pi — the `hwd` variants build but have not been run
-   on silicon.
-3. Fold the per-test `hw.sh` / `hw-olimex.sh` runners into something shared,
+1. Hardware tests on the Pi — the `hwd` variants build but have not been run
+   on silicon. This is the only open item in the step-2 gate.
+2. Fold the per-test `hw.sh` / `hw-olimex.sh` runners into something shared,
    the way `run-qemu.sh` replaced `verify-qemu-all.sh` + `run_one_test.sh`.
    They are ~200-line near-identical scripts, two per test, per ISA.
 
-*Gate:* all 24 targets build **(met, both ports)**; QEMU suites pass; hardware
-tests pass on the Pi; no device or test source exists in more than one repo
-**(met)**.
+*Gate:* all 24 targets build **(met, both ports)**; QEMU suites pass
+**(met, 11/1/0 both ports)**; hardware tests pass on the Pi **(not yet run)**;
+no device or test source exists in more than one repo **(met)**.
 
 Then step 3 (`aarch32` gains RK3506), step 4 (`cortexm`), step 5
 (`posix-arch`).
@@ -131,6 +139,17 @@ Then step 3 (`aarch32` gains RK3506), step 4 (`cortexm`), step 5
 - **A port needs its machine flags at link time too**, not just compile time.
   Without them the driver picks the wrong multilib and every AArch32 link fails
   with "uses VFP register arguments".
+- **QEMU suites must run one at a time.** Running two four-core suites
+  concurrently, or alongside a build, starves a vCPU: `smp_test2` stalled with
+  three workers finished and the fourth frozen mid-loop. On an idle host the
+  same binary passes 5 out of 5. A stalled worker with no fault is contention,
+  not a bug — re-run before investigating.
+- **The AArch32 suite runs on `raspi3b` with the boot shim, never `raspi2b`.**
+  The port is built `-mcpu=cortex-a53`, so its load-acquire instructions are
+  undefined on the raspi2b Cortex-A7 and it faults at the first one. QEMU's
+  raspi3b starts its cores in AArch64, so a 20-line stub drops to AArch32 and
+  jumps to the image. Hardware needs none of this: `config.txt` sets
+  `arm_64bit=0`.
 - **`rtk`'s `diff` reports "Files are identical" for files with different
   MD5s.** Seen on `sd.cpp`, `bcm2837.hpp`, `bcm_irq.hpp`. Use `md5sum` or
   Python `difflib` for anything that matters.

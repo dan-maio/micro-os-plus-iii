@@ -1,15 +1,21 @@
 # -----------------------------------------------------------------------------
 # micro-os-plus-iii-smp — the common half of the unified µOS++ III SMP project.
 #
-# This repository holds everything that is *common* (see the design spec,
-# Section 1.1): the kernel, the device layer, and the shared test sources.
-# Architecture-specific code lives in its own repository per D8/D9, and each
-# architecture repo consumes this one as a Git submodule (D10):
+# This repository holds everything that is *common* (design spec, Section 1.1):
+# the kernel (src/, include/), the device layer (devices/) and the shared test
+# sources (test/common/).
 #
-#   add_subdirectory (micro-os-plus-iii-smp)
+# Architecture-specific code lives in its own INDEPENDENT repository, outside
+# this one — micro-os-plus-iii-cortexm, -aarch32, -aarch64, -posix-arch. The
+# dependency runs one way only: an architecture project consumes this one.
+#
+#   add_subdirectory (micro-os-plus-iii-smp)       # or a submodule of it
 #   target_link_libraries (my-app PRIVATE micro-os-plus::iii)
 #
-# It is therefore designed to work both standalone and as a subproject.
+# Nothing here may depend on an architecture project.
+#
+# Portions derived from µOS++ IIIe by Liviu Ionescu, MIT licensed; see
+# LICENSE-micro-os-plus-iii.
 # -----------------------------------------------------------------------------
 
 cmake_minimum_required (VERSION 3.20)
@@ -21,45 +27,119 @@ project (
 )
 
 # True only when this repo is the top-level build, false when an architecture
-# repo added it as a submodule.
+# project consumes it.
 if (CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   set (UOS_SMP_STANDALONE TRUE)
 else ()
   set (UOS_SMP_STANDALONE FALSE)
 endif ()
 
-# Absolute paths are forbidden in scripts and build files; consumers refer to
-# the shared trees through these variables instead.
-set (UOS_SMP_ROOT        "${CMAKE_CURRENT_SOURCE_DIR}" CACHE INTERNAL "")
-set (UOS_TEST_COMMON     "${CMAKE_CURRENT_SOURCE_DIR}/test/common" CACHE INTERNAL "")
-set (UOS_CMAKE_DIR       "${CMAKE_CURRENT_SOURCE_DIR}/cmake" CACHE INTERNAL "")
-set (UOS_TOOLCHAINS_DIR  "${CMAKE_CURRENT_SOURCE_DIR}/cmake/toolchains" CACHE INTERNAL "")
+# Absolute paths are forbidden; consumers use these instead.
+set (UOS_SMP_ROOT       "${CMAKE_CURRENT_SOURCE_DIR}" CACHE INTERNAL "")
+set (UOS_TEST_COMMON    "${CMAKE_CURRENT_SOURCE_DIR}/test/common" CACHE INTERNAL "")
+set (UOS_CMAKE_DIR      "${CMAKE_CURRENT_SOURCE_DIR}/cmake" CACHE INTERNAL "")
+set (UOS_TOOLCHAINS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/cmake/toolchains" CACHE INTERNAL "")
 
-# The shared application helper, available to every architecture repo.
 include ("${CMAKE_CURRENT_SOURCE_DIR}/cmake/uos-app.cmake")
 
 # -----------------------------------------------------------------------------
-# The kernel. Exports micro-os-plus::iii.
+# The kernel — an INTERFACE library, compiled by whichever application links it
+# against that application's architecture port.
 #
-# Note: the kernel does not compile on its own. os-decls.h includes
-# <cmsis-plus/rtos/port/os-decls.h>, which an architecture repo supplies. This
-# subdirectory therefore defines an INTERFACE library; the sources are compiled
-# by whichever application links it, against that application's port.
-add_subdirectory (micro-os-plus-iii)
+# It does NOT compile on its own: include/cmsis-plus/rtos/os-decls.h includes
+# <cmsis-plus/rtos/port/os-decls.h>, which an architecture project supplies.
+
+add_library (micro-os-plus-iii-interface INTERFACE)
+
+target_include_directories (
+  micro-os-plus-iii-interface INTERFACE "include" "include/cmsis-plus/legacy"
+)
+
+target_sources (
+  micro-os-plus-iii-interface
+  INTERFACE
+            src/diag/trace-itm.cpp
+            src/diag/trace-segger-rtt.cpp
+            src/diag/trace-semihosting.cpp
+            src/diag/trace.cpp
+            src/driver/common.cpp
+            src/driver/serial.cpp
+            # src/driver/usart-wrapper.cpp src/driver/usb-device.cpp
+            # src/driver/usb-host.cpp src/driver/usbd-wrapper.cpp
+            # src/driver/usbh-wrapper.cpp
+            src/libc/_sbrk.c
+            src/libc/newlib/c-newlib-reent.cpp
+            src/libc/stdlib/assert.c
+            src/libc/stdlib/atexit.cpp
+            src/libc/stdlib/atexit.h
+            src/libc/stdlib/exit.c
+            src/libc/stdlib/init-fini.c
+            src/libc/stdlib/malloc.cpp
+            src/libc/stdlib/timegm.c
+            src/libcpp/chrono.cpp
+            src/libcpp/condition-variable.cpp
+            src/libcpp/cxx.cpp
+            src/libcpp/memory-resource.cpp
+            src/libcpp/mutex.cpp
+            src/libcpp/new.cpp
+            src/libcpp/system-error.cpp
+            src/libcpp/thread-cpp.h
+            src/libcpp/thread.cpp
+            src/memory/block-pool.cpp
+            src/memory/first-fit-top.cpp
+            src/memory/lifo.cpp
+            src/posix-io/block-device-partition.cpp
+            src/posix-io/block-device.cpp
+            src/posix-io/c-syscalls-posix.cpp
+            src/posix-io/char-device.cpp
+            src/posix-io/device.cpp
+            src/posix-io/directory.cpp
+            src/posix-io/file-descriptors-manager.cpp
+            src/posix-io/file-system.cpp
+            src/posix-io/file.cpp
+            src/posix-io/io.cpp
+            src/posix-io/net-stack.cpp
+            src/posix-io/socket.cpp
+            src/posix-io/tty.cpp
+            src/rtos/internal/os-flags.cpp
+            src/rtos/internal/os-lists.cpp
+            src/rtos/os-c-wrapper.cpp
+            src/rtos/os-clocks.cpp
+            src/rtos/os-condvar.cpp
+            src/rtos/os-core.cpp
+            src/rtos/os-evflags.cpp
+            src/rtos/os-idle.cpp
+            src/rtos/os-main.cpp
+            src/rtos/os-memory.cpp
+            src/rtos/os-mempool.cpp
+            src/rtos/os-mqueue.cpp
+            src/rtos/os-mutex.cpp
+            src/rtos/os-semaphore.cpp
+            src/rtos/os-thread.cpp
+            src/rtos/os-timer.cpp
+            src/semihosting/c-syscalls-semihosting.cpp
+            src/startup/exception-handlers.c
+            src/startup/initialise-free-store.cpp
+            src/startup/initialize-hardware.c
+            src/startup/reset-hardware.c
+            src/startup/startup.cpp
+            src/utils/lists.cpp
+)
+
+add_library (micro-os-plus::iii ALIAS micro-os-plus-iii-interface)
 
 # -----------------------------------------------------------------------------
-# The common device layer. Exports micro-os-plus::devices.
-# Added in step 2, when the rpi slice extracts it.
+# The common device layer. Exports micro-os-plus::devices. Added in step 2.
 if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/devices/CMakeLists.txt")
   add_subdirectory (devices)
 endif ()
 
 # -----------------------------------------------------------------------------
-# Tests are built by the architecture repos, which know their toolchain and
+# Tests are built by the architecture projects, which know their toolchain and
 # linker script. Standalone, there is nothing to build here.
 if (UOS_SMP_STANDALONE AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/test/CMakeLists.txt")
   add_subdirectory (test)
 endif ()
 
 # -----------------------------------------------------------------------------
-message (STATUS "µOS++ III SMP common: kernel=micro-os-plus::iii standalone=${UOS_SMP_STANDALONE}")
+message (STATUS "µOS++ III SMP common: micro-os-plus::iii  standalone=${UOS_SMP_STANDALONE}")

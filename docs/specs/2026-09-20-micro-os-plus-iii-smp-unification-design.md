@@ -62,8 +62,8 @@ Section 4 records the measurements.
 | D6 | Execution | Vertical slice: skeleton, then rpi-32b/64b end-to-end, then lyra-a7, then pico2 x5, then cortexm x3. |
 | D7 | Duplication | Near zero. Common code lives once, in a folder, referenced everywhere. |
 | D8 | Organising axis | **Architecture-specific, not target-specific.** Four ports: `cortexm`, `aarch32`, `aarch64`, `posix-arch`. A board is a build configuration, never a port folder. |
-| D9 | Topology | **Multi-repo.** The main repo holds all common code; each architecture is its own Git repository holding only `src/` and `include/`. |
-| D10 | Linkage | Each architecture repo pins the main repo as a **Git submodule** and consumes it via `add_subdirectory`. |
+| D9 | Topology | **Multi-repo.** The main repo holds all common code at its root (`src/`, `include/`, `devices/`, `test/`); each architecture is its own Git repository, outside it, holding only `src/` and `include/`. |
+| D10 | Linkage | Architecture projects are **independent repositories outside** the main repo. Each pins the main repo as a **Git submodule** and consumes it via `add_subdirectory`. The dependency is one-way: an architecture project uses the main repo, never the reverse, and the main repo contains no `arch/` folder. |
 | D11 | `cortexm` SMP | `cortexm` must be SMP. pico2/RP2350 already is; its core becomes the architecture's SMP implementation and the STM32 boards run it at `OS_NCPU=1`. |
 | D12 | `posix-arch` SMP | `posix-arch` must be SMP, modelled as **one host thread per CPU**. See Section 7.6. |
 
@@ -250,30 +250,40 @@ changes is that those directories hold *build manifests*, not *source copies*.
 # 6. Target tree
 
 ```
-micro-os-plus-iii-smp/              MAIN REPO — all common code
-├── CMakeLists.txt                  exports the INTERFACE libraries below
+micro-os-plus-iii-smp/              MAIN REPO — the common code, at the root
+├── CMakeLists.txt                  exports micro-os-plus::iii (+ ::devices)
+├── LICENSE-micro-os-plus-iii       upstream MIT licence, retained
 ├── cmake/
 │   ├── toolchains/                 arm-none-eabi, aarch64-none-elf, native
-│   └── uos-app.cmake               the shared app-declaration function
-├── micro-os-plus-iii/              the kernel, once — 706 files
-├── devices/                        common device layer, once
-│   ├── include/micro-os-plus/devices/
-│   └── src/                        usb-dwc2, sd, flatfs, led, uart, spi
-└── test/
-    ├── common/                     ONE source per logical test
-    └── <board>/{qemu,hwd}/         11 boards; manifests, linker, flash scripts
+│   │   └── uos-bare-metal-common.cmake
+│   └── uos-app.cmake               the shared app-declaration helper
+├── src/                            kernel sources        (73 files)
+├── include/                        kernel headers        (81 files)
+├── devices/                        common device layer
+├── test/
+│   ├── common/                     ONE source per logical test
+│   └── <board>/{qemu,hwd}/         manifests, linker, flash scripts
+├── tools/                          verification gates
+└── docs/
 
-micro-os-plus-iii-cortexm/          ARCH REPO
-├── .gitmodules                     -> micro-os-plus-iii-smp (pinned)
-├── CMakeLists.txt
-├── src/                            os-core.cpp (SMP, from pico2), startup, switch
-└── include/cmsis-plus/rtos/port/   os-decls.h, os-c-decls.h, os-inlines.h
+  ... and, OUTSIDE it, four independent repositories:
 
-micro-os-plus-iii-aarch32/          ARCH REPO  (RK3506 + BCM2837)
-micro-os-plus-iii-aarch64/          ARCH REPO  (BCM2837)
-micro-os-plus-iii-posix-arch/       ARCH REPO  (native host, SMP to be built)
-     ... each with the same shape: .gitmodules, CMakeLists.txt, src/, include/
+micro-os-plus-iii-cortexm/          STM32F4 + RP2350
+micro-os-plus-iii-aarch32/          RK3506 + BCM2837
+micro-os-plus-iii-aarch64/          BCM2837
+micro-os-plus-iii-posix-arch/       native host
+└── each: CMakeLists.txt, src/, include/, and micro-os-plus-iii-smp as a
+    submodule. They consume the main repo; nothing in the main repo refers
+    to them.
 ```
+
+The kernel is flattened to the repository root rather than nested, which also
+aligns paths with upstream (whose root is likewise `src/` + `include/`), so the
+GitHub merge planned in D3 lines up path-for-path. Upstream's own `tests/`
+(456 files), `doxygen/`, `inspiration/`, `templates/`, `config/` and `scripts/`
+are not carried: 552 of the original 706 files were upstream tooling rather
+than kernel. The pristine copy remains in the old repository if any of it is
+ever wanted back.
 
 **Board to architecture (D8):**
 

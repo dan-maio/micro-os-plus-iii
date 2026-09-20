@@ -22,7 +22,7 @@ TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 
 # The authoritative list is the target_sources() block, minus commented lines.
 python3 - <<'PY' > "$TMP/srclist"
-s = open("micro-os-plus-iii/CMakeLists.txt").read()
+s = open("CMakeLists.txt").read()
 blk = s.split("target_sources (", 1)[1].split(")", 1)[0]
 for line in blk.splitlines():
     line = line.strip()
@@ -37,10 +37,9 @@ total=$(wc -l < "$TMP/srclist"); ok=0; failed=""
 while read -r f; do
   [ -z "$f" ] && continue
   if "$CXX" -std=c++17 -c -w \
-       -Imicro-os-plus-iii/include \
-       -Imicro-os-plus-iii/include/cmsis-plus/legacy \
+       -Iinclude -Iinclude/cmsis-plus/legacy \
        -I"$PORT_INC" -D_XOPEN_SOURCE=700L \
-       -x c++ "micro-os-plus-iii/$f" -o "$TMP/o.o" 2>"$TMP/err"; then
+       -x c++ "$f" -o "$TMP/o.o" 2>"$TMP/err"; then
     ok=$((ok+1))
   else
     failed="$failed$f: $(grep -m1 'error:' "$TMP/err" | sed 's/.*error: //')"$'\n'

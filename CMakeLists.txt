@@ -140,9 +140,11 @@ add_library (micro-os-plus::iii ALIAS micro-os-plus-iii-interface)
 # path-for-path, so the only conflicts are the six genuine SMP files.
 
 # -----------------------------------------------------------------------------
-# Tests are built by the architecture projects, which know their toolchain and
-# linker script. Standalone, there is nothing to build here.
-if (UOS_SMP_STANDALONE AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/test/CMakeLists.txt")
+# The test applications live here because they are ISA-neutral, but they are
+# *built* by the architecture projects, which know the toolchain, the linker
+# script and which boards exist. All this exposes is the shared support
+# target; adding it costs nothing when nobody links it.
+if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/test/CMakeLists.txt")
   add_subdirectory (test)
 endif ()
 

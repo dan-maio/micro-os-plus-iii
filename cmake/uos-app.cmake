@@ -82,3 +82,44 @@ function (uos_add_app _name)
     )
   endif ()
 endfunction ()
+
+# -----------------------------------------------------------------------------
+# uos_add_test_app (<name> [APP <dir>] <uos_add_app arguments...>)
+#
+# Declares one of the shared test applications from test/common/. The sources
+# come from test/common/<APP>/ -- there is exactly one copy of each test in the
+# workspace, and every architecture project compiles that same copy.
+#
+# APP defaults to <name>, so a board that builds the test under its own target
+# name passes APP explicitly:
+#
+#   uos_add_test_app (rpi-smp_test1 APP smp_test1 NCPU 4 PORT rpi-aarch64 ...)
+#
+# Any extra SOURCES/DEFINES/LIBRARIES are appended to the shared ones.
+# -----------------------------------------------------------------------------
+function (uos_add_test_app _name)
+  cmake_parse_arguments (T "" "APP" "SOURCES" ${ARGN})
+
+  if (NOT T_APP)
+    set (T_APP "${_name}")
+  endif ()
+
+  set (_dir "${UOS_TEST_COMMON}/${T_APP}")
+  if (NOT IS_DIRECTORY "${_dir}")
+    message (FATAL_ERROR "uos_add_test_app: no shared test application '${T_APP}' in ${UOS_TEST_COMMON}")
+  endif ()
+
+  # Every .cpp in the application directory, so a test that grew a second
+  # translation unit (usb_test/sink.cpp) needs no separate declaration.
+  file (GLOB _common_sources CONFIGURE_DEPENDS "${_dir}/*.cpp")
+  if (NOT _common_sources)
+    message (FATAL_ERROR "uos_add_test_app: no sources in ${_dir}")
+  endif ()
+
+  uos_add_app (
+    ${_name}
+    SOURCES ${_common_sources} ${T_SOURCES}
+    LIBRARIES micro-os-plus::test-common
+    ${T_UNPARSED_ARGUMENTS}
+  )
+endfunction ()

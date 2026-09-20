@@ -2,7 +2,7 @@
 title: "µOS++ III SMP — Project Unification Design"
 subtitle: "Migrating micro-os-plus-iii-smp-old to a unified, deduplicated micro-os-plus-iii-smp"
 date: 2026-09-20
-status: draft — awaiting review
+status: approved — all questions resolved 2026-09-20
 ---
 
 # 1. Goal
@@ -20,6 +20,32 @@ a second copy of the whole.
 
 This rule outranks layout convenience. Where it conflicts with an earlier
 structural decision, it wins, and Section 5 records each such case.
+
+## 1.1 Terminology — "portable" is not used in this spec
+
+The requirement document uses *portable* in two opposite senses: Section
+"Architecture-Independent Code" asks for a folder holding code that is
+"not portable-independent" (meaning code valid everywhere), while the
+`devices` section asks for "the portable part of the device
+implementations" (also meaning code valid everywhere). A review note on
+this spec then defined the pair the other way round — *non-portable* as
+"available on all platforms" and *portable* as "code specific to a
+platform".
+
+All three readings are defensible and they contradict each other, so the
+words are retired. This spec uses exactly two terms:
+
+| term | meaning | where it lives |
+|---|---|---|
+| **common** | valid on every target it is compiled for | `micro-os-plus-iii/`, `devices/`, `port/<arch>/common/`, `port/soc-common/<soc>/`, `test/common/` |
+| **target-specific** | valid only for one architecture, SoC or board | `port/<arch>/<soc>/`, `port/<arch>/<soc>/device/`, `test/<board>/` |
+
+"Common" is always qualified by scope when the scope is not obvious:
+*common to all targets* (the kernel), *common to an architecture*
+(`port/armv7-a/common/`), *common to one SoC across two ISAs*
+(`port/soc-common/bcm2837/`). The test of what is common is measurement,
+not intuition: if two copies are identical or near-identical, the shared
+part is common by definition, and Section 4 records the measurements.
 
 # 2. Locked decisions
 
@@ -217,7 +243,7 @@ micro-os-plus-iii-smp/
 │                                   (replaces 214 Makefiles)
 ├── micro-os-plus-iii/              the kernel, once — 706 files, arch-independent
 │
-├── devices/                        portable device layer, once
+├── devices/                        common device layer, once
 │   ├── include/micro-os-plus/devices/
 │   └── src/                        usb-dwc2, sd, flatfs, led, uart, spi
 │
@@ -284,7 +310,7 @@ the mechanism by which two whole implementations share a file.
 
 ## 7.3 `devices/`
 
-Holds cross-SoC-portable device code — the 2,966 verbatim-shared lines plus
+Holds device code common across SoCs — the 2,966 verbatim-shared lines plus
 LED/UART/SPI abstracted from the per-board `bsp/` directories. Register-level
 SoC glue stays in `port/<arch>/<soc>/device/`. The boundary is the one the
 code already drew: if it is identical across SoCs or ISAs, it belongs here.
@@ -306,7 +332,7 @@ The top level composes INTERFACE libraries, all source-only, no binaries:
 
 - `micro-os-plus::iii` — the kernel
 - `micro-os-plus::port-<arch>-<soc>` — one per SoC, pulling in `<arch>/common` and `soc-common` as needed
-- `micro-os-plus::devices` — the portable device layer
+- `micro-os-plus::devices` — the common device layer
 
 Each application links the three and adds its own `main.cpp`. `uos-app.cmake`
 provides the single function that declares an application, so a per-app
@@ -351,13 +377,16 @@ Each step is a reviewable, buildable increment.
 - `micro-os-plus-iii/tests/` — upstream's own suite, carried as shipped.
 - New functionality. This is a restructuring; behaviour must not change.
 
-# 11. Open questions
+# 11. Resolved decisions
 
-1. **Board naming.** This spec uses `lyra-a7`, `rpi-32b`, `rpi-64b`,
-   `nucleof411`, `weactf411`, `weactf412`, `pico2`, `pico2-std`, `pico2-sdk`,
-   `pico2-sdk-min`, `stdcpp-pico2`. Confirm or replace.
-2. **`stdcpp-pico2`.** It has only 7 apps and 8 tracked Makefiles, and is a
-   `std`-C++ reference variant rather than an RTOS port. Confirm it migrates as
-   a board rather than being dropped or parked.
-3. **Near-identical threshold.** Section 9's duplicate-source gate needs a
-   concrete similarity threshold. Proposed: flag any pair above 85% identical.
+Settled in review on 2026-09-20. Nothing in this spec is now open.
+
+| # | Question | Resolution |
+|---|---|---|
+| Q1 | Board naming | **Confirmed as proposed.** `lyra-a7`, `rpi-32b`, `rpi-64b`, `nucleof411`, `weactf411`, `weactf412`, `pico2`, `pico2-std`, `pico2-sdk`, `pico2-sdk-min`, `stdcpp-pico2`. |
+| Q2 | `stdcpp-pico2` | **Migrates as a board.** Not parked, not dropped, despite being a `std`-C++ reference variant rather than an RTOS port. It keeps its 7 applications and its entry under `test/`. |
+| Q3 | Near-identical threshold | **85% accepted.** The Section 9 duplicate-source gate flags any two tracked sources above 85% identical. |
+| Q4 | "portable" terminology | **Word retired.** Raised in review as ambiguous; see Section 1.1. The spec uses *common* and *target-specific* only. |
+
+The implementation plan is no longer gated. Section 8 step 1 — skeleton plus
+kernel — is the next action.

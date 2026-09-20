@@ -1,6 +1,6 @@
 # Migration status
 
-**Updated:** 2026-09-20 · **Phase:** design complete, migration not started
+**Updated:** 2026-09-20 · **Phase:** design approved, migration not started
 
 This file is the cold-start entry point. Read it, then
 `docs/specs/2026-09-20-micro-os-plus-iii-smp-unification-design.md` for the
@@ -45,23 +45,23 @@ micro-os-plus-iii-smp/          <- you are here; origin wired, 2 commits, pushed
 4. **`.gitignore` committed.** Verified with `git check-ignore` against all
    7,179 tracked files slated to migrate: none are excluded.
 
-## Blocked on — three decisions
+## Decisions — all resolved
 
-The implementation plan cannot be written until these are settled. They are
-Section 11 of the spec.
+Settled 2026-09-20. Spec Section 11 carries the table; nothing is open.
 
-1. **Board naming.** The spec assumes `lyra-a7`, `rpi-32b`, `rpi-64b`,
-   `nucleof411`, `weactf411`, `weactf412`, `pico2`, `pico2-std`, `pico2-sdk`,
-   `pico2-sdk-min`, `stdcpp-pico2`. Confirm or replace.
-2. **`stdcpp-pico2`.** 7 apps, 8 Makefiles, a `std`-C++ reference variant
-   rather than an RTOS port. Migrate as a board, or park it?
-3. **Duplicate-detection threshold** for the Section 9 verification gate.
-   Proposed: flag any two tracked sources above 85% identical.
+1. **Board naming** — confirmed as proposed.
+2. **`stdcpp-pico2`** — migrates as a board, keeping its 7 applications.
+3. **Duplicate-detection threshold** — 85%.
+4. **"portable" terminology** — retired. Raised in review as ambiguous: the
+   requirement document uses the word to mean *common to all platforms*, while
+   the review note defined it as *specific to one platform*. The spec now uses
+   **common** and **target-specific** only. See spec Section 1.1 before
+   deciding which folder any file belongs in.
 
-## Next step once unblocked
+## Next step
 
 Step 1 of the Section 8 sequence — **skeleton plus kernel**. It is mechanical
-and independently verifiable, and does not depend on the three open questions:
+and independently verifiable, and is now unblocked:
 
 - Create `cmake/toolchains/`, `cmake/uos-app.cmake`, top-level `CMakeLists.txt`.
 - Copy `micro-os-plus-iii-smp-old/cortexm/micro-os-plus-iii/` (706 files, zero

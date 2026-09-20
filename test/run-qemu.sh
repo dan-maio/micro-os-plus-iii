@@ -19,6 +19,19 @@ QEMU="${2:?usage: run-qemu.sh <build-test-dir> <qemu> <machine-args...>}"
 shift 2
 MACHINE=("$@")
 
+# Some ports cannot be handed straight to -kernel. The AArch32 BCM2837 build is
+# one: QEMU's raspi3b machine starts its Cortex-A53 cores in AArch64, so the
+# image is loaded at an address and a small shim drops to AArch32 and jumps
+# there. Set both to use that path; leave them unset for a direct -kernel boot.
+#
+#   UOS_QEMU_SHIM=/path/to/shim8.img UOS_QEMU_LOAD_ADDR=0x10000 test/run-qemu.sh ...
+SHIM="${UOS_QEMU_SHIM:-}"
+LOAD_ADDR="${UOS_QEMU_LOAD_ADDR:-0x10000}"
+if [[ -n "$SHIM" && ! -f "$SHIM" ]]; then
+  echo "UOS_QEMU_SHIM is set but $SHIM does not exist" >&2
+  exit 2
+fi
+
 timeout_for () {
   case "$1" in
     smp_test0|smp_test1|smp_test3|smp_test4) echo 150 ;;
@@ -73,8 +86,14 @@ for img in "${BUILD_DIR}"/*-qemu.bin; do
     drive=(-drive "file=${sd},if=sd,format=raw")
   fi
 
+  if [[ -n "$SHIM" ]]; then
+    boot=(-kernel "$SHIM" -device "loader,file=${img},addr=${LOAD_ADDR}")
+  else
+    boot=(-kernel "$img")
+  fi
+
   timeout "$tmo" "$QEMU" "${MACHINE[@]}" -nographic -serial none \
-      -semihosting-config enable=on,target=native "${drive[@]}" -kernel "$img" \
+      -semihosting-config enable=on,target=native "${drive[@]}" "${boot[@]}" \
       > "$log" 2>&1
   rc=$?
 

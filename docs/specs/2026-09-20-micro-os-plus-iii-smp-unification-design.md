@@ -458,7 +458,16 @@ to be a submodule before any architecture repo is created.**
 1. **Main repo skeleton + kernel.** `cmake/toolchains/`, `uos-app.cmake`, root
    `CMakeLists.txt`, and `cortexm/micro-os-plus-iii/` (706 files, zero build
    litter) copied to `micro-os-plus-iii/`.
-   *Gate:* the kernel compiles standalone.
+
+   *Gate:* revision 1 of this spec said "the kernel compiles standalone". That
+   is impossible and the wording was wrong: `os-decls.h:24` includes
+   `<cmsis-plus/rtos/port/os-decls.h>`, which only an architecture repo
+   supplies, so the kernel never compiles without a port. The real gate is
+   that all three toolchains configure, and that **every source
+   `micro-os-plus::iii` declares compiles when a port's headers are present**.
+   `tools/verify-kernel-compiles.sh <port-include-dir>` enforces it, using the
+   pristine `posix-arch` headers as the witness because they need no
+   cross-compiler. Result at the time of writing: 61 of 61.
 
 2. **`aarch32` + `aarch64`, end to end — the proving slice.** Migrates rpi-32b
    and rpi-64b, which exercises every hard part at once: the `devices/`

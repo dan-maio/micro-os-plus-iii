@@ -1,0 +1,84 @@
+# -----------------------------------------------------------------------------
+# uos-app.cmake — the single application-declaration helper.
+#
+# D7: the predecessor repository declared each application with its own
+# Makefile, 214 of them, differing by roughly 48 lines of boilerplate. This
+# file replaces that boilerplate, so a per-application CMakeLists.txt states
+# only what is genuinely specific to it.
+#
+# Usage:
+#
+#   uos_add_app (smp_test0
+#     SOURCES       ${UOS_TEST_COMMON}/smp_test0/main.cpp
+#     PORT          micro-os-plus::port-aarch32
+#     LINKER_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/linker.ld
+#     NCPU          4
+#   )
+# -----------------------------------------------------------------------------
+
+include_guard (GLOBAL)
+
+function (uos_add_app _name)
+  set (_opts)
+  set (_one  LINKER_SCRIPT PORT NCPU OUTPUT_NAME)
+  set (_many SOURCES INCLUDES DEFINES OPTIONS LIBRARIES)
+  cmake_parse_arguments (A "${_opts}" "${_one}" "${_many}" ${ARGN})
+
+  if (NOT A_SOURCES)
+    message (FATAL_ERROR "uos_add_app(${_name}): SOURCES is required")
+  endif ()
+
+  add_executable (${_name} ${A_SOURCES})
+
+  # The kernel is always linked; the port is whatever architecture repo is
+  # driving this build. Devices are optional -- not every application uses them.
+  target_link_libraries (${_name} PRIVATE micro-os-plus::iii)
+  if (A_PORT)
+    target_link_libraries (${_name} PRIVATE ${A_PORT})
+  endif ()
+  if (TARGET micro-os-plus::devices)
+    target_link_libraries (${_name} PRIVATE micro-os-plus::devices)
+  endif ()
+  if (A_LIBRARIES)
+    target_link_libraries (${_name} PRIVATE ${A_LIBRARIES})
+  endif ()
+
+  if (A_INCLUDES)
+    target_include_directories (${_name} PRIVATE ${A_INCLUDES})
+  endif ()
+  if (A_DEFINES)
+    target_compile_definitions (${_name} PRIVATE ${A_DEFINES})
+  endif ()
+  if (A_OPTIONS)
+    target_compile_options (${_name} PRIVATE ${A_OPTIONS})
+  endif ()
+
+  # OS_NCPU is how a board selects its CPU count from a shared port (D11:
+  # the STM32 boards build the SMP cortexm port at OS_NCPU=1).
+  if (A_NCPU)
+    target_compile_definitions (${_name} PRIVATE OS_NCPU=${A_NCPU})
+    if (A_NCPU GREATER 1)
+      target_compile_definitions (${_name} PRIVATE OS_USE_SMP_SCHEDULER=1)
+    endif ()
+  endif ()
+
+  if (A_OUTPUT_NAME)
+    set_target_properties (${_name} PROPERTIES OUTPUT_NAME "${A_OUTPUT_NAME}")
+  endif ()
+
+  if (A_LINKER_SCRIPT)
+    target_link_options (${_name} PRIVATE "-T${A_LINKER_SCRIPT}")
+    set_target_properties (${_name} PROPERTIES LINK_DEPENDS "${A_LINKER_SCRIPT}")
+  endif ()
+
+  # Bare-metal targets want a raw image and a listing beside the ELF.
+  if (CMAKE_SYSTEM_NAME STREQUAL "Generic")
+    add_custom_command (
+      TARGET ${_name} POST_BUILD
+      COMMAND "${CMAKE_OBJCOPY}" -O binary "$<TARGET_FILE:${_name}>"
+              "$<TARGET_FILE_DIR:${_name}>/${_name}.bin"
+      COMMAND "${CMAKE_SIZE}" "$<TARGET_FILE:${_name}>"
+      VERBATIM
+    )
+  endif ()
+endfunction ()

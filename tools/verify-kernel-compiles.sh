@@ -20,16 +20,20 @@ CXX="${2:-g++}"
 
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 
-# The authoritative list is the target_sources() block, minus commented lines.
+# The authoritative list is every target_sources() block -- the core target and
+# each optional group -- minus commented lines.
 python3 - <<'PY' > "$TMP/srclist"
 s = open("CMakeLists.txt").read()
-blk = s.split("target_sources (", 1)[1].split(")", 1)[0]
-for line in blk.splitlines():
+seen = set()
+blocks = [chunk.split(")", 1)[0] for chunk in s.split("target_sources (")[1:]]
+for blk in blocks:
+  for line in blk.splitlines():
     line = line.strip()
     if not line or line.startswith("#"):
         continue
     for tok in line.split():
-        if tok.startswith("src/") and tok.endswith((".cpp", ".c")):
+        if tok.startswith("src/") and tok.endswith((".cpp", ".c")) and tok not in seen:
+            seen.add(tok)
             print(tok)
 PY
 

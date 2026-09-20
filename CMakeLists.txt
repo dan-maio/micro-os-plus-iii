@@ -54,78 +54,128 @@ target_include_directories (
   micro-os-plus-iii-interface INTERFACE "include" "include/cmsis-plus/legacy"
 )
 
+# The core: what every port compiles. Measured against the proven rpi
+# builds, which took exactly this set and nothing else.
 target_sources (
   micro-os-plus-iii-interface
   INTERFACE
-            src/diag/trace-itm.cpp
-            src/diag/trace-segger-rtt.cpp
-            src/diag/trace-semihosting.cpp
-            src/diag/trace.cpp
-            src/driver/common.cpp
-            src/driver/serial.cpp
-            # src/driver/usart-wrapper.cpp src/driver/usb-device.cpp
-            # src/driver/usb-host.cpp src/driver/usbd-wrapper.cpp
-            # src/driver/usbh-wrapper.cpp
-            src/libc/_sbrk.c
-            src/libc/newlib/c-newlib-reent.cpp
-            src/libc/stdlib/assert.c
-            src/libc/stdlib/atexit.cpp
-            src/libc/stdlib/atexit.h
-            src/libc/stdlib/exit.c
-            src/libc/stdlib/init-fini.c
-            src/libc/stdlib/malloc.cpp
-            src/libc/stdlib/timegm.c
-            src/libcpp/chrono.cpp
-            src/libcpp/condition-variable.cpp
-            src/libcpp/cxx.cpp
-            src/libcpp/memory-resource.cpp
-            src/libcpp/mutex.cpp
-            src/libcpp/new.cpp
-            src/libcpp/system-error.cpp
-            src/libcpp/thread-cpp.h
-            src/libcpp/thread.cpp
-            src/memory/block-pool.cpp
-            src/memory/first-fit-top.cpp
-            src/memory/lifo.cpp
-            src/posix-io/block-device-partition.cpp
-            src/posix-io/block-device.cpp
-            src/posix-io/c-syscalls-posix.cpp
-            src/posix-io/char-device.cpp
-            src/posix-io/device.cpp
-            src/posix-io/directory.cpp
-            src/posix-io/file-descriptors-manager.cpp
-            src/posix-io/file-system.cpp
-            src/posix-io/file.cpp
-            src/posix-io/io.cpp
-            src/posix-io/net-stack.cpp
-            src/posix-io/socket.cpp
-            src/posix-io/tty.cpp
-            src/rtos/internal/os-flags.cpp
-            src/rtos/internal/os-lists.cpp
-            src/rtos/os-c-wrapper.cpp
-            src/rtos/os-clocks.cpp
-            src/rtos/os-condvar.cpp
-            src/rtos/os-core.cpp
-            src/rtos/os-evflags.cpp
-            src/rtos/os-idle.cpp
-            src/rtos/os-main.cpp
-            src/rtos/os-memory.cpp
-            src/rtos/os-mempool.cpp
-            src/rtos/os-mqueue.cpp
-            src/rtos/os-mutex.cpp
-            src/rtos/os-semaphore.cpp
-            src/rtos/os-thread.cpp
-            src/rtos/os-timer.cpp
-            src/semihosting/c-syscalls-semihosting.cpp
-            src/startup/exception-handlers.c
-            src/startup/initialise-free-store.cpp
-            src/startup/initialize-hardware.c
-            src/startup/reset-hardware.c
-            src/startup/startup.cpp
-            src/utils/lists.cpp
+        src/diag/trace.cpp
+        src/libcpp/chrono.cpp
+        src/libcpp/condition-variable.cpp
+        src/libcpp/cxx.cpp
+        src/libcpp/memory-resource.cpp
+        src/libcpp/mutex.cpp
+        src/libcpp/new.cpp
+        src/libcpp/system-error.cpp
+        src/libcpp/thread.cpp
+        src/libc/_sbrk.c
+        src/libc/stdlib/assert.c
+        src/libc/stdlib/atexit.cpp
+        src/libc/stdlib/exit.c
+        src/libc/stdlib/init-fini.c
+        src/libc/stdlib/malloc.cpp
+        src/libc/stdlib/timegm.c
+        src/memory/block-pool.cpp
+        src/memory/first-fit-top.cpp
+        src/memory/lifo.cpp
+        src/rtos/internal/os-flags.cpp
+        src/rtos/internal/os-lists.cpp
+        src/rtos/os-clocks.cpp
+        src/rtos/os-condvar.cpp
+        src/rtos/os-core.cpp
+        src/rtos/os-c-wrapper.cpp
+        src/rtos/os-evflags.cpp
+        src/rtos/os-idle.cpp
+        src/rtos/os-main.cpp
+        src/rtos/os-memory.cpp
+        src/rtos/os-mempool.cpp
+        src/rtos/os-mqueue.cpp
+        src/rtos/os-mutex.cpp
+        src/rtos/os-semaphore.cpp
+        src/rtos/os-thread.cpp
+        src/rtos/os-timer.cpp
+        src/startup/initialise-free-store.cpp
+        src/utils/lists.cpp
 )
 
 add_library (micro-os-plus::iii ALIAS micro-os-plus-iii-interface)
+
+# -----------------------------------------------------------------------------
+# Optional groups. Upstream ships these beside the core, but a bare-metal port
+# does not necessarily want them -- the rpi ports compile none of them: they
+# have their own startup.S, their own semihosting in uart.hpp, and no file
+# descriptors. Listing them in the core target is what made
+# c-syscalls-posix.cpp collide with newlib's unistd.h.
+#
+# A port takes what it needs:
+#
+#   target_link_libraries (my-port INTERFACE micro-os-plus::iii-posix-io)
+#
+# The trace backends are mutually exclusive: link at most one.
+
+add_library (micro-os-plus-iii-posix-io-interface INTERFACE)
+target_sources (micro-os-plus-iii-posix-io-interface INTERFACE
+        src/posix-io/block-device-partition.cpp
+        src/posix-io/block-device.cpp
+        src/posix-io/c-syscalls-posix.cpp
+        src/posix-io/char-device.cpp
+        src/posix-io/device.cpp
+        src/posix-io/directory.cpp
+        src/posix-io/file-descriptors-manager.cpp
+        src/posix-io/file-system.cpp
+        src/posix-io/file.cpp
+        src/posix-io/io.cpp
+        src/posix-io/net-stack.cpp
+        src/posix-io/socket.cpp
+        src/posix-io/tty.cpp
+)
+add_library (micro-os-plus::iii-posix-io ALIAS micro-os-plus-iii-posix-io-interface)
+
+add_library (micro-os-plus-iii-drivers-interface INTERFACE)
+target_sources (micro-os-plus-iii-drivers-interface INTERFACE
+        src/driver/common.cpp
+        src/driver/serial.cpp
+)
+add_library (micro-os-plus::iii-drivers ALIAS micro-os-plus-iii-drivers-interface)
+
+add_library (micro-os-plus-iii-startup-interface INTERFACE)
+target_sources (micro-os-plus-iii-startup-interface INTERFACE
+        src/startup/exception-handlers.c
+        src/startup/initialize-hardware.c
+        src/startup/reset-hardware.c
+        src/startup/startup.cpp
+)
+add_library (micro-os-plus::iii-startup ALIAS micro-os-plus-iii-startup-interface)
+
+add_library (micro-os-plus-iii-newlib-reent-interface INTERFACE)
+target_sources (micro-os-plus-iii-newlib-reent-interface INTERFACE
+        src/libc/newlib/c-newlib-reent.cpp
+)
+add_library (micro-os-plus::iii-newlib-reent ALIAS micro-os-plus-iii-newlib-reent-interface)
+
+add_library (micro-os-plus-iii-semihosting-interface INTERFACE)
+target_sources (micro-os-plus-iii-semihosting-interface INTERFACE
+        src/semihosting/c-syscalls-semihosting.cpp
+)
+add_library (micro-os-plus::iii-semihosting ALIAS micro-os-plus-iii-semihosting-interface)
+
+add_library (micro-os-plus-iii-trace-itm-interface INTERFACE)
+target_sources (micro-os-plus-iii-trace-itm-interface INTERFACE
+        src/diag/trace-itm.cpp
+)
+add_library (micro-os-plus::iii-trace-itm ALIAS micro-os-plus-iii-trace-itm-interface)
+
+add_library (micro-os-plus-iii-trace-semihosting-interface INTERFACE)
+target_sources (micro-os-plus-iii-trace-semihosting-interface INTERFACE
+        src/diag/trace-semihosting.cpp
+)
+add_library (micro-os-plus::iii-trace-semihosting ALIAS micro-os-plus-iii-trace-semihosting-interface)
+
+add_library (micro-os-plus-iii-trace-segger-rtt-interface INTERFACE)
+target_sources (micro-os-plus-iii-trace-segger-rtt-interface INTERFACE
+        src/diag/trace-segger-rtt.cpp
+)
+add_library (micro-os-plus::iii-trace-segger-rtt ALIAS micro-os-plus-iii-trace-segger-rtt-interface)
 
 # -----------------------------------------------------------------------------
 # Drivers and SoC support are NOT part of this repository. They live in

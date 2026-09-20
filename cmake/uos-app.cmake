@@ -53,6 +53,29 @@ function (uos_add_app _name)
     target_compile_options (${_name} PRIVATE ${A_OPTIONS})
   endif ()
 
+  # The flags every bare-metal application in the predecessor repository
+  # carried in its own Makefile, identically. The architecture project adds
+  # only its -mcpu/-march on top of these.
+  if (CMAKE_SYSTEM_NAME STREQUAL "Generic")
+    target_compile_options (
+      ${_name} PRIVATE
+      -O2 -g3 -fmessage-length=0 -fsigned-char
+      -ffunction-sections -fdata-sections
+      $<$<COMPILE_LANGUAGE:C>:-std=gnu11>
+      $<$<COMPILE_LANGUAGE:CXX>:-std=c++23>
+      $<$<COMPILE_LANGUAGE:CXX>:-fabi-version=0>
+      $<$<COMPILE_LANGUAGE:CXX>:-fno-exceptions>
+      $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>
+      $<$<COMPILE_LANGUAGE:ASM>:-x$<SEMICOLON>assembler-with-cpp>
+    )
+    target_link_options (
+      ${_name} PRIVATE
+      -nostartfiles
+      -Wl,--gc-sections
+      "-Wl,-Map,$<TARGET_FILE_DIR:${_name}>/${_name}.map"
+    )
+  endif ()
+
   # OS_NCPU is how a board selects its CPU count from a shared port (D11:
   # the STM32 boards build the SMP cortexm port at OS_NCPU=1).
   if (A_NCPU)

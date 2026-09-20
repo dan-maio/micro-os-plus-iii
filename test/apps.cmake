@@ -47,10 +47,11 @@ set (UOS_TEST_APPS_NEED_SD
 function (uos_test_app_defines _app _out)
   set (_d "")
   if (_app STREQUAL "usb_test")
-    # led.hpp's own default is GPIO 16, which blinks nothing on a bare board.
-    # A burst of LED_BLINKS blinks, each LED_ON_MS lit then LED_OFF_MS dark,
-    # then LED_GAP_MS dark, repeating.
-    list (APPEND _d LED_PIN=29 LED_BLINKS=3 LED_ON_MS=40 LED_OFF_MS=40
+    # The blink pattern, which is usb_test's own: a burst of LED_BLINKS
+    # blinks, each LED_ON_MS lit then LED_OFF_MS dark, then LED_GAP_MS dark,
+    # repeating. Which GPIO that is belongs to the board, so LED_PIN is set
+    # by the architecture project for every test, not here for one of them.
+    list (APPEND _d LED_BLINKS=3 LED_ON_MS=40 LED_OFF_MS=40
                     LED_GAP_MS=300 USB_FORCE_FS)
   endif ()
   set (${_out} "${_d}" PARENT_SCOPE)

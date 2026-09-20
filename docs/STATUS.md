@@ -1,6 +1,7 @@
 # Migration status
 
-**Updated:** 2026-09-20 · **Phase:** step 1 complete — skeleton and kernel in place
+**Updated:** 2026-09-20 · **Phase:** step 2 — the proving slice, builds green,
+QEMU suites running
 
 This file is the cold-start entry point. Read it, then
 `docs/specs/2026-09-20-micro-os-plus-iii-smp-unification-design.md` for the
@@ -10,122 +11,146 @@ full design and the measurements behind it.
 
 ## Where things stand
 
-**Step 1 of 5 is complete.** The kernel is vendored once and the build
-skeleton is in place. The old tree is untouched and remains read-only.
+**Step 1 is complete. Step 2 is most of the way through.** Six repositories
+exist; both ARM architecture projects build all 24 of their targets from a
+single copy of every test.
 
 ```
-micro-os-plus-iii-smp/          <- you are here; origin wired, 2 commits, pushed
-├── .gitignore
-└── docs/
-    ├── STATUS.md               <- this file
-    ├── micro-os-plus-iii-project-unification.md    the original requirement
-    └── specs/
-        └── 2026-09-20-micro-os-plus-iii-smp-unification-design.md
+TMP7/
+├── micro-os-plus-iii-smp/        kernel + shared tests + shared build rules
+│   ├── src/ include/             the kernel, upstream path-for-path
+│   ├── port/smp-common/          os-decls.h, shared by both ARM ports
+│   ├── test/common/              the twelve test applications, one copy each
+│   ├── test/apps.cmake           which tests exist and how each is configured
+│   ├── test/run-qemu.sh          the shared QEMU suite runner
+│   ├── cmake/                    toolchains + uos_add_app / uos_add_test_app
+│   └── tools/verify-kernel-compiles.sh
+├── micro-os-plus-iii-devices/    SD, flatfs, DWC2, FatFs, BCM2837 SoC
+├── micro-os-plus-iii-aarch64/    ARMv8-A port  (24 targets build)
+├── micro-os-plus-iii-aarch32/    ARMv7-A port  (24 targets build)
+└── micro-os-plus-iii-smp-old/    READ ONLY — the migration source
 ```
 
 | | |
 |---|---|
-| New working tree | `/home/dan/Downloads/luckfox_lyra/TMP7/micro-os-plus-iii-smp` |
-| New remote | `/home/dan/Downloads/GIT/micro-os-plus-iii-smp.git` |
-| Migration source (read-only) | `/home/dan/Downloads/luckfox_lyra/TMP7/micro-os-plus-iii-smp-old` |
-| Old remote | `/home/dan/Downloads/GIT/micro-os-plus-iii-smp-old.git` |
-| Commits | `cb4b3e1` docs · `0aa4924` .gitignore |
+| Migration source (read-only) | `TMP7/micro-os-plus-iii-smp-old` |
+| Remotes | `GIT/micro-os-plus-iii-{smp,devices,aarch32,aarch64}.git` |
+| Old remote | `GIT/micro-os-plus-iii-smp-old.git` |
+
+Each architecture project pins the kernel and the devices repo as submodules.
+The dependency runs one way: neither the kernel nor the devices repo knows an
+architecture project exists.
 
 ## Done
 
-1. **Remotes reorganised.** `GIT/micro-os-plus-iii-smp.git` renamed to
-   `…-smp-old.git` (77 MB, history intact). Both clones that referenced the old
-   name were repointed: `TMP7/micro-os-plus-iii-smp-old` and
-   `TMP7/backup/micro-os-plus-iii-smp`. A new empty bare repo took the original
-   name and is this repository's `origin`.
-2. **Old tree analysed and measured.** Every figure in the spec came from the
-   tree, not estimation. Summary in the spec, Sections 3 and 4.
-3. **Design spec written and committed.** Near-zero duplication (D7) is the
-   governing constraint.
-4. **`.gitignore` committed.** Verified with `git check-ignore` against all
-   7,179 tracked files slated to migrate: none are excluded.
-5. **Step 1 — skeleton and kernel** (`2502d93`). Kernel vendored once from
-   `cortexm/micro-os-plus-iii` (706 files, zero litter). Root `CMakeLists.txt`
-   works standalone and as a submodule. Three toolchains share one preamble.
-   `cmake/uos-app.cmake` replaces the 214 Makefiles and carries the `OS_NCPU`
-   knob. Gate passed: all three toolchains configure; **61 of 61** declared
-   kernel sources compile, enforced by `tools/verify-kernel-compiles.sh`.
+1. **Remotes reorganised**, old tree analysed and measured, design spec
+   written. Every figure in the spec came from the tree, not estimation.
+2. **Step 1 — skeleton and kernel.** Kernel vendored once, flattened to the
+   repository root so it matches upstream path-for-path. Three toolchains share
+   one preamble. `uos_add_app` replaces 214 Makefiles.
+3. **Devices split out** (`micro-os-plus-iii-devices`). All seven sources
+   compile for armv7-a *and* armv8-a from one copy; ~12,000 duplicated lines
+   collapse to one copy.
+4. **Step 2a — the twelve test applications unified.** 15,507 lines of
+   application C++ become 7,610. Nothing ISA-specific is left in a test.
+5. **Step 2b — both ARM architecture projects.** `aarch64` and `aarch32` each
+   build all 24 targets (12 applications × {qemu, hwd}) from one loop over
+   `test/apps.cmake`; neither names a test itself.
+
+## What made the test deduplication possible
+
+The ISA seam in the applications turned out to be tiny, and mostly not a seam:
+
+| what the two copies disagreed on | resolution |
+|---|---|
+| `dsb` vs `dsb sy`, `dmb` vs `dmb ish` | not a difference — the explicit forms assemble on ARMv7-A too. Verified with both assemblers. |
+| `cpsie i` vs `msr daifclr, #2` | already a kernel API: `interrupts::uncritical_section::enter()`, implemented by every port |
+| `mrrc p15…c14` vs `mrs cntpct_el0` | already in the port's `timer_arm.hpp`; the tests were re-reading the register themselves |
+| `"(AArch64)"` in banners | `PORT_BANNER_ISA` / `PORT_BANNER_CPU`, beside the existing `PORT_BANNER_LONG`/`SHORT` |
+
+Two pieces of per-application boilerplate were also collected:
+`test-smp-boot` (idle stacks, idle body, `smp_install_boot_threads()`, in ten
+of twelve tests) and `test-console` (the mutex-guarded print helpers, in
+three). The shared boot helper generates thread names from `OS_NCPU` instead
+of listing four, so it no longer assumes a four-core BCM2837.
+
+## Two defects found and fixed on the way
+
+- **The kernel exported all 63 sources as one target**, but the proven rpi
+  builds compiled exactly 37. Linking the rest breaks the build:
+  `posix-io/c-syscalls-posix.cpp` declares `read`/`write` returning `ssize_t`,
+  newlib declares them returning `int`. `micro-os-plus::iii` is now that
+  measured 37-source core; posix-io, drivers, generic startup, newlib-reent,
+  semihosting and the three trace backends are opt-in targets. Two entries were
+  headers listed as sources and are gone — which is why 63 entries were always
+  61 compiled files.
+- **The Cortex-A7 port's `os-decls.h` was missing `volatile`** on
+  `lock_state[]`, which several cores read and write. The shared copy in
+  `port/smp-common/` is the correct one, so adopting it fixes that port rather
+  than merely deduplicating it.
 
 ## Decisions — all resolved
 
-Revision 1 settled Q1-Q4; revision 2 settled Q5-Q9. Spec Section 11 has the
-table. Nothing is open.
-
-**Revision 2 changed the shape of the project** (`docs/new-modifications.md`):
-
-1. **Architecture-specific, not target-specific.** Four ports — `cortexm`,
-   `aarch32`, `aarch64`, `posix-arch`. A board is a build configuration, never
-   a port folder.
-2. **Multi-repo.** Main repo holds all common code; each architecture is its
-   own Git repo holding only `src/` and `include/`, pinning the main repo as a
-   **submodule**.
-3. **`devices/` and `test/common/` stay in the main repo** — their consumers
-   are now separate repos, and cross-repo copies drift with nothing to catch it.
-4. **`cortexm` must be SMP** — largely already true: pico2/RP2350 is a working
-   dual-core Cortex-M33 SMP port (124 SMP mentions vs 10 in the STM32 port).
-   It becomes the architecture's core; STM32 boards run it at `OS_NCPU=1`.
-5. **`posix-arch` must be SMP** — the only genuinely new implementation. One
-   host thread per CPU; see spec Section 7.6.
+Spec Section 11 has the table; nothing is open. Revision 2 set the shape:
+architecture-specific ports (not target-specific), six repositories,
+architecture projects independent and *outside* the main repo, devices in
+their own repo, `cortexm` and `posix-arch` both to become SMP.
 
 ## Next step
 
-Step 2 of the Section 8 sequence — **`aarch32` + `aarch64` end to end**, the
-proving slice. It migrates rpi-32b and rpi-64b and exercises every hard part at
-once: the `devices/` extraction into this repo, two architecture repos
-consuming it by submodule, shared `test/common/` sources across two ISAs, and
-the only real QEMU coverage in the project. 12 shared app sources, 24 targets.
+**Finish step 2.** Remaining:
 
-*Gate:* all 24 build; QEMU suites pass; hardware tests pass on the Pi; no
-device or test source exists in more than one repo.
+1. QEMU suites green on both ports (running; the four SD tests needed the
+   runner to provision a card image, which it now does).
+2. Hardware tests on the Pi — the `hwd` variants build but have not been run
+   on silicon.
+3. Fold the per-test `hw.sh` / `hw-olimex.sh` runners into something shared,
+   the way `run-qemu.sh` replaced `verify-qemu-all.sh` + `run_one_test.sh`.
+   They are ~200-line near-identical scripts, two per test, per ISA.
 
-Superseded notes from step 1:
+*Gate:* all 24 targets build **(met, both ports)**; QEMU suites pass; hardware
+tests pass on the Pi; no device or test source exists in more than one repo
+**(met)**.
 
-- Done in `2502d93`. Note the gate wording was corrected: the kernel can
-  **never** compile standalone, because `os-decls.h:24` includes
-  `<cmsis-plus/rtos/port/os-decls.h>`, which only an architecture repo
-  supplies. Use `tools/verify-kernel-compiles.sh <port-include-dir>` instead.
-
-Then step 2, the proving slice: rpi-32b and rpi-64b end to end.
+Then step 3 (`aarch32` gains RK3506), step 4 (`cortexm`), step 5
+(`posix-arch`).
 
 ## Things a fresh session should not rediscover
 
-- The four patched kernel copies are **byte-identical**. Verified by `diff -rq`.
-  They collapse to one at zero risk.
+- The four patched kernel copies are **byte-identical** (`diff -rq`).
 - The kernel differs from pristine upstream in exactly **6 files**, all under
   `rtos/`. That is the entire SMP delta.
 - **Upstream fork point**, preserved because the spec drops `BASE`:
   `micro-os-plus-iii` @ `c47f806b57f8b9b870ec7b89ded663dec354df96`
   (branch `xpack-development`), `micro-os-plus-iii-cortexm` @
-  `687e975caa298519cb214d4b5a9774c48f784816`. The planned GitHub merge needs
-  these as its base.
-- A test app is only ~5 tracked files. The ~100 others per app directory are
-  untracked `build/` and `output/` artifacts — every app currently recompiles
-  the whole kernel privately.
+  `687e975caa298519cb214d4b5a9774c48f784816`.
+- **`src/rtos/os-core.cpp` exists twice on purpose.** The kernel's is the
+  portable SMP scheduler; each port has its own at the same relative path with
+  the bring-up, the kernel lock and the context-switch hooks. Both are
+  compiled, exactly as the old Makefiles did. They do not collide.
+- **A port needs its machine flags at link time too**, not just compile time.
+  Without them the driver picks the wrong multilib and every AArch32 link fails
+  with "uses VFP register arguments".
+- **`rtk`'s `diff` reports "Files are identical" for files with different
+  MD5s.** Seen on `sd.cpp`, `bcm2837.hpp`, `bcm_irq.hpp`. Use `md5sum` or
+  Python `difflib` for anything that matters.
+- `rtk` silently dropped the `-u` flag from `git push -u`; tracking was set
+  with `git branch --set-upstream-to`. Expect this on new branches.
+- Do **not** add a blanket `*.html` ignore rule — the kernel ships three
+  doxygen templates as `.html`.
 - There are **214 tracked Makefiles**, not the 24 an early count suggested.
-- QEMU support is real only for rpi-32b and rpi-64b, plus one
-  `weactf411/spi-pipeline/run-qemu.sh`. The `qemu-cortex-m*` directories belong
-  to upstream's own suite inside the kernel copies.
-- Do **not** add a blanket `*.html` ignore rule. The kernel ships three doxygen
-  templates as `.html`; they are upstream source. The `.gitignore` says so.
-- `rtk` silently dropped the `-u` flag from `git push -u`. The push succeeded
-  but tracking config was not written; it was set with
-  `git branch --set-upstream-to`. Expect this on new branches.
+- A test app is only ~5 tracked files; the ~100 others per directory are
+  untracked build artifacts.
 - **The SMP port contract is small.** The whole kernel patch is 379 lines and
   asks a port for only: `OS_USE_SMP_SCHEDULER`, `OS_NCPU`, `port_cpu_id`,
   `port::scheduler::switch_stacks`, `port::stack::element_t`, plus a kernel
   lock and an IPI.
 - **`cortexm` SMP is not from scratch.** pico2's `os-core.cpp` is already a
   complete dual-core Cortex-M33 SMP port.
-- **`posix-arch` is pristine upstream v1.0.1**, untracked in the old workspace,
-  with its own GitHub remote. Single host thread, `ucontext` coroutines,
-  cooperative only — upstream's `NOTES.md` says so explicitly.
+- **`posix-arch` is pristine upstream v1.0.1**, untracked in the old
+  workspace. Single host thread, `ucontext` coroutines, cooperative only.
 - **Three POSIX defects to fix when going multi-threaded:** `sigprocmask` is
   unspecified in a multithreaded process (use `pthread_sigmask`);
   `setitimer(ITIMER_REAL)` delivers to an arbitrary thread (use `timer_create`
-  with `SIGEV_THREAD_ID`); and `errno`/`thread_local` are host-thread local, so
-  uOS++ thread migration between CPUs corrupts them.
+  with `SIGEV_THREAD_ID`); `errno`/`thread_local` are host-thread local, so
+  µOS++ thread migration between CPUs corrupts them.

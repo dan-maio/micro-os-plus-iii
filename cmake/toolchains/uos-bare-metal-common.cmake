@@ -11,9 +11,15 @@ set (CMAKE_SYSTEM_NAME Generic)
 set (CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
 
 # Prefer an xPack toolchain when one is installed, else fall back to PATH.
+# -DUOS_TOOLCHAIN_BIN=<dir> pins one exactly, which is what you want when
+# bisecting a miscompilation across toolchain versions.
+if (UOS_TOOLCHAIN_BIN)
+  set (_uos_xpacks "${UOS_TOOLCHAIN_BIN}")
+else ()
 file (GLOB _uos_xpacks
       "$ENV{HOME}/.local/xPacks/@xpack-dev-tools/${UOS_TOOLCHAIN_XPACK}/*/.content/bin"
 )
+endif ()
 if (_uos_xpacks)
   list (SORT _uos_xpacks COMPARE NATURAL ORDER DESCENDING)
   list (GET _uos_xpacks 0 _uos_bin)

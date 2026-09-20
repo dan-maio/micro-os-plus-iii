@@ -58,7 +58,7 @@ sd_image_for () {
 }
 
 LOGS="${BUILD_DIR}/.qemu-logs"; mkdir -p "$LOGS"
-pass=0; fail=0; declare -a results=()
+pass=0; fail=0; skip=0; declare -a results=()
 
 for img in "${BUILD_DIR}"/*-qemu.bin; do
   [[ -e "$img" ]] || { echo "no *-qemu.bin in ${BUILD_DIR}"; exit 2; }
@@ -80,6 +80,12 @@ for img in "${BUILD_DIR}"/*-qemu.bin; do
 
   if grep -q 'RESULT: PASS' "$log"; then
     echo "PASS"; pass=$((pass+1)); results+=("$app PASS")
+  elif grep -q 'RESULT: SKIP' "$log"; then
+    # A test can decide it has nothing to do here -- usb_test needs USB device
+    # mode, which QEMU does not emulate. Not a failure; the predecessor suite
+    # recorded these as SKIP too.
+    echo "SKIP  ($(sed -n 's/.*RESULT: SKIP *//p' "$log" | head -1))"
+    skip=$((skip+1)); results+=("$app SKIP")
   elif grep -q 'RESULT: FAIL' "$log"; then
     echo "FAIL  (see $log)"; fail=$((fail+1)); results+=("$app FAIL")
   elif [[ $rc -eq 124 ]]; then
@@ -90,5 +96,5 @@ for img in "${BUILD_DIR}"/*-qemu.bin; do
 done
 
 echo
-echo "qemu suite: ${pass} passed, ${fail} failed"
+echo "qemu suite: ${pass} passed, ${skip} skipped, ${fail} failed"
 [[ $fail -eq 0 ]]

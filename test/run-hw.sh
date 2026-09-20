@@ -62,13 +62,23 @@ OPENOCD="${OPENOCD:-$(ls -d "$HOME"/.local/xPacks/@xpack-dev-tools/openocd/*/.co
 SCRIPTS="$(cd "$(dirname "$OPENOCD")/.." 2>/dev/null && pwd)/openocd/scripts"
 [[ -d "$SCRIPTS" ]] || SCRIPTS=""
 
-# Hardware runs at silicon speed, so these are far shorter than the QEMU
-# timeouts in run-qemu.sh; they are the predecessor scripts' durations.
+# A hardware budget is NOT the test's own duration -- it is dominated by the
+# semihosting traps, and those scale with how much the test prints, not with
+# how long it thinks it runs. Measured: smp_test4 reaches its verdict at
+# t=9597ms of target time, yet needs over 120s of wall clock, because its
+# reporter emits ~9 lines a second and every `<<` is a separate SYS_WRITE0,
+# each a debug halt/resume over JTAG at roughly 0.15s.
+#
+# So the chatty tests get generous budgets. Override with the third argument.
 run_secs_for () {
   case "$1" in
-    smp-mat-test|smp-mat-sdcard-test)                 echo 300 ;;
-    sd_test|smp-num-test|smp-pipeline-test)           echo 240 ;;
-    *)                                                echo 120 ;;
+    smp_test0|smp_test1|smp_test2|smp_test3)          echo 120 ;;  # measured
+    smp_test4)                                        echo 300 ;;  # measured
+    smp-mat-test|smp-mat-sdcard-test)                 echo 900 ;;
+    smp-num-test|smp-pipeline-test|smp-pro-cons-test) echo 600 ;;
+    sd_test)                                          echo 450 ;;
+    usb_test)                                         echo 300 ;;
+    *)                                                echo 300 ;;
   esac
 }
 

@@ -17,8 +17,16 @@
 # the kernel entry. startup.S does the rest: core 0 brings the system up,
 # cores 1..N-1 park until the kernel releases them through __smp_spin + SEV.
 #
+# ONE TEST PER POWER CYCLE. Every run is a debug-in-RAM run: OpenOCD halts
+# the cores and load_image's the ELF over whatever the previous test left in
+# DRAM. The Pi has no SRST and the Cortex-A53 debug target has no reset
+# method, so nothing here can put the board back into a known state -- only
+# you can, by power-cycling it. That is why this script refuses to run a
+# suite: it takes exactly one test, and you reset the board before the next.
+#
 # Usage:
-#   run-hw.sh <build-test-dir> <app|all> [run-seconds]
+#   run-hw.sh <build-test-dir> <app> [run-seconds]
+#   run-hw.sh <build-test-dir> list
 #
 # The architecture project supplies the ISA facts, the way run-qemu.sh takes
 # the machine arguments from its caller -- this script stays ISA-neutral:
@@ -36,8 +44,8 @@
 #   OPENOCD           openocd binary (default: newest xPack, else PATH)
 set -uo pipefail
 
-BUILD_DIR="${1:?usage: run-hw.sh <build-test-dir> <app|all> [run-seconds]}"
-WHICH="${2:-all}"
+BUILD_DIR="${1:?usage: run-hw.sh <build-test-dir> <app|list> [run-seconds]}"
+WHICH="${2:-list}"
 RUN_SECS_ARG="${3:-}"
 
 CFG="${UOS_HW_CFG:?run-hw.sh: the architecture project must set UOS_HW_CFG}"
@@ -172,28 +180,39 @@ EOF
   return "$rc"
 }
 
-pass=0; fail=0; skip=0
-if [[ "$WHICH" == "all" ]]; then
-  shopt -s nullglob
-  elfs=("${BUILD_DIR}"/*-hwd)
-  shopt -u nullglob
-  ((${#elfs[@]})) || { say "no *-hwd executables in ${BUILD_DIR}"; exit 2; }
-else
-  elfs=("${BUILD_DIR}/${WHICH}-hwd")
-  [[ -x "${elfs[0]}" ]] || { say "no such build: ${elfs[0]}"; exit 2; }
+shopt -s nullglob
+available=("${BUILD_DIR}"/*-hwd)
+shopt -u nullglob
+((${#available[@]})) || { say "no *-hwd executables in ${BUILD_DIR}"; exit 2; }
+
+if [[ "$WHICH" == "list" ]]; then
+  echo "hardware tests built in ${BUILD_DIR}:"
+  for elf in "${available[@]}"; do
+    app="$(basename "$elf" -hwd)"
+    printf '  %-22s %4ss\n' "$app" "$(run_secs_for "$app")"
+  done
+  echo
+  echo "Run one, then power-cycle the board before the next."
+  exit 0
 fi
 
-for elf in "${elfs[@]}"; do
-  [[ -x "$elf" ]] || continue
-  app="$(basename "$elf" -hwd)"
-  run_one "$app" "$elf"
-  case $? in
-    0) pass=$((pass + 1)) ;;
-    3) skip=$((skip + 1)) ;;
-    *) fail=$((fail + 1)) ;;
-  esac
-done
+if [[ "$WHICH" == "all" ]]; then
+  say "refusing to run a suite."
+  say "Each test is loaded into RAM over whatever the previous one left there,"
+  say "and the Pi has no reset this script can drive. Run one test, power-cycle"
+  say "the board, then run the next. '$0 $BUILD_DIR list' shows them."
+  exit 2
+fi
 
+ELF="${BUILD_DIR}/${WHICH}-hwd"
+[[ -x "$ELF" ]] || { say "no such build: $ELF   (try: $0 $BUILD_DIR list)"; exit 2; }
+
+run_one "$WHICH" "$ELF"
+rc=$?
 echo
-echo "hardware suite: ${pass} passed, ${skip} skipped, ${fail} failed"
-[[ $fail -eq 0 ]]
+case "$rc" in
+  0) say "$WHICH PASSED — power-cycle the board before the next test." ;;
+  3) say "$WHICH SKIPPED — power-cycle the board before the next test." ;;
+  *) say "$WHICH did not pass — power-cycle the board before retrying." ;;
+esac
+[[ $rc -eq 0 || $rc -eq 3 ]]

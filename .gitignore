@@ -6,8 +6,9 @@
 # across 233 build/ and 173 output/ directories. The unified CMake build keeps
 # objects out of the source tree, but these rules stay as a backstop.
 # ---------------------------------------------------------------------------
-build/
-build-*/
+# build*/ , not build/ + build-*/ : a directory named build15 or
+# buildgcc14 slipped through the narrower pair and got committed once.
+build*/
 cmake-build*/
 output/
 target/

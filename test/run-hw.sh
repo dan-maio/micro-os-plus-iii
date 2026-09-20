@@ -41,6 +41,13 @@
 #   UOS_HW_RESUME     pc   = set PC, then resume            (AArch64)
 #                     cpsr = set CPSR, then resume at entry (AArch32)
 #   UOS_HW_NCPU       cores to drive                (default: 4)
+#   UOS_HW_ADAPTER_KHZ  override the JTAG clock after init. board/rpi3.cfg
+#                     asks for 4000 kHz, which is more than jumper wires
+#                     reliably carry -- especially while the board is drawing
+#                     USB and SD current. A DAP that gives up mid-run reports
+#                     "Invalid ACK (0) in DAP response" and then fails to
+#                     re-examine every core; drop to 1000 and retry before
+#                     suspecting the firmware.
 #   OPENOCD           openocd binary (default: newest xPack, else PATH)
 set -uo pipefail
 
@@ -56,6 +63,7 @@ READELF="${UOS_HW_READELF:-readelf}"
 NCPU="${UOS_HW_NCPU:-4}"
 SPIN_WORDS="${UOS_HW_SPIN_WORDS:-$((NCPU * 2))}"
 RESUME_MODE="${UOS_HW_RESUME:-pc}"
+ADAPTER_KHZ="${UOS_HW_ADAPTER_KHZ:-}"
 
 OPENOCD="${OPENOCD:-$(ls -d "$HOME"/.local/xPacks/@xpack-dev-tools/openocd/*/.content/bin/openocd 2>/dev/null | sort -V | tail -1)}"
 [[ -n "$OPENOCD" && -x "$OPENOCD" ]] || OPENOCD="$(command -v openocd || echo openocd)"
@@ -138,8 +146,15 @@ foreach core {$(seq -s' ' 0 $((NCPU - 1)))} {
   fi
 
   # Quote nothing but the expansions we want: \$core must reach Tcl literally.
+  local speed=""
+  if [[ -n "$ADAPTER_KHZ" ]]; then
+    speed="echo \"--- stage: JTAG clock -> ${ADAPTER_KHZ} kHz ---\"
+adapter speed ${ADAPTER_KHZ}"
+  fi
+
   cat > "$cfg" <<EOF
-echo "--- stage: halt all cores ---"
+${speed:+$speed
+}echo "--- stage: halt all cores ---"
 foreach core {$(seq -s' ' 0 $((NCPU - 1)))} { targets bcm2837.cpu\$core; halt }
 echo "--- stage: enable semihosting on all cores ---"
 # Per-target: a core whose semihosting is off stalls at a debug halt the first
@@ -171,6 +186,9 @@ EOF
     if grep -q 'RESULT: SKIP' "$log" 2>/dev/null; then rc=3; break; fi
     if grep -qE 'RESULT: FAIL|\[FAIL\]|FAIL:|FATAL:' "$log" 2>/dev/null; then rc=1; break; fi
     if ! kill -0 "$ocd" 2>/dev/null; then rc=4; break; fi
+    if grep -qE 'Invalid ACK|Polling failed|Examination failed' "$log" 2>/dev/null; then
+      rc=6; break
+    fi
     if grep -qE '^Error: ' "$log" 2>/dev/null; then rc=5; break; fi
     sleep 1; waited=$((waited + 1))
   done
@@ -185,6 +203,9 @@ EOF
     1) echo "FAIL  (see $log)" ;;
     4) echo "OPENOCD DIED  (see $log)" ;;
     5) echo "OPENOCD ERROR: $(grep -m1 '^Error: ' "$log")" ;;
+    6) echo "DEBUG LINK LOST  (the DAP stopped answering, not a firmware fault)"
+       echo "    retry with UOS_HW_ADAPTER_KHZ=1000, and check the board's supply"
+       echo "    see $log" ;;
     *) echo "TIMEOUT after ${secs}s  (see $log)" ;;
   esac
   return "$rc"

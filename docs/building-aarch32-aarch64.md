@@ -155,12 +155,12 @@ Measured on a Raspberry Pi Zero 2 W over a SEGGER J-Link.
 | Port | Hardware |
 |---|---|
 | **AArch64** | all twelve tests pass |
-| **AArch32** | `usb_test` passes; the other eleven are built but not yet run on silicon |
+| **AArch32** | all twelve tests pass |
 
-Only what has actually been run on the board is recorded here. The AArch32
-figure is not inferred from the AArch64 one — the two ports share every test
-source, but they are separate binaries and a stale build is indistinguishable
-from a bug until you rebuild and re-run.
+Each figure is from runs on that port. They are not inferred from one another:
+the two ports share every test source, but they are separate binaries, and a
+stale build is indistinguishable from a bug until you rebuild and re-run.
+**Rebuild the port you are about to test.**
 
 ### Standalone boot
 

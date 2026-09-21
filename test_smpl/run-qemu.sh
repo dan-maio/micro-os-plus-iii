@@ -49,14 +49,19 @@ timeout_for () {
 # seeded flatfs volume (its own flatfs_tool.py builds one); the others just
 # need a large enough blank image to format. Kept out of git by .gitignore --
 # a 4 GiB sparse file per test.
-COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common"
+# Where this board's test sources are, for the host-side helpers a test ships
+# beside itself (sd_test/flatfs_tool.py seeds the card image). Each board owns
+# its tests, so the board's runner passes the path.
+COMMON_DIR="${UOS_TEST_SRC_DIR:-}"
 
 sd_image_for () {
   local app="$1" img="${LOGS}/${app}.disk.img"
   case "$app" in
     sd_test)
       if [[ ! -f "$img" ]]; then
-        python3 "${COMMON_DIR}/sd_test/flatfs_tool.py" make-seed "$img" >/dev/null \
+        local tool="${COMMON_DIR}/sd_test/flatfs_tool.py"
+        [[ -f "$tool" ]] || { echo "no flatfs_tool.py (set UOS_TEST_SRC_DIR)" >&2; return 1; }
+        python3 "$tool" make-seed "$img" >/dev/null \
           || { echo "could not seed $img" >&2; return 1; }
       fi
       ;;
@@ -73,9 +78,14 @@ sd_image_for () {
 LOGS="${BUILD_DIR}/.qemu-logs"; mkdir -p "$LOGS"
 pass=0; fail=0; skip=0; declare -a results=()
 
+ONLY="${UOS_QEMU_ONLY:-}"
+
 for img in "${BUILD_DIR}"/*-qemu.bin; do
   [[ -e "$img" ]] || { echo "no *-qemu.bin in ${BUILD_DIR}"; exit 2; }
   app="$(basename "$img" -qemu.bin)"
+  if [[ -n "$ONLY" && "$app" != "$ONLY" ]]; then
+    continue
+  fi
   tmo="$(timeout_for "$app")"
   log="${LOGS}/${app}.log"
 
@@ -92,9 +102,18 @@ for img in "${BUILD_DIR}"/*-qemu.bin; do
     boot=(-kernel "$img")
   fi
 
-  timeout "$tmo" "$QEMU" "${MACHINE[@]}" -nographic -serial none \
-      -semihosting-config enable=on,target=native "${drive[@]}" "${boot[@]}" \
-      > "$log" 2>&1
+  # A suite of a dozen tests is read from its summary, so each run is captured.
+  # A single test is one you are watching, so it also goes to this terminal.
+  if [[ -n "$ONLY" ]]; then
+    echo
+    timeout "$tmo" "$QEMU" "${MACHINE[@]}" -nographic -serial none \
+        -semihosting-config enable=on,target=native "${drive[@]}" "${boot[@]}" \
+        > >(tee "$log") 2>&1
+  else
+    timeout "$tmo" "$QEMU" "${MACHINE[@]}" -nographic -serial none \
+        -semihosting-config enable=on,target=native "${drive[@]}" "${boot[@]}" \
+        > "$log" 2>&1
+  fi
   rc=$?
 
   if grep -q 'RESULT: PASS' "$log"; then

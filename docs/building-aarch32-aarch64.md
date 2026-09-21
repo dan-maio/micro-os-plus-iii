@@ -272,10 +272,11 @@ supplies the `SCTLR.{M,C,I}` clear + I-cache/BP/TLB invalidate as
 `UOS_HW_PRELOAD`, which is the same sequence the board's own
 `write_board.sh` has always used.
 
-The console is the Lyra debug header, **1.5 Mbaud** by default (the
-miniloader's rate), not 115200. Keep your own terminal on it; the runner
-never opens it, and the verdict is read from the semihosted console in
-OpenOCD's log.
+The console is the Lyra debug header at **115200**, the rate the miniloader
+leaves UART1 at. The port does not reprogram it unless the build defines
+`UART_BAUD` (`-DUART_BAUD=1500000` gives the exact divisor-1 rate off the
+24 MHz `sclk_uart1`). Keep your own terminal on it; the runner never opens
+it, and the verdict is read from the semihosted console in OpenOCD's log.
 
 > **Power-cycle first, every time.** The prompt in `write_board.sh` was not a
 > formality: releasing cores 1 and 2 clears their reset bits, and nothing

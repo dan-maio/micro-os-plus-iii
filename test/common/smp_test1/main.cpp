@@ -101,11 +101,8 @@ int os_main (int, char*[])
   (void)os::rtos::interrupts::uncritical_section::enter ();
   smp_install_boot_threads();
   smp::start_secondary_cores();
-  int waited = 0;
-  while ((g_core_stage[1]<3 || g_core_stage[2]<3 || g_core_stage[3]<3) && waited<3000)
-    { sysclock.sleep_for(50); waited += 50; }
-  uart1 << "join: c1=" << g_core_stage[1] << " c2=" << g_core_stage[2]
-        << " c3=" << g_core_stage[3] << " (" << waited << "ms)\n";
+  const int waited = test_wait_secondaries (3000);
+  uart1 << "join: " << test_join_summary () << " (" << waited << "ms)\n";
 
   thread::attributes a = thread::initializer;
   a.th_stack_address = s_ping; a.th_stack_size_bytes = sizeof(s_ping);
@@ -126,8 +123,7 @@ int os_main (int, char*[])
     {
       sysclock.sleep_for(1000);
     }
-  const bool ok = (g_core_stage[1] == 3 && g_core_stage[2] == 3
-                   && g_core_stage[3] == 3 && g_rounds > 0);
+  const bool ok = (test_secondaries_joined () && g_rounds > 0);
   // Single puts() = single semihosted SYS_WRITE0 -> the line cannot be
   // interleaved with another core's output in the OpenOCD log.
   uart1.puts (ok ? "\nRESULT: PASS\n" : "\nRESULT: FAIL\n");

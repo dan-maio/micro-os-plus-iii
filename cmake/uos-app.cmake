@@ -31,13 +31,16 @@ function (uos_add_app _name)
   add_executable (${_name} ${A_SOURCES})
 
   # The kernel is always linked; the port is whatever architecture repo is
-  # driving this build. Devices are optional -- not every application uses them.
+  # driving this build. Everything else -- drivers, silicon support -- comes
+  # through LIBRARIES, named by the caller.
+  #
+  # micro-os-plus::devices used to be linked here whenever the target existed,
+  # which quietly compiled the SD/USB drivers into applications that never
+  # asked for them. That is invisible on a board those drivers happen to
+  # support and a build failure on one they do not, so the caller names them.
   target_link_libraries (${_name} PRIVATE micro-os-plus::iii)
   if (A_PORT)
     target_link_libraries (${_name} PRIVATE ${A_PORT})
-  endif ()
-  if (TARGET micro-os-plus::devices)
-    target_link_libraries (${_name} PRIVATE micro-os-plus::devices)
   endif ()
   if (A_LIBRARIES)
     target_link_libraries (${_name} PRIVATE ${A_LIBRARIES})

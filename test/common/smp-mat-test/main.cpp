@@ -765,7 +765,7 @@ solve_classical (const float src_A[N][N], const float src_b[N],
 // ----------------------------------------------------------------------------
 // Main
 // ----------------------------------------------------------------------------
-// Create the per-core idle threads for cores 1..3 before releasing them.
+// Create the per-core idle threads for the secondaries before releasing them.
 int
 os_main (int /*argc*/, char* /*argv*/[])
 {
@@ -788,20 +788,14 @@ os_main (int /*argc*/, char* /*argv*/[])
   write_fmt ("  N = %d, B = %d, cores = %d\n", N, B, OS_NCPU);
   write_str ("=============================================\n");
 
-  // Register the per-core idle threads for cores 1..3, then release them.
+  // Register the per-core idle threads for the secondaries, then release them.
   smp_install_boot_threads ();
-  write_str ("core 0: releasing cores 1..3...\n");
+  write_fmt ("core 0: releasing cores 1..%u...\n",
+             static_cast<unsigned> (OS_NCPU - 1));
   smp::start_secondary_cores ();
   {
-    int waited = 0;
-    while ((g_core_stage[1] < 3 || g_core_stage[2] < 3 || g_core_stage[3] < 3)
-           && waited < 3000)
-      {
-        sysclock.sleep_for (50);
-        waited += 50;
-      }
-    write_fmt ("core 0: SMP up (c1=%u c2=%u c3=%u).\n", g_core_stage[1],
-               g_core_stage[2], g_core_stage[3]);
+    const int waited = test_wait_secondaries (3000);
+    write_fmt ("core 0: SMP up (%s, %d ms).\n", test_join_summary (), waited);
   }
 
   // ---- Thread Pool demo ----------------------------------------------------

@@ -77,11 +77,37 @@ cmake --build build -j8
 
 ### Board
 
+AArch64 builds for the Pi only. AArch32 carries three boards:
+
 ```sh
-cmake -S . -B build-rpi3b -DBOARD=rpi3b ...     # default: zero2w
+cmake -S . -B build        -DBOARD=zero2w  ...   # default
+cmake -S . -B build-rpi3b  -DBOARD=rpi3b   ...
+cmake -S . -B build-lyra   -DBOARD=luckfox-lyra ...
 ```
 
+| | zero2w | rpi3b | luckfox-lyra |
+|---|---|---|---|
+| silicon | BCM2837 | BCM2837 | RK3506 |
+| SMP cluster | 4× Cortex-A53 (32-bit) | 4× Cortex-A53 (32-bit) | 3× Cortex-A7 |
+| `-mcpu` | `cortex-a53` | `cortex-a53` | `cortex-a7` |
+| `-mfpu` | `neon-fp-armv8` | `neon-fp-armv8` | `neon-vfpv4` |
+| board dir | `boards/rpi-zero-2w` | `boards/rpi-zero-2w` | `boards/luckfox-lyra` |
+| define | `LED_PIN=29` | `BOARD_RPI3B` | `SOC_RK3506` |
+| `OS_NCPU` | 4 | 4 | 3 |
+| applications | 12 | 12 | 7 |
+| QEMU machine | `raspi3b` + shim | `raspi3b` + shim | `virt`, no shim |
+
 `rpi3b` selects `linker-rpi3b.ld` and defines `BOARD_RPI3B`.
+
+`luckfox-lyra` is the RK3506's three Cortex-A7. Its Cortex-M0 is a different
+ISA outside the coherency domain and is not a CPU the scheduler can use, so
+the board is multi-core while the SMP cluster is three. It builds the seven
+applications that need only CPUs, a timer and a console; the other five link
+`micro-os-plus::devices`, whose SD and USB backends are BCM2837-specific.
+
+Adding it moved three files up into the shared port, and turned up seven
+places where one board had been mistaken for the architecture. See
+[`aarch32-second-board.md`](aarch32-second-board.md).
 
 ### What you get
 

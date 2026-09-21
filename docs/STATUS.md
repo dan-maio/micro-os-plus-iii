@@ -16,6 +16,14 @@ projects build all 24 of their targets from a single copy of every test, and
 all twelve tests pass on a Raspberry Pi Zero 2 W on **both** ports — each
 measured on that port, neither inferred from the other.
 
+**Step 3 is in progress.** The AArch32 port now carries a second board, the
+Luckfox Lyra B (RK3506, 3× Cortex-A7): 14 targets build, and both ports still
+pass their QEMU suites (11/1/0 each) after the restructure it required. What
+that second board changed, and the seven portability defects it exposed in
+shared code, are written up in
+[`aarch32-second-board.md`](aarch32-second-board.md). Not done: the `-M virt`
+MMU map and GIC bases, and the eight RK3506-specific tests.
+
 ```
 TMP7/
 ├── micro-os-plus-iii-smp/        kernel + shared tests + shared build rules
@@ -29,6 +37,8 @@ TMP7/
 ├── micro-os-plus-iii-devices/    SD, flatfs, DWC2, FatFs, BCM2837 SoC
 ├── micro-os-plus-iii-aarch64/    ARMv8-A port  (24 targets build)
 ├── micro-os-plus-iii-aarch32/    ARMv7-A port  (24 targets build)
+│   ├── src/ include/             ARMv7-A, every board — incl. the scheduler
+│   └── boards/{rpi-zero-2w,luckfox-lyra}/   BCM2837 · RK3506
 └── micro-os-plus-iii-smp-old/    READ ONLY — the migration source
 ```
 
@@ -130,8 +140,13 @@ suites pass **(met, 11/1/0 both ports)**; hardware tests pass on the Pi
 **(met, 12/12 both ports)**; no device or test source exists in more than one
 repo **(met)**.
 
-Next: step 3 (`aarch32` gains RK3506, lyra-a7, 13 apps; gate is
-`exception_handler.cpp` shared unmodified by both SoCs), step 4 (`cortexm` —
+Step 3 (`aarch32` gains the RK3506) is **under way**. *Gate:*
+`exception_handler.cpp` shared unmodified by both boards **(met)**; the board
+builds **(met, 14 targets)**; neither existing port regressed **(met, QEMU
+11/1/0 on each)**. Open: the `-M virt` MMU map and GIC bases so the emulated
+Lyra runs, and the eight RK3506-specific tests, which are hardware-only.
+
+Then: step 4 (`cortexm` —
 pico2's dual-core SMP core merged with the STM32 boards at `OS_NCPU=1`, 129
 apps), step 5 (`posix-arch` — a new SMP implementation, one host thread per
 CPU).

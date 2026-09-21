@@ -38,7 +38,11 @@ static void* worker (void*)
       __asm__ volatile("" ::: "memory");
       g_counter = v + 1;                 // read-modify-write under the lock
       g_mutex.unlock();
-      g_prog[port_cpu_id() & (OS_NCPU-1)] = i;
+      const unsigned me = port_cpu_id ();
+      if (me < OS_NCPU)
+        {
+          g_prog[me] = i;
+        }
       if ((i & 0x7F) == 0)
         this_thread::yield();
     }
@@ -112,20 +116,21 @@ int os_main (int, char*[])
 
   uart1 << "os_main on core " << static_cast<int>(port_cpu_id()) << "\n";
   smp_install_boot_threads();
-  uart1 << "Releasing cores 1..3...\n";
+  uart1 << "Releasing cores 1.." << (OS_NCPU - 1) << "...\n";
   smp::start_secondary_cores();
 
-  int waited = 0;
-  while ((g_core_stage[1] < 3 || g_core_stage[2] < 3 || g_core_stage[3] < 3) && waited < 3000)
-    { sysclock.sleep_for(50); waited += 50; }
-  uart1 << "join: c1=" << g_core_stage[1] << " c2=" << g_core_stage[2]
-        << " c3=" << g_core_stage[3] << " (" << waited << "ms)\n";
+  const int waited = test_wait_secondaries (3000);
+  uart1 << "join: " << test_join_summary () << " (" << waited << "ms)\n";
 
   thread::attributes attr = thread::initializer;
   static thread* workers[OS_NCPU];
-  static const char* wn[OS_NCPU] = {"w0", "w1", "w2", "w3"};
+  // Names must outlive the thread, and there is one per CPU, so they are
+  // generated rather than listed -- a list is a statement about how many
+  // cores the board has.
+  static char wn[OS_NCPU][4];
   for (unsigned c = 0; c < OS_NCPU; ++c)
     {
+      wn[c][0] = 'w'; wn[c][1] = static_cast<char>('0' + c); wn[c][2] = '\0';
       attr.th_stack_address = wstack[c];
       attr.th_stack_size_bytes = sizeof(wstack[c]);
       workers[c] = new thread(wn[c], worker, nullptr, attr);
@@ -135,9 +140,12 @@ int os_main (int, char*[])
   while (g_done < OS_NCPU)
   {
     sysclock.sleep_for(500);
-    uart1 << "progress: w0=" << g_prog[0] << " w1=" << g_prog[1]
-          << " w2=" << g_prog[2] << " w3=" << g_prog[3]
-          << " done=" << g_done << " counter=" << g_counter << "\n";
+    uart1 << "progress:";
+    for (unsigned c = 0; c < OS_NCPU; ++c)
+      {
+        uart1 << " " << wn[c] << "=" << g_prog[c];
+      }
+    uart1 << " done=" << g_done << " counter=" << g_counter << "\n";
   }
 
   std::uint32_t expected = ITER * OS_NCPU;

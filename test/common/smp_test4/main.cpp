@@ -115,11 +115,8 @@ int os_main (int, char*[])
   (void)os::rtos::interrupts::uncritical_section::enter ();
   smp_install_boot_threads();
   smp::start_secondary_cores();
-  int waited = 0;
-  while ((g_core_stage[1]<3 || g_core_stage[2]<3 || g_core_stage[3]<3) && waited<3000)
-    { sysclock.sleep_for(50); waited += 50; }
-  uart1 << "join: c1=" << g_core_stage[1] << " c2=" << g_core_stage[2]
-        << " c3=" << g_core_stage[3] << " (" << waited << "ms)\n";
+  const int waited = test_wait_secondaries (3000);
+  uart1 << "join: " << test_join_summary () << " (" << waited << "ms)\n";
 
   thread::attributes a = thread::initializer;
   static thread* workers[NWORK];
@@ -144,8 +141,7 @@ int os_main (int, char*[])
     {
       sysclock.sleep_for(1000);
     }
-  bool ok = (g_core_stage[1] == 3 && g_core_stage[2] == 3
-             && g_core_stage[3] == 3);
+  bool ok = test_secondaries_joined ();
   for (unsigned c = 0; ok && c < OS_NCPU; ++c)
     {
       std::uint32_t tot = 0;

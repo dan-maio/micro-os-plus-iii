@@ -178,9 +178,9 @@ static std::atomic<std::uint32_t> g_resumes { 0 };
 static std::atomic<bool> g_suspend_req { false };
 static std::atomic<bool> g_is_suspended { false };
 
-static std::uint32_t g_core_produced[4] = { 0 };
-static std::uint32_t g_core_consumed[4] = { 0 };
-static std::uint32_t g_core_yields[4]   = { 0 };
+static std::uint32_t g_core_produced[OS_NCPU] = { 0 };
+static std::uint32_t g_core_consumed[OS_NCPU] = { 0 };
+static std::uint32_t g_core_yields[OS_NCPU]   = { 0 };
 
 // ---------------------------------------------------------------------------
 // Producer Thread Function (4 instances: prod_0..prod_3)
@@ -211,7 +211,7 @@ producer_thread (void* arg)
       g_pool_alloc_count.fetch_add (1, std::memory_order_relaxed);
 
       auto* pkt = static_cast<Packet*> (mem);
-      const unsigned core = port_cpu_id () & 3u;
+      const unsigned core = cpu_slot ();
       const std::uint32_t seq = g_produced.fetch_add (1, std::memory_order_relaxed);
 
       pkt->seq = seq;
@@ -232,7 +232,7 @@ producer_thread (void* arg)
       this_thread::yield ();
       g_total_yields.fetch_add (1, std::memory_order_relaxed);
       g_stats_mtx.lock ();
-      ++g_core_yields[port_cpu_id () & 3u];
+      ++g_core_yields[cpu_slot ()];
       g_stats_mtx.unlock ();
 
       sysclock.sleep_for (10 + (id * 2));
@@ -270,7 +270,7 @@ consumer_thread (void* arg)
           continue;
         }
 
-      const unsigned core = port_cpu_id () & 3u;
+      const unsigned core = cpu_slot ();
 
       // 2. Validate CRC
       const std::uint32_t expected_crc
@@ -312,7 +312,7 @@ consumer_thread (void* arg)
       this_thread::yield ();
       g_total_yields.fetch_add (1, std::memory_order_relaxed);
       g_stats_mtx.lock ();
-      ++g_core_yields[port_cpu_id () & 3u];
+      ++g_core_yields[cpu_slot ()];
       g_stats_mtx.unlock ();
 
       sysclock.sleep_for (5);
@@ -457,14 +457,8 @@ os_main (int, char*[])
   smp_install_boot_threads ();
   smp::start_secondary_cores ();
 
-  int waited = 0;
-  while ((g_core_stage[1] < 3 || g_core_stage[2] < 3 || g_core_stage[3] < 3) && waited < 3000)
-    {
-      sysclock.sleep_for (50);
-      waited += 50;
-    }
-  console ("Secondary cores joined: c1=%u c2=%u c3=%u (%d ms)\n",
-           g_core_stage[1], g_core_stage[2], g_core_stage[3], waited);
+  const int waited = test_wait_secondaries (3000);
+  console ("Secondary cores joined: %s (%d ms)\n", test_join_summary (), waited);
 
   // 2. Start Software Timer (Heartbeat)
   console ("Starting periodic software timer (200 ms)...\n");
@@ -593,7 +587,8 @@ os_main (int, char*[])
 
   console ("\n================ Producer-Consumer Test Summary ================\n");
   console ("Kernel Objects Tested:\n");
-  console ("  [1] thread              : 12 threads active across 4 cores\n");
+  console ("  [1] thread              : 12 threads active across %u cores\n",
+           static_cast<unsigned> (OS_NCPU));
   console ("  [2] memory_pool         : allocs=%u, frees=%u (diff=%d)\n",
            allocs, frees, static_cast<int> (allocs - frees));
   console ("  [3] message_queue       : sent=%u, received=%u\n", total_p, total_c);
@@ -609,12 +604,9 @@ os_main (int, char*[])
   console ("Errors:\n");
   console ("  CRC Errors: %u\n", crc_err);
   console ("SMP Core Distribution:\n");
-  console ("  Produced by core : c0=%u c1=%u c2=%u c3=%u\n",
-           g_core_produced[0], g_core_produced[1], g_core_produced[2], g_core_produced[3]);
-  console ("  Consumed by core : c0=%u c1=%u c2=%u c3=%u\n",
-           g_core_consumed[0], g_core_consumed[1], g_core_consumed[2], g_core_consumed[3]);
-  console ("  Yields by core   : c0=%u c1=%u c2=%u c3=%u\n",
-           g_core_yields[0], g_core_yields[1], g_core_yields[2], g_core_yields[3]);
+  report_per_core ("Produced by core", g_core_produced);
+  report_per_core ("Consumed by core", g_core_consumed);
+  report_per_core ("Yields by core  ", g_core_yields);
   console ("================================================================\n\n");
 
   // Pass criteria:
@@ -626,10 +618,14 @@ os_main (int, char*[])
   // - Binary semaphore stage sync executed
   // - Suspend / resume executed
   // - Condition variable batches checked
-  const bool all_cores_active = (g_core_produced[0] > 0) && (g_core_produced[1] > 0)
-                             && (g_core_produced[2] > 0) && (g_core_produced[3] > 0)
-                             && (g_core_consumed[0] > 0) && (g_core_consumed[1] > 0)
-                             && (g_core_consumed[2] > 0) && (g_core_consumed[3] > 0);
+  bool all_cores_active = true;
+  for (unsigned c = 0; c < OS_NCPU; ++c)
+    {
+      if (g_core_produced[c] == 0 || g_core_consumed[c] == 0)
+        {
+          all_cores_active = false;
+        }
+    }
 
   const bool pass = (total_p > 50) && (total_c > 50)
                  && (crc_err == 0)

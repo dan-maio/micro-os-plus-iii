@@ -19,6 +19,7 @@
 #include <uart.hpp>
 
 #include <cstdarg>
+#include <cstdint>
 #include <cstdio>
 
 namespace test
@@ -83,6 +84,29 @@ console_uart (const char* fmt, ...)
   test::console_mutex ().lock ();
   uart::uart1.puts_uart (b);
   test::console_mutex ().unlock ();
+}
+
+
+// Prints one per-CPU tally array as "<label> : c0=.. c1=.. ..", for as many
+// cores as this port has. Tests that report work distribution used to spell
+// out c0 through c3, which is a statement about the BCM2837 rather than about
+// the test.
+inline void
+report_per_core (const char* label, const std::uint32_t* counts)
+{
+  char b[32 * OS_NCPU + 64];
+  int n = std::snprintf (b, sizeof (b), "  %s : ", label);
+  for (unsigned c = 0; c < OS_NCPU && n > 0 && n < static_cast<int> (sizeof (b)); ++c)
+    {
+      const int w = std::snprintf (b + n, sizeof (b) - static_cast<unsigned> (n),
+                                   "c%u=%u ", c, counts[c]);
+      if (w <= 0)
+        {
+          break;
+        }
+      n += w;
+    }
+  console ("%s\n", b);
 }
 
 #endif /* UOS_TEST_CONSOLE_HPP_ */

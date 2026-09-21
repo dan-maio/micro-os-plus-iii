@@ -65,7 +65,7 @@ function (uos_add_app _name)
       -O2 -g3 -fmessage-length=0 -fsigned-char
       -ffunction-sections -fdata-sections
       $<$<COMPILE_LANGUAGE:C>:-std=gnu11>
-      $<$<COMPILE_LANGUAGE:CXX>:-std=c++23>
+      $<$<COMPILE_LANGUAGE:CXX>:-std=c++20>
       $<$<COMPILE_LANGUAGE:CXX>:-fabi-version=0>
       $<$<COMPILE_LANGUAGE:CXX>:-fno-exceptions>
       $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>

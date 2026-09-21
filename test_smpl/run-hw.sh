@@ -8,8 +8,9 @@
 # PURE OpenOCD. No GDB, no reset, and NO serial redirection: the UART console
 # is yours, in your own terminal (tio/picocom on /dev/ttyACM0). This script
 # never opens the tty, so it cannot fight the terminal you have open on it.
-# The verdict is read from the semihosted console, which OpenOCD prints into
-# its own log.
+# Everything OpenOCD and the board's semihosting write goes straight to this
+# terminal as it happens; a copy is teed to a log only so the verdict can be
+# matched.
 #
 # Deterministic restart without reset (the Pi has no SRST): halt all cores --
 # so cores left running stale code cannot corrupt RAM during load_image --
@@ -222,8 +223,11 @@ EOF
   [[ "$CFG_INIT" == "1" ]] && args+=(-c "init")
   args+=(-f "$cfg")
 
-  printf '%-24s ' "$app"
-  "$OPENOCD" "${args[@]}" > "$log" 2>&1 &
+  # OpenOCD runs with its output on this terminal, so the board's semihosting
+  # writes appear as they happen. The copy in $log exists only so the loop
+  # below can see the test's verdict; nothing is hidden by it.
+  say "--- $app (${secs}s max) ---"
+  "$OPENOCD" "${args[@]}" > >(tee "$log") 2>&1 &
   local ocd=$!
 
   local rc=2 waited=0
@@ -243,16 +247,16 @@ EOF
   # Give the probe a moment to release the USB interface before the next test.
   sleep 1
 
+  printf '\n%-24s ' "$app"
   case "$rc" in
     0) echo "PASS  (${waited}s)" ;;
     3) echo "SKIP  ($(sed -n 's/.*RESULT: SKIP *//p' "$log" | head -1))" ;;
-    1) echo "FAIL  (see $log)" ;;
-    4) echo "OPENOCD DIED  (see $log)" ;;
+    1) echo "FAIL" ;;
+    4) echo "OPENOCD DIED" ;;
     5) echo "OPENOCD ERROR: $(grep -m1 '^Error: ' "$log")" ;;
     6) echo "DEBUG LINK LOST  (the DAP stopped answering, not a firmware fault)"
-       echo "    retry with UOS_HW_ADAPTER_KHZ=1000, and check the board's supply"
-       echo "    see $log" ;;
-    *) echo "TIMEOUT after ${secs}s  (see $log)" ;;
+       echo "    retry with UOS_HW_ADAPTER_KHZ=1000, and check the board's supply" ;;
+    *) echo "TIMEOUT after ${secs}s" ;;
   esac
   return "$rc"
 }

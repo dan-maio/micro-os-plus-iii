@@ -216,8 +216,10 @@ lines.
 
 It is **pure OpenOCD** — no GDB, no reset, and it never opens the serial
 device, so it cannot fight the terminal you keep on the console. Keep your own
-`tio -b 115200 /dev/ttyACM0` running; the verdict is read from the semihosted
-console in OpenOCD's log.
+`tio -b 115200 /dev/ttyACM0` running. Everything OpenOCD and the board's
+semihosting write appears on your terminal as it happens; the copy teed to
+`build/test/.hw-logs/<app>.log` exists only so the script can match the
+verdict.
 
 > **One test per power cycle.** Every run is `load_image` into RAM over
 > whatever the previous test left there, and neither board has a reset a

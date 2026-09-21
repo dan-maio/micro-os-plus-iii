@@ -149,11 +149,12 @@ AArch32 on the Pi goes through the boot shim — see
 
 ### `run-hw.sh <build-test-dir> <app|list> [run-seconds]`
 
-Drives one `*-hwd` image on real silicon through OpenOCD, and reads the
-verdict from the semihosted console in OpenOCD's own log.
+Drives one `*-hwd` image on real silicon through OpenOCD.
 
 **Pure OpenOCD**: no GDB, no reset, and it never opens the serial device — so
-it cannot fight the terminal you keep on the console.
+it cannot fight the terminal you keep on the console. OpenOCD's output and the
+board's semihosting go straight to your terminal, live; a copy is teed to
+`.hw-logs/<app>.log` only so the verdict can be matched.
 
 **It refuses a suite.** Every run is `load_image` into RAM over whatever the
 previous test left there, and neither supported board has a reset a script can

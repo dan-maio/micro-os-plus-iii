@@ -1,8 +1,13 @@
 # -----------------------------------------------------------------------------
 # micro-os-plus-iii-smp — the common half of the unified µOS++ III SMP project.
 #
-# This repository is the RTOS kernel (src/, include/) and the shared test
-# sources (test_smpl/common/). Nothing else.
+# This repository is the RTOS kernel (src/, include/) and the runners that
+# drive a build on QEMU or on hardware (test_smpl/). Nothing else.
+#
+# The test APPLICATIONS are not here. Every board owns its own, in
+# boards/<id>/test/ of the architecture project that has that board, because a
+# board is what decides which tests make sense on it and what they are built
+# with.
 #
 # Architecture-specific code lives in its own INDEPENDENT repository, outside
 # this one — micro-os-plus-iii-cortexm, -aarch32, -aarch64, -posix-arch. The
@@ -35,7 +40,6 @@ endif ()
 
 # Absolute paths are forbidden; consumers use these instead.
 set (UOS_SMP_ROOT       "${CMAKE_CURRENT_SOURCE_DIR}" CACHE INTERNAL "")
-set (UOS_TEST_COMMON    "${CMAKE_CURRENT_SOURCE_DIR}/test_smpl/common" CACHE INTERNAL "")
 set (UOS_CMAKE_DIR      "${CMAKE_CURRENT_SOURCE_DIR}/cmake" CACHE INTERNAL "")
 set (UOS_TOOLCHAINS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/cmake/toolchains" CACHE INTERNAL "")
 
@@ -198,15 +202,6 @@ target_include_directories (
   micro-os-plus-iii-port-smp-decls-interface INTERFACE "port/smp-common"
 )
 add_library (micro-os-plus::port-smp-decls ALIAS micro-os-plus-iii-port-smp-decls-interface)
-
-# -----------------------------------------------------------------------------
-# The test applications live here because they are ISA-neutral, but they are
-# *built* by the architecture projects, which know the toolchain, the linker
-# script and which boards exist. All this exposes is the shared support
-# target; adding it costs nothing when nobody links it.
-if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/test_smpl/CMakeLists.txt")
-  add_subdirectory (test_smpl)
-endif ()
 
 # -----------------------------------------------------------------------------
 message (STATUS "µOS++ III SMP common: micro-os-plus::iii  standalone=${UOS_SMP_STANDALONE}")

@@ -1,7 +1,7 @@
 # `test_smpl/` — the two shared test runners
 
 > **The test applications are no longer here.** Every board owns its own, in
-> `boards/<id>/test/` of the architecture project that has that board. How they
+> `test/<board>/` of the architecture project that has that board. How they
 > are laid out and how to run them is
 > [`tests-in-aarch32-aarch64.md`](tests-in-aarch32-aarch64.md).
 >
@@ -14,7 +14,7 @@ test_smpl/
 └── run-hw.sh        run one *-hwd image on silicon, through OpenOCD
 ```
 
-Neither script knows a board or a port. A board's `boards/<id>/{qemu,hw}.sh`
+Neither script knows a board or a port. A board's `test/boards/<id>/{qemu,hw}.sh`
 supplies the facts and execs one of these; that is the only way they are
 called.
 

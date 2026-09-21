@@ -47,7 +47,7 @@ differ.
 | Bring-up, kernel lock, context switch hooks | port `src/rtos/os-core.cpp` | the port's half of the scheduler |
 | Reset vector, MMU, exception vectors, timer | port `src/` | board and ISA |
 | SD, FatFs, flatfs, USB, SoC mailbox | devices repo | shared verbatim by both ARM ports |
-| Test applications | port `boards/<id>/test/` | every board owns its own — see `tests-in-aarch32-aarch64.md` |
+| Test applications | port `test/<board>/` | every board owns its own — see `tests-in-aarch32-aarch64.md` |
 
 ### Two files called `src/rtos/os-core.cpp`
 

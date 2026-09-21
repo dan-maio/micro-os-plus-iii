@@ -181,7 +181,7 @@ CPUs, a timer and a console — which is also the only subset its predecessor
 project ever had.
 
 The selection is not configured at all any more — it is observed. Every board
-owns its tests in `boards/<id>/test/`, and the port builds the directories that
+owns its tests in `test/<board>/`, and the port builds the directories that
 are there. A board with no SD card has no `sd_test` directory; a single-CPU
 board will have no `smp_*` ones. That is what makes the next port tractable:
 `cortexm` will have a dozen boards, half of them single-core, and none of them
@@ -263,13 +263,13 @@ Each of the three is a real property of the RK3506, not a convenience:
   other than the image, so `SCTLR.{M,C,I}` are cleared and the I-cache,
   branch predictor and TLB invalidated first — the same sequence the
   predecessor's own `write_board.sh` used. It is now `UOS_HW_PRELOAD` in
-  `boards/luckfox-lyra/hw.sh`.
+  `test/boards/luckfox-lyra/hw.sh`.
 
 The Pi's generated script is unchanged by all of this, byte for byte apart
 from `[format {bcm2837.cpu%d} $core]` where it said `bcm2837.cpu$core`.
 
-`boards/luckfox-lyra/openocd.cfg` is one copy; the predecessor had thirteen,
-one per test directory. `write_board.sh` is gone — `boards/luckfox-lyra/hw.sh`
+`test/boards/luckfox-lyra/openocd.cfg` is one copy; the predecessor had thirteen,
+one per test directory. `write_board.sh` is gone — `test/boards/luckfox-lyra/hw.sh`
 is what it did, for any test, and every board now has the same two scripts.
 
 ```sh

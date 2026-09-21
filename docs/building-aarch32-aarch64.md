@@ -91,7 +91,7 @@ cmake -S . -B build-lyra   -DBOARD=luckfox-lyra ...
 | SMP cluster | 4× Cortex-A53 (32-bit) | 4× Cortex-A53 (32-bit) | 3× Cortex-A7 |
 | `-mcpu` | `cortex-a53` | `cortex-a53` | `cortex-a7` |
 | `-mfpu` | `neon-fp-armv8` | `neon-fp-armv8` | `neon-vfpv4` |
-| board dir | `boards/rpi-zero-2w` | `boards/rpi-zero-2w` | `boards/luckfox-lyra` |
+| board dir | `test/boards/rpi-zero-2w` | `test/boards/rpi-zero-2w` | `test/boards/luckfox-lyra` |
 | define | `LED_PIN=29` | `BOARD_RPI3B` | `SOC_RK3506` |
 | `OS_NCPU` | 4 | 4 | 3 |
 | applications | 12 | 12 | 7 |
@@ -196,7 +196,7 @@ stale build is indistinguishable from a bug until you rebuild and re-run.
 ### Standalone boot
 
 Flash a `*-hwd.bin` as `kernel8.img` (AArch64) or `kernel7.img` (AArch32) on the
-boot partition, with the port's `config.txt` from `boards/rpi-zero-2w/`.
+boot partition, with the port's `config.txt` from `test/boards/rpi-zero-2w/`.
 
 ### Debug-in-RAM, through OpenOCD
 
@@ -255,7 +255,7 @@ BOARD=luckfox-lyra test/hw.sh smp_test0    # run one
 ```
 
 Same runner, same rules, three differences — all of them in
-`boards/luckfox-lyra/openocd.cfg` and the `luckfox-lyra` branch of
+`test/boards/luckfox-lyra/openocd.cfg` and the `luckfox-lyra` branch of
 `test/hw.sh`, none of them in the shared runner:
 
 **The probe is a WCH-Link over SWD**, not a J-Link over JTAG — `cmsis-dap`,
@@ -296,7 +296,7 @@ covers the Pi only.
 
 The four SD tests and `usb_test` mount the card's **existing** FAT32 partition
 through FatFs and keep every file under `tests/`. They never format it and
-never touch the root. `boards/rpi-zero-2w/verify-bootcard.py` proves that
+never touch the root. `test/boards/rpi-zero-2w/verify-bootcard.py` proves that
 byte-for-byte under QEMU.
 
 FatFs is built without long-name support, so a file arrives on the card as an
@@ -315,7 +315,7 @@ normally but never enumerates, with no error message.
 ```bash
 test/hw.sh usb_test 900          # one terminal
 # ~20 s later, in another:
-cd boards/rpi-zero-2w/test/usb_test
+cd test/rpi-zero-2w/usb_test
 sudo ./host_xfer.py
 ```
 
@@ -366,7 +366,7 @@ predecessor repository carried, which differed by about 48 lines of boilerplate
 each.
 
 A test is never declared by hand: `test/CMakeLists.txt` globs
-`boards/${BOARD}/test/*/` and calls `uos_add_app` once per directory per
+`test/${BOARD}/*/` and calls `uos_add_app` once per directory per
 variant. Adding a test to a board is adding a directory.
 
 ## 7. CMake targets exported
@@ -386,7 +386,7 @@ variant. Adding a test to a board is adding a directory.
 
 The ARM ports link the core and `port-smp-decls`, and **none** of
 the optional groups. Test support is not a kernel target any more — each board
-carries its own in `boards/<id>/test/{include,src}/`. Linking `iii-posix-io` into a newlib bare-metal build fails
+carries its own in `test/<board>/{include,src}/`. Linking `iii-posix-io` into a newlib bare-metal build fails
 to compile: it declares `read`/`write` returning `ssize_t` where newlib
 declares `int`.
 

@@ -14,7 +14,7 @@ reaches exactly one board.
 ```
 micro-os-plus-iii-aarch{32,64}/
 ├── src/  include/                    the ISA — no board, no test
-└── boards/<id>/
+└── test/boards/<id>/
     ├── board.cmake                   the board's facts, globbed
     ├── include/  src/                the board's silicon
     ├── hw.sh  qemu.sh                how to run this board's tests
@@ -24,7 +24,7 @@ micro-os-plus-iii-aarch{32,64}/
         └── tests.cmake               the knobs a directory listing cannot say
 ```
 
-`test/CMakeLists.txt` in the port is a loop over `boards/${BOARD}/test/*/`. It
+`test/CMakeLists.txt` in the port is a loop over `test/${BOARD}/*/`. It
 names no test and no board.
 
 ### Today
@@ -61,8 +61,9 @@ share, so a Pi 3 B was linked and mapped for 1 GB while every thread stack
 above 512 MiB looked corrupt to the context switch.
 
 The tests are *not* shared that way, because sharing them is what makes a
-change to one board able to break another. `_test_dir` is
-`boards/${BOARD}/test`, never `${UOS_BOARD_SRC_DIR}/test`.
+change to one board able to break another. `_test_dir` is `test/${BOARD}`,
+never `${UOS_BOARD_SRC_DIR}/test` — which is exactly why `test/rpi3b/` exists
+beside `test/boards/rpi3b/board.cmake`.
 
 ### The cost, stated plainly
 
@@ -151,7 +152,7 @@ BOARD=rpi3b test/hw.sh smp_test0          # run one
 BOARD=rpi3b test/hw.sh smp_test0 300      # …with a 300 s budget
 ```
 
-or call the board directly — `boards/rpi3b/hw.sh smp_test0`. An unknown board
+or call the board directly — `test/boards/rpi3b/hw.sh smp_test0`. An unknown board
 gets the available ones listed rather than a wrong branch taken.
 
 Each board's script holds only that board's facts and delegates the session
@@ -210,7 +211,7 @@ this reason and takes exactly one test.
 
 ## 6. Adding a test, adding a board
 
-**A test, for one board:** make `boards/<id>/test/<name>/` with a `main.cpp`.
+**A test, for one board:** make `test/<board>/<name>/` with a `main.cpp`.
 That is all — it is globbed. If it needs the SD card, add its name to
 `BOARD_TEST_NEED_DEVICES`; if it brings its own start-up code, to
 `BOARD_TEST_SELF_CONTAINED`.
@@ -218,9 +219,9 @@ That is all — it is globbed. If it needs the SD card, add its name to
 **A test, for several boards:** copy it into each board's `test/`. There is
 deliberately no mechanism to avoid this.
 
-**A board:** make `boards/<id>/` with `board.cmake`, `include/`, `src/`,
-`test/`, `hw.sh`, `qemu.sh`, a linker script and an OpenOCD config. Nothing
-outside that directory is edited — not `CMakeLists.txt`, not `test/hw.sh`, not
+**A board:** make `test/boards/<id>/` with `board.cmake`, `include/`, `src/`,
+`hw.sh`, `qemu.sh`, a linker script and an OpenOCD config, and `test/<id>/`
+with its applications. Nothing outside those two directories is edited — not `CMakeLists.txt`, not `test/hw.sh`, not
 another board. `board.cmake` is globbed, and the configure step names any fact
 it forgot; `src/board-contract.cpp` compiles nothing and fails the build for a
 board that left `PORT_RAM_BASE`, `PORT_RAM_END`, `OS_NCPU`, `PORT_GREETING`,
@@ -236,7 +237,7 @@ A board sharing another's silicon points `UOS_BOARD_SRC_DIR` at it and
 - `smp-pro-cons-test` carries its **own** linker script in the predecessor
   (`smp-pro-cons-test/linker{,-rpi3b}.ld`). The build has no per-test linker
   override yet; it uses the board's.
-- `boards/luckfox-lyra/test/.pending/` holds six of the predecessor's Lyra
+- `test/luckfox-lyra/.pending/` holds six of the predecessor's Lyra
   tests that cannot link yet — three need FatFs compiled as C++ inside
   `namespace fatfs`, two need the RK3506 DWC2 device stack, one needs the
   Cortex-M0 firmware blob. A dot-directory is not globbed, so they are present

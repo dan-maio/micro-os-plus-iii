@@ -37,15 +37,24 @@ TMP7/
 ├── micro-os-plus-iii-devices/    flatfs, FatFs; SD per SoC (BCM2837, RK3506)
 ├── micro-os-plus-iii-aarch64/    ARMv8-A port
 │   ├── src/ include/             ARMv8-A, every board
-│   └── boards/{rpi-zero-2w,rpi3b}/          each with board.cmake, include/,
-│                                            src/, test/, hw.sh, qemu.sh
+│   └── test/                     everything board- or test-specific
+│       ├── CMakeLists.txt        one loop over test/<board>/*/
+│       ├── hw.sh  qemu.sh        dispatchers; BOARD picks the directory
+│       ├── boards/{rpi-zero-2w,rpi3b}/   board.cmake, include/, src/,
+│       │                                 linker, OpenOCD, hw.sh, qemu.sh
+│       ├── rpi-zero-2w/ rpi3b/   each board's test applications
+│       └── build*/               the build trees
 ├── micro-os-plus-iii-aarch32/    ARMv7-A port
 │   ├── src/ include/             ARMv7-A, every board — incl. the scheduler
-│   └── boards/{rpi-zero-2w,rpi3b,luckfox-lyra}/   BCM2837 · BCM2837 · RK3506
+│   └── test/                     same shape
+│       ├── boards/{rpi-zero-2w,rpi3b,luckfox-lyra}/  BCM2837 · BCM2837 · RK3506
+│       └── rpi-zero-2w/ rpi3b/ luckfox-lyra/         12 · 12 · 13 applications
 └── micro-os-plus-iii-smp-old/    READ ONLY — the migration source
 
-Every board owns its tests, in `boards/<id>/test/`; how that is laid out and
-how to run it is [`tests-in-aarch32-aarch64.md`](tests-in-aarch32-aarch64.md).
+Outside `src/` and `include/` — which are the ISA and nothing else — an
+architecture project is all `test/`: the boards, their tests and their build
+trees. How that is laid out and how to run it is
+[`tests-in-aarch32-aarch64.md`](tests-in-aarch32-aarch64.md).
 ```
 
 | | |
@@ -74,7 +83,7 @@ neither the kernel nor the devices repo knows an architecture project exists.
 4. **Step 2a — the twelve test applications unified.** 15,507 lines of
    application C++ become 7,610. Nothing ISA-specific is left in a test.
 5. **Step 2b — both ARM architecture projects.** Each builds every board's
-   tests from one loop over `boards/${BOARD}/test/*/`, in two variants. No
+   tests from one loop over `test/${BOARD}/*/`, in two variants. No
    test name and no board name appears in either port's build files.
    24 targets per Pi board, 26 for the Lyra.
 6. **QEMU suites green.** `11 passed, 1 skipped, 0 failed` on both, with

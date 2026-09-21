@@ -30,12 +30,15 @@ micro-os-plus-iii-aarch32/
 │   └── rtos/os-core.cpp      MOVED UP — the port's half of the scheduler
 └── boards/
     ├── rpi-zero-2w/          BCM2837, 4× Cortex-A53
+    ├── rpi3b/                BCM2837 too — shares rpi-zero-2w's src/ and
+    │                         include/ under -DBOARD_RPI3B, owns its test/
     └── luckfox-lyra/         RK3506,  3× Cortex-A7
         ├── src/{mmu,port_sys,smp,timer_arm}.cpp  startup.S
         │   └── rtos/port_isr.cpp
         ├── include/{gic,led,osal,rk3506,smp,uart}.hpp
+        ├── test/             this board's test applications
         ├── linker.ld  linker-qemu-virt.ld
-        └── openocd.cfg  write_board.sh
+        └── openocd.cfg  hw.sh  qemu.sh
 ```
 
 The Cortex-M0 is not a fourth CPU and is not in this tree. It is a different
@@ -177,12 +180,20 @@ those drivers grow a second backend the Lyra builds the subset that needs only
 CPUs, a timer and a console — which is also the only subset its predecessor
 project ever had.
 
-The selection is not a list of board names. Each test declares what it needs
-(`UOS_TEST_APPS_SMP_ONLY`, `…_NEED_SD`, `…_NEED_USB` in `test_smpl/apps.cmake`),
-each board declares `UOS_BOARD_CAPS`, and `test/CMakeLists.txt` intersects the
-two. That is what makes the next port tractable: `cortexm` will have a dozen
-boards, half of them single-core, and none of them will appear in an
-`if/elseif` chain.
+The selection is not configured at all any more — it is observed. Every board
+owns its tests in `boards/<id>/test/`, and the port builds the directories that
+are there. A board with no SD card has no `sd_test` directory; a single-CPU
+board will have no `smp_*` ones. That is what makes the next port tractable:
+`cortexm` will have a dozen boards, half of them single-core, and none of them
+will appear in an `if/elseif` chain. The layout is
+[`tests-in-aarch32-aarch64.md`](tests-in-aarch32-aarch64.md).
+
+Since this chapter was first written, the Lyra **has** gained its SD card: the
+predecessor's RK3506 DesignWare MSHC driver is now
+`micro-os-plus-iii-devices/soc/rk3506/`, reached through
+`micro-os-plus::devices-rk3506`, and the board builds 11 of the 12 shared
+applications plus two of its own. Only `usb_test` is still missing, waiting on
+the RK3506 DWC2 device stack.
 
 > **`UOS_BOARD_CAPS` is about the port, not the board.** It lists what *this
 > port can drive on this board* — not the connectors the board carries. The
@@ -191,9 +202,8 @@ boards, half of them single-core, and none of them will appear in an
 > SD backend — `src/sd.cpp`, a polled Arasan SDHCI at the BCM2837's
 > `0x3F30_0000` — and the RK3506 has a Synopsys DesignWare MSHC somewhere
 > else. The capability returns the day a `dw_mmc` backend appears behind
-> `sd.hpp`, and the four SD tests reappear with no edit to
-> `test/CMakeLists.txt`. Reading the list as a hardware inventory is the one
-> way to misread it.
+> `sd.hpp`. Reading the list as a hardware inventory is the one way to misread
+> it. (That backend has since arrived — see above.)
 
 ---
 
@@ -251,14 +261,16 @@ Each of the three is a real property of the RK3506, not a convenience:
 - **The MMU and caches are ON** when the miniloader hands core 0 over.
   `load_image` writing through a dirty cache leaves DRAM holding something
   other than the image, so `SCTLR.{M,C,I}` are cleared and the I-cache,
-  branch predictor and TLB invalidated first — the same sequence the board's
-  own `write_board.sh` has always used.
+  branch predictor and TLB invalidated first — the same sequence the
+  predecessor's own `write_board.sh` used. It is now `UOS_HW_PRELOAD` in
+  `boards/luckfox-lyra/hw.sh`.
 
 The Pi's generated script is unchanged by all of this, byte for byte apart
 from `[format {bcm2837.cpu%d} $core]` where it said `bcm2837.cpu$core`.
 
-`boards/luckfox-lyra/openocd.cfg` and `write_board.sh` are one copy each.
-The predecessor project had thirteen of each, one per test directory.
+`boards/luckfox-lyra/openocd.cfg` is one copy; the predecessor had thirteen,
+one per test directory. `write_board.sh` is gone — `boards/luckfox-lyra/hw.sh`
+is what it did, for any test, and every board now has the same two scripts.
 
 ```sh
 BOARD=luckfox-lyra test/hw.sh list

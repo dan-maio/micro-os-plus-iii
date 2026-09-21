@@ -7,6 +7,16 @@ status: approved — revision 2, 2026-09-20 (architecture-specific ports, multi-
 
 # 1. Goal
 
+> **Superseded on 2026-09-21 for the test layout.** This design put one copy of
+> each test in `test_smpl/common/` and had every port build the same list. That
+> is no longer how it works: every board owns its tests, in
+> `boards/<id>/test/` of the architecture project, and `test_smpl/` keeps only
+> the two runners. The reasoning and the current layout are in
+> [`tests-in-aarch32-aarch64.md`](../tests-in-aarch32-aarch64.md). Everything
+> else in this document — the three-tier fact model, the board contract, the
+> repository split — still holds. D7, the sections on `test_smpl/common/` and
+> Q7 below should be read as history.
+
 Migrate the C/C++ content of `micro-os-plus-iii-smp-old` into a new,
 unified `micro-os-plus-iii-smp` repository with a modern, compact layout:
 one kernel, one device layer, one port tree organised by architecture, and

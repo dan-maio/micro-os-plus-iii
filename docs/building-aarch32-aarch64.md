@@ -128,9 +128,10 @@ usb_test-qemu         usb_test-hwd
 FAT32 boot partition rather than formatting a blank card) and `DEBUG_BOOT`
 (early-boot asm markers for OpenOCD bring-up).
 
-> The shared suite itself — what each of the twelve applications proves, how
-> `apps.cmake` configures them, and how to add one — is
-> [`test-smpl.md`](test-smpl.md).
+> How the tests are laid out, what each board has, what `tests.cmake` says and
+> how to add one is
+> [`tests-in-aarch32-aarch64.md`](tests-in-aarch32-aarch64.md). The two shared
+> runners those scripts delegate to are [`test-smpl.md`](test-smpl.md).
 
 ## 4. Running the QEMU suites
 
@@ -271,23 +272,25 @@ secondaries are released through the SRAM mailbox, not a spin table.
 miniloader hands core 0 over with both on, and `load_image` writing through a
 dirty cache leaves DRAM holding something other than the image. `hw.sh`
 supplies the `SCTLR.{M,C,I}` clear + I-cache/BP/TLB invalidate as
-`UOS_HW_PRELOAD`, which is the same sequence the board's own
-`write_board.sh` has always used.
+`UOS_HW_PRELOAD`, which is the same sequence the predecessor's own
+`write_board.sh` used.
 
 The console is the Lyra debug header at **115200**, the rate the miniloader
 leaves UART1 at. The port does not reprogram it unless the build defines
 `UART_BAUD` (`-DUART_BAUD=1500000` gives the exact divisor-1 rate off the
-24 MHz `sclk_uart1`). Keep your own terminal on it; the runner never opens
-it, and the verdict is read from the semihosted console in OpenOCD's log.
+24 MHz `sclk_uart1`). Keep your own terminal on it; the runner never opens it.
+Everything OpenOCD and the board's semihosting write reaches your terminal as
+it happens, and the tee'd copy under `.hw-logs/` is only what the verdict is
+matched against.
 
-> **Power-cycle first, every time.** The prompt in `write_board.sh` was not a
-> formality: releasing cores 1 and 2 clears their reset bits, and nothing
+> **Power-cycle first, every time.** The prompt the predecessor's
+> `write_board.sh` carried was not a formality: releasing cores 1 and 2 clears their reset bits, and nothing
 > short of a power cycle puts them back. A second run without one finds them
 > already out of the BootROM and running whatever the last test left behind.
 
-Not yet measured: no test in this repository has been run on a Lyra. The
-seven builds exist and the session is wired; the results table above covers
-the Pi only.
+Not yet measured: no test in this repository has been run to completion on a
+Lyra. Thirteen builds exist and the session is wired; the results table above
+covers the Pi only.
 
 ### The boot card
 
@@ -312,7 +315,7 @@ normally but never enumerates, with no error message.
 ```bash
 test/hw.sh usb_test 900          # one terminal
 # ~20 s later, in another:
-cd ../micro-os-plus-iii-smp/test_smpl/common/usb_test
+cd boards/rpi-zero-2w/test/usb_test
 sudo ./host_xfer.py
 ```
 
@@ -362,14 +365,9 @@ emits the `.bin` and a size listing. It replaces the 214 Makefiles the
 predecessor repository carried, which differed by about 48 lines of boilerplate
 each.
 
-To build one of the shared tests instead:
-
-```cmake
-uos_add_test_app (smp_test1 NCPU 4 LINKER_SCRIPT ... DEFINES ...)
-```
-
-which resolves the sources from `test_smpl/common/smp_test1/`. No build ever spells
-out a path into the test tree.
+A test is never declared by hand: `test/CMakeLists.txt` globs
+`boards/${BOARD}/test/*/` and calls `uos_add_app` once per directory per
+variant. Adding a test to a board is adding a directory.
 
 ## 7. CMake targets exported
 
@@ -385,10 +383,10 @@ out a path into the test tree.
 | `micro-os-plus::iii-semihosting` | 1 |
 | `micro-os-plus::iii-trace-itm` / `-trace-semihosting` / `-trace-segger-rtt` | mutually exclusive; link at most one |
 | `micro-os-plus::port-smp-decls` | the shared `os-decls.h` |
-| `micro-os-plus::test-common` | the shared test support |
 
-The ARM ports link the core, `port-smp-decls` and `test-common`, and **none** of
-the optional groups. Linking `iii-posix-io` into a newlib bare-metal build fails
+The ARM ports link the core and `port-smp-decls`, and **none** of
+the optional groups. Test support is not a kernel target any more — each board
+carries its own in `boards/<id>/test/{include,src}/`. Linking `iii-posix-io` into a newlib bare-metal build fails
 to compile: it declares `read`/`write` returning `ssize_t` where newlib
 declares `int`.
 

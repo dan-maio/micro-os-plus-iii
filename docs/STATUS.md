@@ -26,22 +26,26 @@ MMU map and GIC bases, and the eight RK3506-specific tests.
 
 ```
 TMP7/
-├── micro-os-plus-iii-smp/        kernel + shared tests + shared build rules
+├── micro-os-plus-iii-smp/        kernel + shared build rules + test runners
 │   ├── src/ include/             the kernel, upstream path-for-path
 │   ├── port/smp-common/          os-decls.h, shared by both ARM ports
-│   ├── test_smpl/                the shared test suite -- see test-smpl.md
-│   │   ├── common/               the twelve applications, one copy each
-│   │   ├── apps.cmake            which tests exist and how each is configured
+│   ├── test_smpl/                the two runners -- see test-smpl.md
 │   │   ├── run-qemu.sh           the shared QEMU suite runner
 │   │   └── run-hw.sh             the shared hardware session runner
-│   ├── cmake/                    toolchains + uos_add_app / uos_add_test_app
+│   ├── cmake/                    toolchains + uos_add_app
 │   └── tools/verify-kernel-compiles.sh
-├── micro-os-plus-iii-devices/    SD, flatfs, DWC2, FatFs, BCM2837 SoC
-├── micro-os-plus-iii-aarch64/    ARMv8-A port  (24 targets build)
-├── micro-os-plus-iii-aarch32/    ARMv7-A port  (24 targets build)
+├── micro-os-plus-iii-devices/    flatfs, FatFs; SD per SoC (BCM2837, RK3506)
+├── micro-os-plus-iii-aarch64/    ARMv8-A port
+│   ├── src/ include/             ARMv8-A, every board
+│   └── boards/{rpi-zero-2w,rpi3b}/          each with board.cmake, include/,
+│                                            src/, test/, hw.sh, qemu.sh
+├── micro-os-plus-iii-aarch32/    ARMv7-A port
 │   ├── src/ include/             ARMv7-A, every board — incl. the scheduler
-│   └── boards/{rpi-zero-2w,luckfox-lyra}/   BCM2837 · RK3506
+│   └── boards/{rpi-zero-2w,rpi3b,luckfox-lyra}/   BCM2837 · BCM2837 · RK3506
 └── micro-os-plus-iii-smp-old/    READ ONLY — the migration source
+
+Every board owns its tests, in `boards/<id>/test/`; how that is laid out and
+how to run it is [`tests-in-aarch32-aarch64.md`](tests-in-aarch32-aarch64.md).
 ```
 
 | | |
@@ -69,9 +73,10 @@ neither the kernel nor the devices repo knows an architecture project exists.
    collapse to one copy.
 4. **Step 2a — the twelve test applications unified.** 15,507 lines of
    application C++ become 7,610. Nothing ISA-specific is left in a test.
-5. **Step 2b — both ARM architecture projects.** `aarch64` and `aarch32` each
-   build all 24 targets (12 applications × {qemu, hwd}) from one loop over
-   `test_smpl/apps.cmake`; neither names a test itself.
+5. **Step 2b — both ARM architecture projects.** Each builds every board's
+   tests from one loop over `boards/${BOARD}/test/*/`, in two variants. No
+   test name and no board name appears in either port's build files.
+   24 targets per Pi board, 26 for the Lyra.
 6. **QEMU suites green.** `11 passed, 1 skipped, 0 failed` on both, with
    gcc 15 and one suite at a time. `usb_test` skips by design — QEMU emulates
    no USB device mode — as the predecessor suite also recorded.

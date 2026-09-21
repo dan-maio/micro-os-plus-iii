@@ -90,8 +90,10 @@ constexpr std::uint32_t kSeedSize = 100000u;
 constexpr std::uint32_t kSeedSeed = 0x51A7E51u;
 constexpr const char* kSeedName = "seed.bin";
 
+// Board-neutral on purpose: flatfs_tool.py compares this file byte for byte,
+// and a host tool cannot know which board wrote the card.
 constexpr const char* kHelloText
-    = "Hello from flatfs on Raspberry Pi Zero 2W (BCM2837, 4x Cortex-A53)!\n";
+    = "Hello from flatfs on micro-os-plus-iii!\n";
 
 struct FileSpec
 {

@@ -49,6 +49,14 @@ cpu_slot (void)
   return (id < OS_NCPU) ? id : 0u;
 }
 
+// The core count as text, for banners and messages. A test that prints
+// "4-core" is a test that lies on a three-core board, and it lies in the one
+// line a reader trusts most. OS_NCPU is a board fact (boards/<id>/board.cmake),
+// so the string follows it.
+#define TEST_STR_(x) #x
+#define TEST_STR(x)  TEST_STR_(x)
+#define TEST_NCPU_STR TEST_STR (OS_NCPU)
+
 // Stack words per secondary idle thread. Override per application with
 // -DTEST_IDLE_STACK_WORDS=<n> when a port needs deeper idle stacks.
 #ifndef TEST_IDLE_STACK_WORDS

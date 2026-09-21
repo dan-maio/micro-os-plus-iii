@@ -1,6 +1,6 @@
 /*
  * smp-mat-sdcard-test (Raspberry Pi Zero 2W / BCM2837, 4× Cortex-A53) —
- * parallel block linear equation solver, N = 200, B = 20, 4 cores, with the
+ * parallel block linear equation solver, N = 200, B = 20, OS_NCPU cores, with the
  * MATRICES STORED ON THE SD CARD instead of only in RAM. Storage is flatfs
  * over the raw disk.img (QEMU build) or the existing FAT32 boot partition via
  * FatFs with files under /tests (make HW=1, never formatted).
@@ -20,7 +20,7 @@
  *      A.mat / b.mat on the card.
  *   3. LOAD A_block / b_block back from the card (the solver working copy —
  *      proving the solver's data comes off the SD card).
- *   4. PARALLEL BLOCK elimination (B=50, 10 row-blocks over 4 cores,
+ *   4. PARALLEL BLOCK elimination (B=50, 10 row-blocks over OS_NCPU cores,
  *      generation-based spin barriers, core 0 does the diagonal LU +
  *      back substitution) -> x_block.
  *   5. Classical N×N LU ground truth on core 0, again loading A/b from the
@@ -40,9 +40,9 @@
  *   - SD card I/O uses this port's sd.hpp / flatfs.hpp drivers;
  *   - UART0 (PL011) + a GPIO LED via this port's uart.hpp / led.hpp.
  *
- * With B = 50, N/B = 10 blocks over 4 cores: the block count need NOT be a
+ * With B = 50, N/B = 10 blocks over OS_NCPU cores: the block count need NOT be a
  * multiple of the core count — the round-robin row-block assignment simply
- * distributes 10 blocks unevenly across the 4 cores.
+ * distributes 10 blocks unevenly across the cores.
  *
  * Output on UART0 @115200; the LED blinks while the solver runs and becomes a
  * heartbeat after the summary.
@@ -887,7 +887,7 @@ os_main (int /*argc*/, char* /*argv*/[])
 
   write_str ("\n");
   write_str ("=============================================\n");
-  write_str ("  " PORT_BANNER_LONG " (BCM2837, 4x A53)\n");
+  write_str ("  " PORT_BANNER_LONG " - " PORT_BANNER_CPU "\n");
   write_str ("  micro-os-plus-iii  smp-mat-sdcard-test\n");
   write_str ("  parallel block linear solver, matrices on SD\n");
   write_fmt ("  N = %d, B = %d, cores = %d\n", N, B, OS_NCPU);
@@ -905,7 +905,7 @@ os_main (int /*argc*/, char* /*argv*/[])
   const int num_blocks = N / B;
   // NOTE: num_blocks need NOT be a multiple of OS_NCPU - the round-robin row
   // assignment ((i-(k+1)) % OS_NCPU == core_id) simply distributes the blocks
-  // unevenly. With N=200, B=20 -> 10 blocks over 4 cores.
+  // unevenly. With N=200, B=20 -> 10 blocks over OS_NCPU cores.
   if (num_blocks % OS_NCPU != 0)
     {
       write_fmt ("NOTE: %d blocks over %d cores (uneven round-robin split).\n",
@@ -1006,7 +1006,7 @@ os_main (int /*argc*/, char* /*argv*/[])
   // Bring up SMP (cores 1-3), then do the RAM-only compute phases.
   // =========================================================================
   smp_install_boot_threads ();
-  write_str ("core 0: releasing cores 1..3...\n");
+  write_str ("core 0: releasing the secondary cores...\n");
   smp::start_secondary_cores ();
   {
     int waited = 0;
@@ -1037,7 +1037,7 @@ os_main (int /*argc*/, char* /*argv*/[])
   write_str ("Thread Pool demo finished. All 20 tasks executed successfully.\n\n");
 
   // ---- Launch the parallel solver threads ----------------------------------
-  write_str ("Starting parallel 4-core block elimination (N=200, B=20)...\n");
+  write_str ("Starting parallel " TEST_NCPU_STR "-core block elimination (N=200, B=20)...\n");
   for (int c = 0; c < OS_NCPU; ++c)
     {
       thread::attributes attr = thread::initializer;

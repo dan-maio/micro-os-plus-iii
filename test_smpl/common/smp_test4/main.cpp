@@ -2,10 +2,10 @@
  * smp_test4 — Raspberry Pi Zero 2W µOS++ no-affinity load balancing.
  *
  * Spawns NWORK CPU-bound worker threads with NO cpu_affinity, so the SMP
- * scheduler is free to place them on any of the 4 cores. Each worker records
+ * scheduler is free to place them on any of the OS_NCPU cores. Each worker records
  * how many time-slices it ran on each core; a reporter prints the per-worker
  * core histogram once a second and blinks the LED. If work lands on more than
- * one core (and across all four over time), the load balancer is working.
+ * one core (and across all of them over time), the load balancer is working.
  */
 #include <cmsis-plus/rtos/os.h>
 #include <cmsis-plus/diag/trace.h>
@@ -133,7 +133,7 @@ int os_main (int, char*[])
   t_rep.cpu_affinity(1u << 0);   // keep the console on core 0 for tidy output
 
   // Run the load-balancing demo for exactly 10 one-second beats, then check the
-  // load actually spread across all four cores (no-affinity balancing) and end
+  // load actually spread across every core (no-affinity balancing) and end
   // through a semihosted exit() (SEMIHOST builds). The idle fallback is only
   // reached on a plain SEMIHOST=0 / SD-boot image.
   constexpr std::uint32_t kCheckBeats = 10;

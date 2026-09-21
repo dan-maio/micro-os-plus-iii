@@ -15,7 +15,7 @@
  *   semihost          the ONLY writer of the ARM semihosting channel: same
  *                     queue discipline, for the OpenOCD/J-Link run.
  *
- * Two unpinned worker threads keep all four cores scheduling while USB traffic
+ * Two unpinned worker threads keep every core scheduling while USB traffic
  * flows, and report a per-core iteration count for the SMP tally.
  *
  * The received file is stored through the selected Sink AND streamed to the
@@ -925,7 +925,7 @@ os_main (int argc, char* argv[])
   // ---------------------------------------------------------------------
 
   // Release cores 1..3 so the load generators and the console/storage threads
-  // genuinely spread over all four cores (smp_test2 pattern: the per-core idle
+  // genuinely spread over every core (smp_test2 pattern: the per-core idle
   // threads are installed first, then each core is released and waits for its
   // first tick before the next). Until this ran, everything was on core 0.
   smp_install_boot_threads ();
@@ -969,7 +969,7 @@ os_main (int argc, char* argv[])
   }
   start_thread (mon_stack, sizeof (mon_stack), "mon", monitor_thread_fn, 0u);
 
-  // Unpinned load generators: they keep all four cores scheduling while USB
+  // Unpinned load generators: they keep every core scheduling while USB
   // traffic flows, and prove the SMP path is exercised.
   start_thread (work_stack[0], sizeof (work_stack[0]), "w0", worker_thread_fn, 0u);
   start_thread (work_stack[1], sizeof (work_stack[1]), "w1", worker_thread_fn, 0u);

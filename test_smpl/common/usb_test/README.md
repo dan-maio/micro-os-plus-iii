@@ -34,7 +34,7 @@ service thread:
 | `uart`  | any | the **only** writer of the PL011 console: drains a message queue of file chunks and status lines. |
 | `semi`  | any | the **only** writer of the ARM semihosting channel: same queue discipline. |
 | `led`   | any | blinks the user LED: a burst of 3 blinks, each 40 ms lit then 40 ms dark, then a 300 ms dark gap, repeating. On the Zero 2 W that is the onboard green ACT LED (`LED_PIN=29`, the Makefile default); `make LED_PIN=16` drives header pin 36 instead, for an externally wired LED. The pattern is tunable with `LED_BLINKS`, `LED_ON_MS`, `LED_OFF_MS` and `LED_GAP_MS`. |
-| `w0`,`w1` | any | unpinned load generators; keep all four cores scheduling and produce the per-core SMP tally. |
+| `w0`,`w1` | any | unpinned load generators; keep every core scheduling and produce the per-core SMP tally. |
 
 `uart.hpp` is a polled driver with no locking, so exactly one thread writes it;
 the same holds for the semihosting channel. The other threads communicate with
@@ -167,7 +167,7 @@ python3 host_xfer.py --sizes 512,1024 --name z.bin     # the ZLP-sensitive sizes
 The 512 and 1024 cases exercise the zero-length-packet rule, the 0-byte case
 the empty transfer, and 65536/1048576 multi-block `flatfs` writes. The device
 prints `RESULT: PASS` only when no CRC mismatch occurred, at least one command
-was served, and at least three of the four cores were active during the run
+was served, and all but at most one core was active during the run
 (the SMP tally). A `100 MiB` run with no `!!! CORRUPT CONTEXT FRAME !!!` from
 the port's tripwire is the stability gate.
 

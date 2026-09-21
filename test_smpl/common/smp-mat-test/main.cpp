@@ -1,6 +1,6 @@
 /*
  * smp-mat-test (Raspberry Pi Zero 2W / BCM2837, 4× Cortex-A53) — parallel
- * block linear equation solver, N = 120, B = 20, 4 cores. Adapted from the
+ * block linear equation solver, N = 120, B = 20, OS_NCPU cores. Adapted from the
  * pico2 smp-mat-test (itself the pico2 port of the A7 smp_test4). EVERYTHING
  * RUNS IN RAM (the whole kernel image, all matrices, all stacks live in DRAM;
  * there is no flash/XIP on this platform).
@@ -26,9 +26,9 @@
  *     (smp_install_boot_threads + smp::start_secondary_cores);
  *   - UART0 (PL011) + a GPIO LED via this port's uart.hpp / led.hpp.
  *
- * With B = 20, N/B = 6 blocks over 4 cores: the block count need NOT be a
+ * With B = 20, N/B = 6 blocks over OS_NCPU cores: the block count need NOT be a
  * multiple of the core count — the round-robin row-block assignment simply
- * distributes 6 blocks unevenly across the 4 cores.
+ * distributes 6 blocks unevenly across the cores.
  *
  * Output on UART0 @115200; the LED blinks while the solver runs and becomes a
  * heartbeat after the summary.
@@ -782,7 +782,7 @@ os_main (int /*argc*/, char* /*argv*/[])
 
   write_str ("\n");
   write_str ("=============================================\n");
-  write_str ("  " PORT_BANNER_LONG " (BCM2837, 4x A53)\n");
+  write_str ("  " PORT_BANNER_LONG " - " PORT_BANNER_CPU "\n");
   write_str ("  micro-os-plus-iii  smp-mat-test (all in RAM)\n");
   write_str ("  parallel block linear solver\n");
   write_fmt ("  N = %d, B = %d, cores = %d\n", N, B, OS_NCPU);
@@ -827,7 +827,7 @@ os_main (int /*argc*/, char* /*argv*/[])
   int num_blocks = N / B;
   // NOTE: num_blocks need NOT be a multiple of OS_NCPU — the round-robin row
   // assignment ((i-(k+1)) % OS_NCPU == core_id) simply distributes the blocks
-  // unevenly. With N=120, B=20 -> 6 blocks over 4 cores.
+  // unevenly. With N=120, B=20 -> 6 blocks over OS_NCPU cores.
   if (num_blocks % OS_NCPU != 0)
     {
       write_fmt ("NOTE: %d blocks over %d cores (uneven round-robin split).\n",

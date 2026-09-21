@@ -606,7 +606,7 @@ int
 os_main (int, char*[])
 {
   console ("\n+== " PORT_BANNER_SHORT " µOS++ SMP PIPELINE TEST (" PORT_BANNER_ISA ") ==+\n");
-  console ("13 threads, 4 cores, shared queues, SD-card persistence & yield() stress\n\n");
+  console ("13 threads, " TEST_NCPU_STR " cores, shared queues, SD-card persistence & yield() stress\n\n");
 
   sd_prepare ();
 

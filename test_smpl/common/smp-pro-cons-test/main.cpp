@@ -3,7 +3,7 @@
  * Raspberry Pi Zero 2W (BCM2837, 4x Cortex-A53, AArch64).
  *
  * This test exercises every single µOS++ III kernel object in SMP concurrency:
- *   1. os::rtos::thread                 : 12 threads running concurrently across 4 cores
+ *   1. os::rtos::thread                 : 12 threads running concurrently across OS_NCPU cores
  *   2. os::rtos::memory_pool            : Block allocation/free of data packets
  *   3. os::rtos::message_queue          : Bounded typed inter-thread message FIFO
  *   4. os::rtos::semaphore_counting     : Flow-control credit bucket
@@ -554,7 +554,7 @@ os_main (int, char*[])
   };
   s_telem_thread.cpu_affinity (1u << 0);
 
-  console ("12 concurrent threads started across 4 cores!\n");
+  console ("12 concurrent threads started across " TEST_NCPU_STR " cores!\n");
   console ("Running pipeline for %u ms ...\n\n", static_cast<unsigned> (RUN_MS));
 
   // Run test window

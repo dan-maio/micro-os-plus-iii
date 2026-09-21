@@ -1,10 +1,11 @@
 /*
- * smp_test2 — Raspberry Pi Zero 2W µOS++ Phase-2 4-core SMP test.
+ * smp_test2 — µOS++ Phase-2 SMP lock-coherency test.
  *
- * Brings up all four Cortex-A cores. One worker thread is pinned to each core;
- * every worker bumps a shared counter under a µOS++ mutex ITER times. If the
- * final counter == 4*ITER, the LDREX/STREX kernel lock + cacheable/shareable
- * DRAM mapping are coherent across cores (no lost updates). Each line is tagged
+ * Brings up all OS_NCPU Cortex-A cores -- four on a BCM2837, three on an
+ * RK3506. One worker thread is pinned to each core; every worker bumps a
+ * shared counter under a µOS++ mutex ITER times. If the final counter ==
+ * OS_NCPU*ITER, the LDREX/STREX kernel lock + cacheable/shareable DRAM
+ * mapping are coherent across cores (no lost updates). Each line is tagged
  * with the core it actually ran on (port_cpu_id).
  */
 #include <cmsis-plus/rtos/os.h>
@@ -66,7 +67,7 @@ extern "C"
   void os_startup_initialize_hardware (void)
   {
     uart::uart1.init();
-    uart::uart1 << "\n\n+== " PORT_BANNER_SHORT " µOS++ SMP TEST 2 : 4-core lock coherency ==+\n\n";
+    uart::uart1 << "\n\n+== " PORT_BANNER_SHORT " µOS++ SMP TEST 2 : " TEST_NCPU_STR "-core lock coherency ==+\n\n";
     os_startup_initialize_free_store(__heap_start,
                                      static_cast<std::size_t>(__heap_end - __heap_start));
     exception::init();
@@ -151,8 +152,9 @@ int os_main (int, char*[])
   std::uint32_t expected = ITER * OS_NCPU;
   uart1 << "\n==== RESULT ====\n";
   uart1 << "counter = " << g_counter << "  expected = " << expected << "\n";
-  uart1 << (g_counter == expected ? "PASS: lock coherent across 4 cores\n"
-                                  : "FAIL: lost updates!\n");
+  uart1 << (g_counter == expected
+                ? "PASS: lock coherent across " TEST_NCPU_STR " cores\n"
+                : "FAIL: lost updates!\n");
   uart1 << "\nRESULT: " << (g_counter == expected ? "PASS" : "FAIL") << "\n";
   if (g_counter == expected)
     {

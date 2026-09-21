@@ -56,8 +56,7 @@ E_SIZE = 24
 E_FLAGS = 28
 
 # Expected files written by the firmware (dev -> host verification)
-HELLO_TEXT = (b"Hello from flatfs on Raspberry Pi Zero 2W "
-              b"(BCM2837, 4x Cortex-A53)!\n")
+HELLO_TEXT = b"Hello from flatfs on micro-os-plus-iii!\n"
 
 # seed.bin parameters (host -> dev)
 SEED_NAME = "seed.bin"

@@ -177,6 +177,24 @@ those drivers grow a second backend the Lyra builds the subset that needs only
 CPUs, a timer and a console — which is also the only subset its predecessor
 project ever had.
 
+The selection is not a list of board names. Each test declares what it needs
+(`UOS_TEST_APPS_SMP_ONLY`, `…_NEED_SD`, `…_NEED_USB` in `test_smpl/apps.cmake`),
+each board declares `UOS_BOARD_CAPS`, and `test/CMakeLists.txt` intersects the
+two. That is what makes the next port tractable: `cortexm` will have a dozen
+boards, half of them single-core, and none of them will appear in an
+`if/elseif` chain.
+
+> **`UOS_BOARD_CAPS` is about the port, not the board.** It lists what *this
+> port can drive on this board* — not the connectors the board carries. The
+> Lyra B **does** have a microSD slot; it is where the miniloader lives. It
+> does not declare `sdcard`, because `micro-os-plus::devices` has exactly one
+> SD backend — `src/sd.cpp`, a polled Arasan SDHCI at the BCM2837's
+> `0x3F30_0000` — and the RK3506 has a Synopsys DesignWare MSHC somewhere
+> else. The capability returns the day a `dw_mmc` backend appears behind
+> `sd.hpp`, and the four SD tests reappear with no edit to
+> `test/CMakeLists.txt`. Reading the list as a hardware inventory is the one
+> way to misread it.
+
 ---
 
 ## 6. QEMU: `-M virt`, and no shim

@@ -131,7 +131,7 @@ static unsigned g_num_len = 0;
 static char g_read_buf[256 * 1024];
 
 // Per-core count of appended lines (the "[cN]" of each write), for a summary.
-static volatile unsigned g_core_lines[OS_NCPU] = { 0, 0, 0, 0 };
+static volatile unsigned g_core_lines[OS_NCPU] = {};
 
 // ---------------------------------------------------------------------------
 // SD helpers. All called with g_file_mtx held.

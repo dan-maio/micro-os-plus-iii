@@ -128,6 +128,10 @@ usb_test-qemu         usb_test-hwd
 FAT32 boot partition rather than formatting a blank card) and `DEBUG_BOOT`
 (early-boot asm markers for OpenOCD bring-up).
 
+> The shared suite itself — what each of the twelve applications proves, how
+> `apps.cmake` configures them, and how to add one — is
+> [`test-smpl.md`](test-smpl.md).
+
 ## 4. Running the QEMU suites
 
 One runner serves every architecture; the caller supplies the machine.
@@ -135,7 +139,7 @@ One runner serves every architecture; the caller supplies the machine.
 ### AArch64 — straight to `-kernel`
 
 ```sh
-../micro-os-plus-iii-smp/test/run-qemu.sh build/test \
+../micro-os-plus-iii-smp/test_smpl/run-qemu.sh build/test \
     "$(ls ~/.local/xPacks/@xpack-dev-tools/qemu-arm/*/.content/bin/qemu-system-aarch64 | tail -1)" \
     -M raspi3b -smp 4
 ```
@@ -147,7 +151,7 @@ drops to AArch32 and jumps to the image. CMake builds it as `qemu-shim`.
 
 ```sh
 UOS_QEMU_SHIM=build/test/shim8.img UOS_QEMU_LOAD_ADDR=0x10000 \
-../micro-os-plus-iii-smp/test/run-qemu.sh build/test \
+../micro-os-plus-iii-smp/test_smpl/run-qemu.sh build/test \
     "$(ls ~/.local/xPacks/@xpack-dev-tools/qemu-arm/*/.content/bin/qemu-system-aarch64 | tail -1)" \
     -M raspi3b -smp 4
 ```
@@ -205,7 +209,7 @@ test/hw.sh smp_test2                # run one
 binutils, the entry fallback, the OpenOCD target names, which cores are
 debug targets at load time, the width of `__smp_spin`, how a core is resumed,
 and whether anything has to happen between the halt and the load. The session
-is driven by `test/run-hw.sh` in the kernel repository, which every port
+is driven by `test_smpl/run-hw.sh` in the kernel repository, which every port
 shares. Together they replace the predecessor's `hw.sh` + `hw-olimex.sh` in
 each test directory of each port: 48 files of about 200 near-identical
 lines.
@@ -305,7 +309,7 @@ normally but never enumerates, with no error message.
 ```bash
 test/hw.sh usb_test 900          # one terminal
 # ~20 s later, in another:
-cd ../micro-os-plus-iii-smp/test/common/usb_test
+cd ../micro-os-plus-iii-smp/test_smpl/common/usb_test
 sudo ./host_xfer.py
 ```
 
@@ -361,7 +365,7 @@ To build one of the shared tests instead:
 uos_add_test_app (smp_test1 NCPU 4 LINKER_SCRIPT ... DEFINES ...)
 ```
 
-which resolves the sources from `test/common/smp_test1/`. No build ever spells
+which resolves the sources from `test_smpl/common/smp_test1/`. No build ever spells
 out a path into the test tree.
 
 ## 7. CMake targets exported

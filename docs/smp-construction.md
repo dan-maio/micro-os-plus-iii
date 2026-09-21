@@ -47,7 +47,7 @@ differ.
 | Bring-up, kernel lock, context switch hooks | port `src/rtos/os-core.cpp` | the port's half of the scheduler |
 | Reset vector, MMU, exception vectors, timer | port `src/` | board and ISA |
 | SD, FatFs, flatfs, USB, SoC mailbox | devices repo | shared verbatim by both ARM ports |
-| Test applications | kernel `test/common/` | ISA-neutral, one copy for every port |
+| Test applications | kernel `test_smpl/common/` | ISA-neutral, one copy for every port |
 
 ### Two files called `src/rtos/os-core.cpp`
 
@@ -136,7 +136,7 @@ void     smp_install_boot_threads (void);  /* supplied by the application  */
 `smp_install_boot_threads()` is the one the *application* owes the port: it
 creates an idle thread per secondary CPU and registers each in
 `os::rtos::scheduler::os_idle_thread_core[]` before the cores are released. All
-twelve shared tests get it from `test/common/src/test-smp-boot.cpp`.
+twelve shared tests get it from `test_smpl/common/src/test-smp-boot.cpp`.
 
 ### 3.5 Bring-up order
 
@@ -206,7 +206,7 @@ The architecture project's `test/CMakeLists.txt`:
 | `DEBUG_BOOT` | `-DUOS_DEBUG_BOOT=ON` | early-boot asm markers from `startup.S`, for bring-up under OpenOCD. **Off by default**, as the sources assume: each marker is a semihosting trap, and under a JTAG probe a trap costs real time |
 | `LED_PIN` | `BOARD=zero2w` | the GPIO driven as the user LED, 29 by default — the Zero 2 W's onboard green ACT LED. `led.hpp`'s own fallback is GPIO 16, header pin 36, which blinks nothing on a bare board. Which pin it is depends on the **board**, so it is set here for every test rather than per application; `BOARD=rpi3b` does not use it at all, because there the ACT LED is VideoCore expander GPIO 130 behind the mailbox |
 
-### 5.3 Per-application, from `test/apps.cmake`
+### 5.3 Per-application, from `test_smpl/apps.cmake`
 
 Only `usb_test` has knobs:
 

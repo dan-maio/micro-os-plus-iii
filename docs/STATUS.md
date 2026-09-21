@@ -29,9 +29,11 @@ TMP7/
 ├── micro-os-plus-iii-smp/        kernel + shared tests + shared build rules
 │   ├── src/ include/             the kernel, upstream path-for-path
 │   ├── port/smp-common/          os-decls.h, shared by both ARM ports
-│   ├── test/common/              the twelve test applications, one copy each
-│   ├── test/apps.cmake           which tests exist and how each is configured
-│   ├── test/run-qemu.sh          the shared QEMU suite runner
+│   ├── test_smpl/                the shared test suite -- see test-smpl.md
+│   │   ├── common/               the twelve applications, one copy each
+│   │   ├── apps.cmake            which tests exist and how each is configured
+│   │   ├── run-qemu.sh           the shared QEMU suite runner
+│   │   └── run-hw.sh             the shared hardware session runner
 │   ├── cmake/                    toolchains + uos_add_app / uos_add_test_app
 │   └── tools/verify-kernel-compiles.sh
 ├── micro-os-plus-iii-devices/    SD, flatfs, DWC2, FatFs, BCM2837 SoC
@@ -69,7 +71,7 @@ neither the kernel nor the devices repo knows an architecture project exists.
    application C++ become 7,610. Nothing ISA-specific is left in a test.
 5. **Step 2b — both ARM architecture projects.** `aarch64` and `aarch32` each
    build all 24 targets (12 applications × {qemu, hwd}) from one loop over
-   `test/apps.cmake`; neither names a test itself.
+   `test_smpl/apps.cmake`; neither names a test itself.
 6. **QEMU suites green.** `11 passed, 1 skipped, 0 failed` on both, with
    gcc 15 and one suite at a time. `usb_test` skips by design — QEMU emulates
    no USB device mode — as the predecessor suite also recorded.
@@ -79,7 +81,7 @@ neither the kernel nor the devices repo knows an architecture project exists.
    `docs/md2pdf.py` that replaces three near-identical copies.
 8. **Hardware green on both ports.** All twelve pass on a Zero 2 W over a
    J-Link, `usb_test` included — the one QEMU can never run.
-   `test/run-hw.sh` plus a ~40-line `test/hw.sh` per port replace the
+   `test_smpl/run-hw.sh` plus a ~40-line `test/hw.sh` per port replace the
    predecessor's 48 per-test runner scripts.
 
 ## What hardware found that QEMU could not

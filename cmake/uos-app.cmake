@@ -112,8 +112,9 @@ endfunction ()
 # -----------------------------------------------------------------------------
 # uos_add_test_app (<name> [APP <dir>] <uos_add_app arguments...>)
 #
-# Declares one of the shared test applications from test/common/. The sources
-# come from test/common/<APP>/ -- there is exactly one copy of each test in the
+# Declares one of the shared test applications from test_smpl/common/. The
+# sources come from test_smpl/common/<APP>/ -- there is exactly one copy of
+# each test in the
 # workspace, and every architecture project compiles that same copy.
 #
 # APP defaults to <name>, so a board that builds the test under its own target

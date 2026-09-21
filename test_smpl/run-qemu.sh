@@ -7,7 +7,7 @@
 # QEMU binary and the machine flags, which are the only parts that differ
 # between ports.
 #
-#   test/run-qemu.sh build/test "$(…)/qemu-system-aarch64" -M raspi3b -smp 4
+#   test_smpl/run-qemu.sh build/test "$(…)/qemu-system-aarch64" -M raspi3b -smp 4
 #
 # The per-test timeouts are the ones the predecessor repository's
 # run_one_test.sh used; they are wall-clock budgets, not expected durations.
@@ -24,7 +24,7 @@ MACHINE=("$@")
 # image is loaded at an address and a small shim drops to AArch32 and jumps
 # there. Set both to use that path; leave them unset for a direct -kernel boot.
 #
-#   UOS_QEMU_SHIM=/path/to/shim8.img UOS_QEMU_LOAD_ADDR=0x10000 test/run-qemu.sh ...
+#   UOS_QEMU_SHIM=/path/to/shim8.img UOS_QEMU_LOAD_ADDR=0x10000 test_smpl/run-qemu.sh ...
 SHIM="${UOS_QEMU_SHIM:-}"
 LOAD_ADDR="${UOS_QEMU_LOAD_ADDR:-0x10000}"
 if [[ -n "$SHIM" && ! -f "$SHIM" ]]; then

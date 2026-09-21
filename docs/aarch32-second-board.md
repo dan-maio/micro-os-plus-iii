@@ -207,7 +207,7 @@ remains.
 
 ## 7. Hardware: what the shared runner had to learn
 
-`test/run-hw.sh` in the kernel repository drives every hardware session. It
+`test_smpl/run-hw.sh` in the kernel repository drives every hardware session. It
 had three things hard-coded that were the Pi's, not the architecture's:
 
 | was | is |

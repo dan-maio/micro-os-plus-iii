@@ -37,7 +37,7 @@ words are retired. This spec uses exactly these terms:
 
 | term | meaning | where it lives |
 |---|---|---|
-| **common** | valid on every architecture it is compiled for | the main repo: `micro-os-plus-iii/`, `devices/`, `test/common/` |
+| **common** | valid on every architecture it is compiled for | the main repo: `micro-os-plus-iii/`, `devices/`, `test_smpl/common/` |
 | **architecture-specific** | valid only for one architecture | an architecture repo: `<arch>/src/`, `<arch>/include/` |
 | **SoC-specific** | valid only for one silicon family within an architecture | inside its architecture repo, behind `OS_ARCHITECTURE_FEATURE` or its own file |
 
@@ -222,7 +222,7 @@ drift with nothing to detect it.
 | pico2 vs pico2-sdk | 15 | 5,268 | 512 | 91% |
 
 These are the same tests built for different ISAs and runtime flavours. Under
-D7 each logical test has exactly **one** source, in `test/common/<app>/`, and
+D7 each logical test has exactly **one** source, in `test_smpl/common/<app>/`, and
 every board that runs it references that source.
 
 ## 4.6 Build files — 214 Makefiles to one shared module
@@ -242,7 +242,7 @@ identical. Keeping five independent board trees would carry ~6,300 lines of
 near-identical source forward. **Revised:** the five variants remain five
 entries under `test/` (so D5's uniform layout holds and each keeps its own
 toolchain, linker script and flash scripts), but they share one set of
-application sources from `test/common/`. The variant is a build configuration,
+application sources from `test_smpl/common/`. The variant is a build configuration,
 not a copy of the code.
 
 **5.2 "rpi-32b and rpi-64b as independent board trees."** Same reasoning:
@@ -388,7 +388,7 @@ or ISAs, it belongs here.
 Lives in the **main repo**, for the same reason as `devices/`: the rpi test
 sources are 95% identical across two ISAs that are now two repositories.
 
-`test/common/<app>/` holds one source per logical test. `test/<board>/{qemu,hwd}/`
+`test_smpl/common/<app>/` holds one source per logical test. `test/<board>/{qemu,hwd}/`
 holds a short manifest naming which shared apps that board builds, its
 toolchain file, linker script and flash/run scripts. Per-board source deltas,
 where they genuinely exist, are expressed as `#ifdef` inside the shared source
@@ -486,7 +486,7 @@ to be a submodule before any architecture repo is created.**
 2. **`aarch32` + `aarch64`, end to end — the proving slice.** Migrates rpi-32b
    and rpi-64b, which exercises every hard part at once: the `devices/`
    extraction into the main repo, two architecture repos consuming it by
-   submodule, the shared `test/common/` sources across two ISAs, and the only
+   submodule, the shared `test_smpl/common/` sources across two ISAs, and the only
    real QEMU coverage in the project. 12 shared app sources, 24 build targets.
    *Gate:* all 24 targets build; QEMU suites pass; hardware tests pass on the Pi;
    no device or test source exists in more than one repo.
@@ -549,7 +549,7 @@ Settled in review on 2026-09-20. Nothing in this spec is now open.
 | Q4 | "portable" terminology | **Word retired.** Raised in review as ambiguous; see Section 1.1. |
 | Q5 | Organising axis | **Architecture, not target.** Four ports: `cortexm`, `aarch32`, `aarch64`, `posix-arch` (D8). *Target-specific* is retired as a category for the same reason as *portable*: it invites per-board folders. |
 | Q6 | Shared device code across `aarch32`/`aarch64` | **Main repo `devices/`.** 2,966 lines measured at 0-diff; duplicating across repos would let them drift unnoticed. |
-| Q7 | Where migrated tests live | **Main repo `test/common/`.** rpi sources are 95% identical across the two ISAs. |
+| Q7 | Where migrated tests live | **Main repo `test_smpl/common/`.** rpi sources are 95% identical across the two ISAs. |
 | Q8 | Architecture-repo linkage | **Git submodule** of the main repo, consumed via `add_subdirectory` (D10). |
 | Q9 | `posix-arch` CPU model | **One host thread per CPU**, `ucontext` within a CPU (D12, Section 7.6). |
 

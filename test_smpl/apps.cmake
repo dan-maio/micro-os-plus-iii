@@ -33,6 +33,13 @@ set (UOS_TEST_APPS_SMP_ONLY
      smp-mat-test smp-mat-sdcard-test smp-pipeline-test smp-pro-cons-test
      CACHE INTERNAL "Tests that require OS_NCPU > 1")
 
+# Tests that need a USB device controller. Declared here for the same reason
+# as the list below: what a test needs is a property of the test, and a port
+# should be able to ask "does this board have one?" without naming the test.
+set (UOS_TEST_APPS_NEED_USB
+     usb_test
+     CACHE INTERNAL "Tests that need the USB device stack")
+
 # Tests that read or write the SD card, and so need micro-os-plus::devices.
 set (UOS_TEST_APPS_NEED_SD
      sd_test smp-mat-sdcard-test smp-num-test smp-pipeline-test

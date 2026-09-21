@@ -19,10 +19,12 @@
 #
 # ONE TEST PER POWER CYCLE. Every run is a debug-in-RAM run: OpenOCD halts
 # the cores and load_image's the ELF over whatever the previous test left in
-# DRAM. The Pi has no SRST and the Cortex-A53 debug target has no reset
-# method, so nothing here can put the board back into a known state -- only
-# you can, by power-cycling it. That is why this script refuses to run a
-# suite: it takes exactly one test, and you reset the board before the next.
+# DRAM. Neither board offers a reset this script can drive -- the Pi has no
+# SRST and its Cortex-A53 debug target has no reset method, and the Lyra's
+# secondaries are released once, by clearing their CRU reset bits, which a
+# second run cannot undo. Only a power cycle puts either board back into a
+# known state. That is why this script refuses to run a suite: it takes
+# exactly one test, and you reset the board before the next.
 #
 # Usage:
 #   run-hw.sh <build-test-dir> <app> [run-seconds]
@@ -38,9 +40,26 @@
 #   UOS_HW_READELF    readelf for the port's ELFs   (default: readelf)
 #   UOS_HW_ENTRY      fallback entry if the ELF has none
 #   UOS_HW_SPIN_WORDS 32-bit words in __smp_spin[]  (default: 2 * NCPU)
-#   UOS_HW_RESUME     pc   = set PC, then resume            (AArch64)
-#                     cpsr = set CPSR, then resume at entry (AArch32)
-#   UOS_HW_NCPU       cores to drive                (default: 4)
+#   UOS_HW_RESUME     pc    = set PC, then resume             (AArch64)
+#                     cpsr  = set CPSR, then resume at entry  (AArch32, Pi)
+#                     entry = resume at entry, touching no register. The
+#                             RK3506's miniloader hands core 0 over in SVC
+#                             already, and this is what the board's own
+#                             loader has always done.
+#   UOS_HW_NCPU       cores the port schedules on  (default: 4)
+#   UOS_HW_TARGET_FMT printf format for the OpenOCD target names, with the
+#                     core index as the only conversion
+#                     (default: bcm2837.cpu%d; the Lyra is rk3506.a7.%d)
+#   UOS_HW_CORES      which core indices this script drives, space separated
+#                     (default: all of them). A board whose secondaries are
+#                     held in BootROM until the kernel releases them --
+#                     declared `-defer-examine` in its OpenOCD config -- has
+#                     no debug target to halt yet, so it lists only "0".
+#   UOS_HW_PRELOAD    Tcl run after the halt and before load_image, on the
+#                     first core listed. The RK3506 needs it: the miniloader
+#                     leaves the MMU and caches ON, and load_image writing
+#                     through them leaves DRAM holding something other than
+#                     the image.
 #   UOS_HW_ADAPTER_KHZ  override the JTAG clock after init. board/rpi3.cfg
 #                     asks for 4000 kHz, which is more than jumper wires
 #                     reliably carry -- especially while the board is drawing
@@ -64,6 +83,15 @@ NCPU="${UOS_HW_NCPU:-4}"
 SPIN_WORDS="${UOS_HW_SPIN_WORDS:-$((NCPU * 2))}"
 RESUME_MODE="${UOS_HW_RESUME:-pc}"
 ADAPTER_KHZ="${UOS_HW_ADAPTER_KHZ:-}"
+TARGET_FMT="${UOS_HW_TARGET_FMT:-bcm2837.cpu%d}"
+CORES="${UOS_HW_CORES:-$(seq -s' ' 0 $((NCPU - 1)))}"
+PRELOAD="${UOS_HW_PRELOAD:-}"
+
+# The OpenOCD target name for a core index, and the first core in the list --
+# the one the image is loaded through.
+target_name () { printf "$TARGET_FMT" "$1"; }
+FIRST_CORE="${CORES%% *}"
+FIRST_TARGET="$(target_name "$FIRST_CORE")"
 
 OPENOCD="${OPENOCD:-$(ls -d "$HOME"/.local/xPacks/@xpack-dev-tools/openocd/*/.content/bin/openocd 2>/dev/null | sort -V | tail -1)}"
 [[ -n "$OPENOCD" && -x "$OPENOCD" ]] || OPENOCD="$(command -v openocd || echo openocd)"
@@ -127,23 +155,29 @@ run_one () {
   # halted in, which is what startup.S dispatches on, so setting the PC is the
   # whole of it. AArch32 has to force the mode through CPSR first.
   local resume
-  if [[ "$RESUME_MODE" == "cpsr" ]]; then
-    resume="foreach core {$(seq -s' ' 0 $((NCPU - 1)))} {
-  targets bcm2837.cpu\$core
+  case "$RESUME_MODE" in
+    cpsr)
+      resume="foreach core {$CORES} {
+  targets [format {$TARGET_FMT} \$core]
   reg cpsr 0x600001da
   resume $entry
-}"
-  else
-    resume="foreach core {$(seq -s' ' 0 $((NCPU - 1)))} {
-  targets bcm2837.cpu\$core
+}" ;;
+    entry)
+      resume="foreach core {$CORES} {
+  targets [format {$TARGET_FMT} \$core]
+  resume $entry
+}" ;;
+    *)
+      resume="foreach core {$CORES} {
+  targets [format {$TARGET_FMT} \$core]
   reg pc $entry
   echo \"  start PC core \$core = [reg pc]\"
 }
-foreach core {$(seq -s' ' 0 $((NCPU - 1)))} {
-  targets bcm2837.cpu\$core
+foreach core {$CORES} {
+  targets [format {$TARGET_FMT} \$core]
   resume
-}"
-  fi
+}" ;;
+  esac
 
   # Quote nothing but the expansions we want: \$core must reach Tcl literally.
   local speed=""
@@ -152,19 +186,31 @@ foreach core {$(seq -s' ' 0 $((NCPU - 1)))} {
 adapter speed ${ADAPTER_KHZ}"
   fi
 
+  local spin_stage=""
+  if [[ -n "$zero" ]]; then
+    spin_stage="echo \"--- stage: zero __smp_spin at 0x${spin} (${SPIN_WORDS} words) ---\"
+${zero}"
+  fi
+  local preload_stage=""
+  if [[ -n "$PRELOAD" ]]; then
+    preload_stage="echo \"--- stage: pre-load ---\"
+targets ${FIRST_TARGET}
+${PRELOAD}
+"
+  fi
+
   cat > "$cfg" <<EOF
 ${speed:+$speed
-}echo "--- stage: halt all cores ---"
-foreach core {$(seq -s' ' 0 $((NCPU - 1)))} { targets bcm2837.cpu\$core; halt }
-echo "--- stage: enable semihosting on all cores ---"
+}echo "--- stage: halt cores $CORES ---"
+foreach core {$CORES} { targets [format {$TARGET_FMT} \$core]; halt }
+echo "--- stage: enable semihosting on cores $CORES ---"
 # Per-target: a core whose semihosting is off stalls at a debug halt the first
 # time it traps, so every core needs it, not just core 0.
-foreach core {$(seq -s' ' 0 $((NCPU - 1)))} { targets bcm2837.cpu\$core; arm semihosting enable }
-echo "--- stage: load_image $elf ---"
-targets bcm2837.cpu0
+foreach core {$CORES} { targets [format {$TARGET_FMT} \$core]; arm semihosting enable }
+${preload_stage}echo "--- stage: load_image $elf ---"
+targets ${FIRST_TARGET}
 load_image $elf
-echo "--- stage: zero __smp_spin at 0x${spin:-<absent>} (${SPIN_WORDS} words) ---"
-${zero}echo "--- stage: resume all cores at $entry ---"
+${spin_stage}echo "--- stage: resume cores $CORES at $entry ---"
 ${resume}
 EOF
 
@@ -230,8 +276,8 @@ fi
 if [[ "$WHICH" == "all" ]]; then
   say "refusing to run a suite."
   say "Each test is loaded into RAM over whatever the previous one left there,"
-  say "and the Pi has no reset this script can drive. Run one test, power-cycle"
-  say "the board, then run the next. '$0 $BUILD_DIR list' shows them."
+  say "and neither board has a reset this script can drive. Run one test,"
+  say "power-cycle the board, then run the next. '$0 $BUILD_DIR list' shows them."
   exit 2
 fi
 

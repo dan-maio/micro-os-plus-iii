@@ -201,13 +201,14 @@ test/hw.sh list                     # the tests this build has, and their budget
 test/hw.sh smp_test2                # run one
 ```
 
-`test/hw.sh` holds only what is specific to the ISA — the binutils, the entry
-fallback, the width of `__smp_spin`, whether a core resumes by setting the PC
-(AArch64) or by forcing CPSR first (AArch32), and whether the OpenOCD config
-initialises itself. The session is driven by `test/run-hw.sh` in the kernel
-repository, which every port shares. Together they replace the predecessor's
-`hw.sh` + `hw-olimex.sh` in each test directory of each port: 48 files of about
-200 near-identical lines.
+`test/hw.sh` holds only what is specific to the port and the board — the
+binutils, the entry fallback, the OpenOCD target names, which cores are
+debug targets at load time, the width of `__smp_spin`, how a core is resumed,
+and whether anything has to happen between the halt and the load. The session
+is driven by `test/run-hw.sh` in the kernel repository, which every port
+shares. Together they replace the predecessor's `hw.sh` + `hw-olimex.sh` in
+each test directory of each port: 48 files of about 200 near-identical
+lines.
 
 It is **pure OpenOCD** — no GDB, no reset, and it never opens the serial
 device, so it cannot fight the terminal you keep on the console. Keep your own
@@ -215,15 +216,17 @@ device, so it cannot fight the terminal you keep on the console. Keep your own
 console in OpenOCD's log.
 
 > **One test per power cycle.** Every run is `load_image` into RAM over
-> whatever the previous test left there, and the Pi has no SRST — the
-> Cortex-A53 debug target has no reset method a script can drive. So
-> `run-hw.sh` takes exactly one test and refuses a suite. Power-cycle between
-> tests.
+> whatever the previous test left there, and neither board has a reset a
+> script can drive — the Pi has no SRST and its Cortex-A53 debug target has
+> no reset method, and the Lyra's secondaries are released once, by clearing
+> their CRU reset bits, which a second run cannot undo. So `run-hw.sh` takes
+> exactly one test and refuses a suite. Power-cycle between tests.
 
 | Env | Meaning |
 |---|---|
-| `PROBE` | `jlink` (default) or `olimex` |
-| `BUILD` | the CMake build directory (default `build`) |
+| `BOARD` | `zero2w` (default), `rpi3b` or `luckfox-lyra` |
+| `PROBE` | `jlink` (default) or `olimex` — the Pi boards only |
+| `BUILD` | the CMake build directory (default `build`, or `build-lyra`) |
 | `UOS_HW_ADAPTER_KHZ` | override the JTAG clock. `board/rpi3.cfg` asks for 4000 kHz, more than jumper wires always carry. A DAP that gives up mid-run prints `Invalid ACK (0) in DAP response` and then fails to re-examine every core; the runner reports that as **DEBUG LINK LOST**, not as a firmware fault. |
 
 The third argument overrides the run budget in seconds. A budget is **not** the
@@ -231,6 +234,53 @@ test's own duration: it is dominated by semihosting traps, and those scale with
 how much a test prints. `smp_test4` reaches its verdict at t=9597 ms of target
 time yet needs well over 120 s of wall clock, because its reporter emits about
 nine lines a second and each is a debug halt and resume over JTAG.
+
+### On a Luckfox Lyra B
+
+```bash
+cd micro-os-plus-iii-aarch32
+cmake -S . -B build-lyra -DBOARD=luckfox-lyra \
+      -DCMAKE_TOOLCHAIN_FILE=../micro-os-plus-iii-smp/cmake/toolchains/arm-none-eabi.cmake
+cmake --build build-lyra -j8
+
+BOARD=luckfox-lyra test/hw.sh list         # the seven tests, and their budgets
+BOARD=luckfox-lyra test/hw.sh smp_test0    # run one
+```
+
+Same runner, same rules, three differences — all of them in
+`boards/luckfox-lyra/openocd.cfg` and the `luckfox-lyra` branch of
+`test/hw.sh`, none of them in the shared runner:
+
+**The probe is a WCH-Link over SWD**, not a J-Link over JTAG — `cmsis-dap`,
+USB `1a86:8011`, `reset_config none separate`, 1000 kHz. There is no `PROBE`
+choice on this board.
+
+**Only core 0 is a debug target when the image is loaded.** Cores 1 and 2 sit
+in the BootROM until the kernel clears their CRU reset bits, so the board's
+OpenOCD config declares them `-defer-examine` and the runner drives core 0
+alone (`UOS_HW_CORES=0`). There is no `__smp_spin` to zero either: the
+secondaries are released through the SRAM mailbox, not a spin table.
+
+**The MMU and caches have to be turned off before the load.** The Rockchip
+miniloader hands core 0 over with both on, and `load_image` writing through a
+dirty cache leaves DRAM holding something other than the image. `hw.sh`
+supplies the `SCTLR.{M,C,I}` clear + I-cache/BP/TLB invalidate as
+`UOS_HW_PRELOAD`, which is the same sequence the board's own
+`write_board.sh` has always used.
+
+The console is the Lyra debug header, **1.5 Mbaud** by default (the
+miniloader's rate), not 115200. Keep your own terminal on it; the runner
+never opens it, and the verdict is read from the semihosted console in
+OpenOCD's log.
+
+> **Power-cycle first, every time.** The prompt in `write_board.sh` was not a
+> formality: releasing cores 1 and 2 clears their reset bits, and nothing
+> short of a power cycle puts them back. A second run without one finds them
+> already out of the BootROM and running whatever the last test left behind.
+
+Not yet measured: no test in this repository has been run on a Lyra. The
+seven builds exist and the session is wired; the results table above covers
+the Pi only.
 
 ### The boot card
 

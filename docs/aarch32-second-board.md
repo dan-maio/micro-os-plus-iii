@@ -205,7 +205,51 @@ remains.
 
 ---
 
-## 7. What is not done
+## 7. Hardware: what the shared runner had to learn
+
+`test/run-hw.sh` in the kernel repository drives every hardware session. It
+had three things hard-coded that were the Pi's, not the architecture's:
+
+| was | is |
+|---|---|
+| target names spelled `bcm2837.cpu$core` | `UOS_HW_TARGET_FMT`, a printf format — `rk3506.a7.%d` for the Lyra |
+| every core 0..NCPU-1 halted, loaded and resumed | `UOS_HW_CORES`, the indices that are debug targets *at load time* |
+| halt → load → resume, nothing in between | `UOS_HW_PRELOAD`, Tcl run after the halt and before `load_image` |
+
+and it gained a third resume mode, `entry` — resume at the entry point
+touching no register — beside `pc` (AArch64) and `cpsr` (AArch32 on the Pi).
+
+Each of the three is a real property of the RK3506, not a convenience:
+
+- **Only core 0 is examinable when the image is loaded.** Cores 1 and 2 are
+  in the BootROM until the kernel clears their CRU reset bits, which is why
+  `openocd.cfg` declares them `-defer-examine`. Halting a target that has not
+  been examined fails.
+- **There is no `__smp_spin`.** The Pi's secondaries park in a spin table the
+  runner zeroes after the load so a core that reaches its parking loop before
+  core 0 clears `.bss` cannot jump to a stale entry. The Lyra's are released
+  through an SRAM mailbox instead, so `UOS_HW_SPIN_WORDS=0` and the stage is
+  skipped entirely.
+- **The MMU and caches are ON** when the miniloader hands core 0 over.
+  `load_image` writing through a dirty cache leaves DRAM holding something
+  other than the image, so `SCTLR.{M,C,I}` are cleared and the I-cache,
+  branch predictor and TLB invalidated first — the same sequence the board's
+  own `write_board.sh` has always used.
+
+The Pi's generated script is unchanged by all of this, byte for byte apart
+from `[format {bcm2837.cpu%d} $core]` where it said `bcm2837.cpu$core`.
+
+`boards/luckfox-lyra/openocd.cfg` and `write_board.sh` are one copy each.
+The predecessor project had thirteen of each, one per test directory.
+
+```sh
+BOARD=luckfox-lyra test/hw.sh list
+BOARD=luckfox-lyra test/hw.sh smp_test0
+```
+
+---
+
+## 8. What is not done
 
 - The `-M virt` MMU map and GIC bases (above).
 - The eight RK3506-specific tests the predecessor project had — `smp_test5`,

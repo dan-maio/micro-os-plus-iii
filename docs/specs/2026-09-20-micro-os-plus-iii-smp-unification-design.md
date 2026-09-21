@@ -514,6 +514,19 @@ to be a submodule before any architecture repo is created.**
    *Gate:* no app source exists more than once; STM32 boards still pass at
    `OS_NCPU=1`; pico2 still passes at `OS_NCPU=2`.
 
+   > **Superseded in part — see [`cortexm-port.md`](../cortexm-port.md).** The
+   > gate stands. The *shape* did not survive measurement: pico2's SMP core is
+   > not portable Cortex-M SMP, because its kernel lock, IPI and CPU index are
+   > RP2350 SIO registers. That makes them board code in this layout, so
+   > `cortexm` gained SMP by a board arriving rather than by merging two
+   > scheduler files — and the two cores are deliberately still separate,
+   > selected per board, because the STM32 boards are hardware-proven on
+   > upstream's. The "5 variants" are also fewer than five: `pico2-sdk-min`
+   > has byte-identical port files to `pico2-sdk`, and the four trees differ
+   > only in how the kernel lock is provided (SIO spinlock / Peterson in
+   > software / Pico SDK). Their applications are one set copied four times,
+   > 99.0–99.5% identical.
+
 5. **`posix-arch`.** The only genuinely new implementation (D12, Section 7.6):
    host threads as CPUs, plus the three correctness fixes.
    *Gate:* the existing upstream tests pass at `OS_NCPU=1`; the SMP object

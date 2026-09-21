@@ -122,6 +122,14 @@ Every application is built once per variant, from the same sources:
 | `<app>-qemu` | `QEMU_BUILD` | `UOS_BOARD_LINKER_QEMU` | the emulated suite |
 | `<app>-hwd` | `HW_BUILD` | `UOS_BOARD_LINKER_HW` | real silicon, over OpenOCD |
 
+> **This file describes the AArch32 and AArch64 ports.** The Cortex-M port
+> carries the same `test/CMakeLists.txt`, the same dispatchers and the same
+> hooks — `board_test_defines()`, `board_test_sources()`,
+> `board_test_includes()`, `BOARD_TEST_SELF_CONTAINED` — so everything here
+> about layout and per-test composition applies to it too. What it does not
+> have is a QEMU suite: all four of its boards are hardware-only. See
+> [`cortexm-port.md`](cortexm-port.md).
+
 **How many variants is the board's decision, not this file's.** A board that
 sets `UOS_BOARD_LINKER_QEMU` gets both; a board that leaves it unset gets
 `hwd` only, because there is nowhere for the other image to run. The absence

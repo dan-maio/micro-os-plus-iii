@@ -1,7 +1,7 @@
 # Migration status
 
-**Updated:** 2026-09-20 · **Phase:** step 2 — **complete**. Builds, QEMU
-suites and hardware all green on both ARM ports.
+**Updated:** 2026-09-21 · **Phase:** step 4 — **under way**. Four
+architecture projects exist; nine board configurations build.
 
 This file is the cold-start entry point. Read it, then
 `docs/specs/2026-09-20-micro-os-plus-iii-smp-unification-design.md` for the
@@ -11,10 +11,10 @@ full design and the measurements behind it.
 
 ## Where things stand
 
-**Steps 1 and 2 are complete.** Six repositories exist; both ARM architecture
-projects build all 24 of their targets from a single copy of every test, and
-all twelve tests pass on a Raspberry Pi Zero 2 W on **both** ports — each
-measured on that port, neither inferred from the other.
+**Steps 1 and 2 are complete.** Six repositories exist; both A-profile
+architecture projects build all 24 of their targets from a single copy of
+every test, and all twelve tests pass on a Raspberry Pi Zero 2 W on **both**
+ports — each measured on that port, neither inferred from the other.
 
 **Step 3 is in progress.** The AArch32 port now carries a second board, the
 Luckfox Lyra B (RK3506, 3× Cortex-A7): 19 targets build, and both ports still
@@ -31,6 +31,14 @@ modelled. Its `board.cmake` sets no `UOS_BOARD_LINKER_QEMU`, so it builds one
 image per test rather than two, and `test/qemu.sh` says so if asked. This is
 not a gap to close later; do not reopen it.
 
+**Step 4 is under way.** `micro-os-plus-iii-cortexm` exists, with four boards:
+three STM32F4 at `OS_NCPU=1` and the Raspberry Pi Pico 2 (RP2350, 2× Cortex-M33)
+at `OS_NCPU=2`. The STM32 boards are the first `OS_NCPU=1` boards in the
+workspace, so they are also the first to build the kernel's **non**-SMP branch
+— every board before them had more than one CPU. Nothing on this port has run
+on hardware yet. The port, its four boards and where its SMP lives are written
+up in [`cortexm-port.md`](cortexm-port.md).
+
 ```
 TMP7/
 ├── micro-os-plus-iii-smp/        kernel + shared build rules + test runners
@@ -41,7 +49,9 @@ TMP7/
 │   │   └── run-hw.sh             the shared hardware session runner
 │   ├── cmake/                    toolchains + uos_add_app
 │   └── tools/verify-kernel-compiles.sh
-├── micro-os-plus-iii-devices/    flatfs, FatFs; SD per SoC (BCM2837, RK3506)
+├── micro-os-plus-iii-devices/    flatfs, FatFs; SD per SoC (BCM2837, RK3506);
+│                                 silicon support per SoC (BCM2837, STM32F4,
+│                                 RP2350)
 ├── micro-os-plus-iii-aarch64/    ARMv8-A port
 │   ├── src/ include/             ARMv8-A, every board
 │   └── test/                     everything board- or test-specific
@@ -55,7 +65,15 @@ TMP7/
 │   ├── src/ include/             ARMv7-A, every board — incl. the scheduler
 │   └── test/                     same shape
 │       ├── boards/{rpi-zero-2w,rpi3b,luckfox-lyra}/  BCM2837 · BCM2837 · RK3506
-│       └── rpi-zero-2w/ rpi3b/ luckfox-lyra/         12 · 12 · 13 applications
+│       └── rpi-zero-2w/ rpi3b/ luckfox-lyra/         12 · 12 · 19 applications
+├── micro-os-plus-iii-cortexm/    Cortex-M port — M4F and M33, 1 and 2 CPUs
+│   ├── src/ include/             upstream's single-core core (STM32 boards)
+│   ├── src/rtos/os-core-rp2350.cpp
+│   │   include-rp2350/           the same core plus an SMP branch (pico2)
+│   └── test/                     same shape
+│       ├── boards/{nucleof411,weactf411,weactf412,pico2}/
+│       │                         STM32F411RE · F411CE · F412RE · RP2350
+│       └── nucleof411/ weactf411/ weactf412/ pico2/   1 · 2 · 2 · 6 apps
 └── micro-os-plus-iii-smp-old/    READ ONLY — the migration source
 
 Outside `src/` and `include/` — which are the ISA and nothing else — an
@@ -67,7 +85,7 @@ trees. How that is laid out and how to run it is
 | | |
 |---|---|
 | Migration source (read-only) | `TMP7/micro-os-plus-iii-smp-old` |
-| Remotes | `GIT/micro-os-plus-iii-{smp,devices,aarch32,aarch64}.git` |
+| Remotes | `GIT/micro-os-plus-iii-{smp,devices,aarch32,aarch64,cortexm}.git` |
 | Old remote | `GIT/micro-os-plus-iii-smp-old.git` |
 
 An architecture project holds **no copy** of the kernel or the devices repo.
@@ -92,7 +110,8 @@ neither the kernel nor the devices repo knows an architecture project exists.
 5. **Step 2b — both ARM architecture projects.** Each builds every board's
    tests from one loop over `test/${BOARD}/*/`, in two variants. No
    test name and no board name appears in either port's build files.
-   24 targets per Pi board, 26 for the Lyra.
+   24 targets per Pi board. The Lyra is 19: it is hardware-only, so it builds
+   one image per test rather than two.
 6. **QEMU suites green.** `11 passed, 1 skipped, 0 failed` on both, with
    gcc 15 and one suite at a time. `usb_test` skips by design — QEMU emulates
    no USB device mode — as the predecessor suite also recorded.
@@ -173,9 +192,29 @@ pair, the interrupt pair and the Cortex-M0) have never been run, and
 
 Emulating the Lyra is **not** open. It was considered and closed: see above.
 
-Then: step 4 (`cortexm` —
-pico2's dual-core SMP core merged with the STM32 boards at `OS_NCPU=1`, 129
-apps), step 5 (`posix-arch` — a new SMP implementation, one host thread per
+Step 4 (`cortexm`) is **under way**. *Gate:* no app source exists more than
+once; STM32 boards pass at `OS_NCPU=1`; pico2 passes at `OS_NCPU=2`. The
+repository exists and all four boards build — three STM32F4 (5 applications)
+and pico2 (6). **Nothing on this port has been run on hardware**, so the two
+`pass` clauses of the gate are not met and are not claimed.
+
+The spec framed this step as "merge pico2's SMP core with the STM32 boards".
+Measurement changed the shape, for the better:
+
+- pico2's core is **not portable Cortex-M SMP**. Its kernel lock is the
+  RP2350's SIO hardware spinlock 0, its IPI the SIO inter-core FIFO on IRQ 25,
+  its CPU index `SIO_CPUID`. All three are silicon, so in this layout they are
+  **board** code — and `cortexm` gained SMP by a board arriving, exactly as
+  the Lyra's GIC-400 SGI and the Pi's are board code.
+- The four "pico2 variants" differ in **one** thing, and it is that same
+  kernel lock: `pico2` uses the SIO spinlock, `pico2-std` Peterson's algorithm
+  in software (the RP2350 has no global exclusive monitor, so LDREX/STREX does
+  not work across the cores), `pico2-sdk` the Pico SDK — and `pico2-sdk-min`
+  has **byte-identical** port files to `pico2-sdk`, so it is not a separate
+  port at all. Only `pico2` is carried so far.
+- The apps are one set copied four times, 99.0–99.5% identical.
+
+Then: step 5 (`posix-arch` — a new SMP implementation, one host thread per
 CPU).
 
 ## Things a fresh session should not rediscover
@@ -236,8 +275,30 @@ CPU).
   asks a port for only: `OS_USE_SMP_SCHEDULER`, `OS_NCPU`, `port_cpu_id`,
   `port::scheduler::switch_stacks`, `port::stack::element_t`, plus a kernel
   lock and an IPI.
-- **`cortexm` SMP is not from scratch.** pico2's `os-core.cpp` is already a
-  complete dual-core Cortex-M33 SMP port.
+- **`cortexm` SMP is not from scratch, and it is not portable.** pico2's
+  `os-core.cpp` is a complete dual-core Cortex-M33 SMP port, but its lock, IPI
+  and CPU index are RP2350 SIO registers. It is 91% the same file as
+  upstream's single-core core, and its port headers already handle every M
+  profile (`6M`, `7M`, `7EM`, `8M_MAIN`) with the SMP parts gated on
+  `OS_USE_SMP_SCHEDULER`. They are **not merged**: the three STM32 boards are
+  hardware-proven on upstream's core, so a board names the core it was proven
+  with (`UOS_BOARD_PORT_CORE`).
+- **`pico2` forces `-D__ARM_ARCH_7EM__`** although the M33 is ARMv8-M, exactly
+  as the predecessor's Makefiles did. The v7E-M path is the one that board was
+  brought up on; letting the compiler pick `__ARM_ARCH_8M_MAIN__` would change
+  the scheduler under a working board.
+- **pico2's `smp-test0` compiles no kernel.** Nine files, none of them
+  µOS++ — it is the bare-metal dual-core bring-up test that runs before any
+  scheduler exists. `uos_add_app()` always links `micro-os-plus::iii`, so it
+  is parked in `test/pico2/.pending/` rather than rewritten.
+- **Flashing the Pico 2: resume cm1 BEFORE cm0.** With `USE_SMP 0` the rp2350
+  target exposes two targets and `reset init` halts both, while one `resume`
+  resumes only the current one. A debug-halted core 1 will not boot from the
+  PSM reset `launch_core1()` issues, so the launch hangs forever on the
+  bootrom readiness word. Also `reset init`, never a bare `reset` — that does
+  not re-run the bootrom/XIP setup and the new image never boots.
+- **The STM32 boards are the workspace's only `OS_NCPU=1` boards.** They are
+  therefore the only ones that build the kernel's non-SMP branch at all.
 - **`posix-arch` is pristine upstream v1.0.1**, untracked in the old
   workspace. Single host thread, `ucontext` coroutines, cooperative only.
 - **Three POSIX defects to fix when going multi-threaded:** `sigprocmask` is

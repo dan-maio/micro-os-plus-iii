@@ -17,12 +17,19 @@ all twelve tests pass on a Raspberry Pi Zero 2 W on **both** ports — each
 measured on that port, neither inferred from the other.
 
 **Step 3 is in progress.** The AArch32 port now carries a second board, the
-Luckfox Lyra B (RK3506, 3× Cortex-A7): 14 targets build, and both ports still
+Luckfox Lyra B (RK3506, 3× Cortex-A7): 19 targets build, and both ports still
 pass their QEMU suites (11/1/0 each) after the restructure it required. What
 that second board changed, and the seven portability defects it exposed in
 shared code, are written up in
-[`aarch32-second-board.md`](aarch32-second-board.md). Not done: the `-M virt`
-MMU map and GIC bases, and the eight RK3506-specific tests.
+[`aarch32-second-board.md`](aarch32-second-board.md).
+
+**The Lyra is a hardware-only board**, decided and closed. QEMU models none of
+the RK3506's own blocks, so an emulated Lyra would be a generic Cortex-A7
+wearing the name — and the DWC2 gadget, the SD host and the Cortex-M0 mailbox,
+which are what make this board worth having, are exactly the parts not
+modelled. Its `board.cmake` sets no `UOS_BOARD_LINKER_QEMU`, so it builds one
+image per test rather than two, and `test/qemu.sh` says so if asked. This is
+not a gap to close later; do not reopen it.
 
 ```
 TMP7/
@@ -158,9 +165,13 @@ repo **(met)**.
 
 Step 3 (`aarch32` gains the RK3506) is **under way**. *Gate:*
 `exception_handler.cpp` shared unmodified by both boards **(met)**; the board
-builds **(met, 14 targets)**; neither existing port regressed **(met, QEMU
-11/1/0 on each)**. Open: the `-M virt` MMU map and GIC bases so the emulated
-Lyra runs, and the eight RK3506-specific tests, which are hardware-only.
+builds **(met, 19 targets)**; neither existing port regressed **(met, QEMU
+11/1/0 on each)**. Open: running the RK3506-specific tests, which are hardware
+only — the six carried over from the predecessor (the USB gadget pair, the SD
+pair, the interrupt pair and the Cortex-M0) have never been run, and
+`smp_test4` is reported not to work.
+
+Emulating the Lyra is **not** open. It was considered and closed: see above.
 
 Then: step 4 (`cortexm` —
 pico2's dual-core SMP core merged with the STM32 boards at `OS_NCPU=1`, 129

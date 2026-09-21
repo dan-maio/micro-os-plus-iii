@@ -94,16 +94,27 @@ cmake -S . -B build-lyra   -DBOARD=luckfox-lyra ...
 | board dir | `test/boards/rpi-zero-2w` | `test/boards/rpi-zero-2w` | `test/boards/luckfox-lyra` |
 | define | `LED_PIN=29` | `BOARD_RPI3B` | `SOC_RK3506` |
 | `OS_NCPU` | 4 | 4 | 3 |
-| applications | 12 | 12 | 7 |
-| QEMU machine | `raspi3b` + shim | `raspi3b` + shim | `virt`, no shim |
+| applications | 12 | 12 | 19 |
+| build targets | 24 (both variants) | 24 (both variants) | 19 (`hwd` only) |
+| QEMU machine | `raspi3b` + shim | `raspi3b` + shim | none — hardware only |
 
 `rpi3b` selects `linker-rpi3b.ld` and defines `BOARD_RPI3B`.
 
 `luckfox-lyra` is the RK3506's three Cortex-A7. Its Cortex-M0 is a different
 ISA outside the coherency domain and is not a CPU the scheduler can use, so
-the board is multi-core while the SMP cluster is three. It builds the seven
-applications that need only CPUs, a timer and a console; the other five link
-`micro-os-plus::devices`, whose SD and USB backends are BCM2837-specific.
+the board is multi-core while the SMP cluster is three.
+
+It has the most applications of any board here — 19, against the Pi's 12 —
+because it carries the predecessor's RK3506 tests as well as the shared ones:
+the GIC-400 SGI pair, the USB gadget pair, the SD pair and the Cortex-M0. It
+reaches its own SD card through `micro-os-plus::devices-rk3506`, which is the
+DesignWare SD host under the same flatfs/FatFs layers the Pi uses, rather than
+`micro-os-plus::devices`, whose backend is BCM2837-specific.
+
+It is also the only **hardware-only** board: its `board.cmake` sets no
+`UOS_BOARD_LINKER_QEMU`, so it builds one image per test rather than two, and
+has no emulated suite. QEMU models none of the RK3506's own blocks, so there
+would be nothing for one to prove.
 
 Adding it moved three files up into the shared port, and turned up seven
 places where one board had been mistaken for the architecture. See

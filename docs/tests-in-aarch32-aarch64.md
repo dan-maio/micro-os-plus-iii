@@ -115,18 +115,24 @@ with a dozen boards, half of them non-SMP.
 
 ## 3. The two variants
 
-Every application is built twice, from the same sources:
+Every application is built once per variant, from the same sources:
 
 | variant | define | linker | for |
 |---|---|---|---|
 | `<app>-qemu` | `QEMU_BUILD` | `UOS_BOARD_LINKER_QEMU` | the emulated suite |
 | `<app>-hwd` | `HW_BUILD` | `UOS_BOARD_LINKER_HW` | real silicon, over OpenOCD |
 
-`QEMU_BUILD` means "this image runs under the emulator", which is not the same
-as "not hardware": a board whose silicon QEMU does not model builds its
-emulated image against a *different machine*. The Lyra is that case — its
-`-qemu` images are linked for `virt`'s DRAM at `0x4000_0000`, not for the
-RK3506's at `0x0020_0000`.
+**How many variants is the board's decision, not this file's.** A board that
+sets `UOS_BOARD_LINKER_QEMU` gets both; a board that leaves it unset gets
+`hwd` only, because there is nowhere for the other image to run. The absence
+*is* the declaration — there is no separate flag that could disagree with it.
+
+The Luckfox Lyra is that case, and deliberately. QEMU has no RK3506 machine,
+and the generic `virt` models none of the blocks that make the board worth
+having — the DWC2 gadget, the DesignWare SD host, the SRAM mailbox, the
+Cortex-M0. An emulated Lyra would be a generic Cortex-A7 wearing the name. So
+the Lyra builds 19 images, not 38, and `test/qemu.sh` points at `hw.sh` when
+asked for it. The Pi boards build both variants and run the emulated suite.
 
 `HW_BUILD` makes the SD tests use the board's existing FAT32 boot partition.
 `UOS_DEBUG_BOOT=ON` additionally compiles the early-boot assembly markers;

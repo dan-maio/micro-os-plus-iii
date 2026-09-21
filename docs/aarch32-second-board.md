@@ -37,8 +37,8 @@ micro-os-plus-iii-aarch32/
         │   └── rtos/port_isr.cpp
         ├── include/{gic,led,osal,rk3506,smp,uart}.hpp
         ├── test/             this board's test applications
-        ├── linker.ld  linker-qemu-virt.ld
-        └── openocd.cfg  hw.sh  qemu.sh
+        ├── linker.ld        one map: this board runs on hardware
+        └── openocd.cfg  hw.sh
 ```
 
 The Cortex-M0 is not a fourth CPU and is not in this tree. It is a different
@@ -159,7 +159,7 @@ cmake -S . -B build-lyra -DBOARD=luckfox-lyra \
 | extra library | `micro-os-plus::soc-bcm2837` | — |
 | `NCPU` | 4 | 3 |
 | `hwd` linker script | `linker.ld` | `linker.ld` |
-| `qemu` linker script | `linker.ld` | `linker-qemu-virt.ld` |
+| `qemu` linker script | `linker.ld` | — none; hardware-only board (§6) |
 | test applications | all twelve | the seven SoC-neutral ones |
 
 Two of those rows are new shapes, not just new values:
@@ -207,29 +207,59 @@ the RK3506 DWC2 device stack.
 
 ---
 
-## 6. QEMU: `-M virt`, and no shim
+## 6. QEMU: the Lyra does not use it
 
 The Pi runs under `-M raspi3b` through a 20-line AArch64 stub, because QEMU
 starts its Cortex-A53 cores in AArch64 and the port is 32-bit.
 
-The Lyra needs no shim: a Cortex-A7 has no AArch64 state to drop out of. It
-runs under **`-M virt`**, the generic machine — PL011 console at
-`0x0900_0000`, GICv2 at `0x0800_0000`, DRAM at `0x4000_0000`.
+**The Lyra has no emulated suite at all.** This was considered, costed and
+closed; it is not unfinished work.
 
-That is a deliberate choice, not a convenience. QEMU models none of the
-RK3506's own blocks — the CRU, the SRAM mailbox, the Rockchip USB gadget, the
-Cortex-M0. Emulating the Lyra would mean emulating the parts of it that are
-least like a Cortex-A7. So **the emulated runs cover the SoC-neutral subset
-only**, and everything specific to the board is hardware-only.
+QEMU has no RK3506 machine, so the only candidate was `-M virt`, the generic
+Cortex-A7 — PL011 at `0x0900_0000`, GICv2 at `0x0800_0000`, DRAM at
+`0x4000_0000`. That machine models none of the RK3506's own blocks: not the
+CRU, not the GIC-400 at `0xFF58_0000`, not the DesignWare SD host, not the
+DWC2 gadget, not the SRAM mailbox, not the Cortex-M0. An emulated Lyra would
+therefore be a generic Cortex-A7 wearing the board's name, running the subset
+of tests that are not about this board — while the DWC2 gadget, the SD host
+and the M0 mailbox, which are the reason the board is in this project, would
+be exactly the parts not modelled.
 
-### Status of this path
+Nothing about the *invocation* was the obstacle, and it is worth writing down
+so nobody re-derives it: `qemu-system-arm -M virt -cpu cortex-a7 -smp 3`
+is accepted and starts (verified on xPack QEMU 9.2.4). What stopped it was
+inside the image. `linker-qemu-virt.ld` placed the `-qemu` build at
+`0x4000_0000`, and then `src/mmu.cpp` built a page table that maps DRAM below
+`0x0800_0000` and MMIO at or above `0xFF00_0000`, with **everything else
+faulting** — so the image declared its own code, its own stack, virt's PL011
+and virt's GIC to be invalid addresses, and died the instant `mmu_enable()`
+set SCTLR.M. Two `#if defined(QEMU_BUILD)` branches would have fixed it, in
+`gic.hpp` and `mmu.cpp`, the same way `uart.hpp`, `led.hpp` and `smp.hpp`
+already have theirs. The fix was small; the thing it bought was not worth
+having.
 
-The `-M virt` images **build**. They do not run yet: `src/mmu.cpp` still maps
-DRAM at `0x0020_0000` and the peripheral window at `0xFF00_0000`, and
-`gic.hpp` still carries the RK3506's GIC bases. `uart.hpp` and `led.hpp`
-already have their `QEMU_BUILD` paths, and `linker-qemu-virt.ld` and the
-`PORT_RAM_*` window are in place. The MMU table and the GIC bases are what
-remains.
+### How the board says so
+
+`test/boards/luckfox-lyra/board.cmake` sets **no** `UOS_BOARD_LINKER_QEMU`.
+That silence is the declaration — there is no second flag to keep in step with
+it and no way to claim an emulated target without having one. `test/CMakeLists.txt`
+reads it and builds one image per test instead of two, so the board went from
+38 targets to 19. `linker-qemu-virt.ld` and the board's `qemu.sh` are gone, and
+`test/qemu.sh` answers `BOARD=luckfox-lyra` by naming the hardware runner:
+
+```
+$ BOARD=luckfox-lyra test/qemu.sh
+qemu.sh: luckfox-lyra is tested on hardware -- it has no emulated suite.
+         BOARD=luckfox-lyra test/hw.sh <test>
+boards with an emulated suite:
+  rpi3b
+  rpi-zero-2w
+```
+
+The `QEMU_BUILD` branches still in `uart.hpp`, `led.hpp` and `smp.hpp` are
+inert — nothing defines the macro for this board. They were left alone rather
+than stripped, because the hardware path is the `#else` of each and those
+three files pass on hardware today.
 
 ---
 
@@ -281,12 +311,20 @@ BOARD=luckfox-lyra test/hw.sh smp_test0
 
 ## 8. What is not done
 
-- The `-M virt` MMU map and GIC bases (above).
-- The eight RK3506-specific tests the predecessor project had — `smp_test5`,
-  `smp_test6`, `smp_test7`, `smp_test_int` and `smp_test_int2..5` — which
-  exercise GIC priority and preemption, the Rockchip USB gadget and the
-  Cortex-M0 mailbox. They are hardware-only by nature. `smp_test0`–`smp_test4`
-  exist in both projects under the same names but are **different tests**; the
-  unified ones are in use.
+- **Running** the RK3506-specific tests. All eight the predecessor had are now
+  here and build — `smp_test_int` and `smp_test_int2` came over first, and
+  `smp_test5`, `smp_test6`, `smp_test7`, `smp_test_int3`, `smp_test_int4` and
+  `smp_test_int5` followed with the code they need (§9). They exercise GIC
+  priority and preemption, the Rockchip USB gadget, the SD host and the
+  Cortex-M0 mailbox, and every one of them is hardware-only by nature. None has
+  been run. `smp_test0`–`smp_test4` exist in both projects under the same names
+  but are **different tests**; the unified ones are in use.
+- `smp_test4` on the Lyra is reported not to work. The symptom has not been
+  captured, and the two candidate causes — the balancer leaving a core idle,
+  versus the test dying earlier — are different bugs.
+- A per-test linker override. `smp-pro-cons-test` carries its own linker
+  script in the predecessor, and the build has no mechanism for one.
+
+Emulation is **not** on this list. See §6.
 - Hardware validation on a Lyra. Nothing in this document claims a Lyra has
   run.

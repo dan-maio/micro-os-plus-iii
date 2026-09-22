@@ -163,6 +163,16 @@ Every application is built once per variant, from the same sources:
 > board about CPU count, memory map and compile options. What it does not have
 > is a QEMU suite: all six of its boards are hardware-only. See
 > [`cortexm-port.md`](cortexm-port.md).
+>
+> **The POSIX port carries the same loop and the same six hooks** with one
+> difference, and it is a difference in the machine rather than in the method:
+> there is **one** variant, `host`, because the host *is* the machine — there
+> is nothing to emulate and nothing to flash, and a test is simply an
+> executable. It is deliberately not a `HW_BUILD`: that define means "use the
+> board's real FAT32 boot partition", while the SD tests' other branch is
+> flatfs over a plain image file, which is exactly what a host-file back-end
+> is. Its dispatcher is `test/run.sh` rather than `qemu.sh`/`hw.sh`. See
+> [`posix-arch-port.md`](posix-arch-port.md).
 
 **How many variants is the board's decision, not this file's.** A board that
 sets `UOS_BOARD_LINKER_QEMU` gets both; a board that leaves it unset gets
@@ -198,6 +208,10 @@ BOARD=rpi3b test/qemu.sh smp_test0        # one test, output live
 BOARD=rpi3b test/hw.sh list               # what this build has
 BOARD=rpi3b test/hw.sh smp_test0          # run one
 BOARD=rpi3b test/hw.sh smp_test0 300      # …with a 300 s budget
+
+# the POSIX host (micro-os-plus-iii-posix-arch)
+BOARD=native test/run.sh                  # the whole suite
+BOARD=native test/run.sh smp_test2        # one test, output live
 ```
 
 or call the board directly — `test/boards/rpi3b/hw.sh smp_test0`. An unknown board
@@ -209,6 +223,7 @@ itself to one shared runner in the kernel repository:
 | | |
 |---|---|
 | `test_smpl/run-qemu.sh` | runs every `*-qemu.bin` in a build directory, reports `PASS`/`SKIP`/`FAIL` from the `RESULT:` line each test prints, and seeds an SD image for the tests that need one |
+| `test_smpl/run-host.sh` | the same, for the POSIX port: runs every `*-host` executable, same timeout table, same verdicts, same summary line — `run-qemu.sh` with the emulator taken out |
 | `test_smpl/run-hw.sh` | halts the cores, enables semihosting, `load_image`, resumes |
 
 Those two files are the same for every board of every port. Nothing

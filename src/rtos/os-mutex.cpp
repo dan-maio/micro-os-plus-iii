@@ -788,12 +788,42 @@ namespace os
                 }
 
               // Boost owner priority.
-              if ((boosted_prio_ > owner_->priority_inherited ()))
+              //
+              // The owner is captured HERE, while the kernel lock is still
+              // held, and the captured pointer -- not the member -- is the
+              // one dereferenced below.
+              //
+              // The reason is the uncritical section itself: it releases the
+              // kernel lock (`priority_inherited()` ends in a yield, which
+              // must not run scheduler-locked), and while it is open the
+              // owner can finish its own `unlock()` on another CPU.
+              // `internal_unlock_()` ends by setting `owner_` to nullptr, so
+              // re-reading the member after the section -- which is exactly
+              // what `owner_->priority_inherited(...)` compiles to -- then
+              // dereferences a null pointer.
+              //
+              // Every SMP port has this window. It was found on the POSIX
+              // host port, where `scheduler::unlock()`/`lock()` is two
+              // `pthread_sigmask()` system calls rather than a handful of
+              // instructions: that widens the window enough to turn a rare
+              // race into the common case (smp_test2 faulted in 21 runs out
+              // of 25 on four CPUs).
+              /* class */ thread* owner = owner_;
+
+              if ((owner != nullptr)
+                  && (boosted_prio_ > owner->priority_inherited ()))
                 {
                   // ----- Enter uncritical section ---------------------------
                   scheduler::uncritical_section sucs;
 
-                  owner_->priority_inherited (boosted_prio_);
+                  // Still the owner? If it released the mutex while this
+                  // section was open there is nothing to inherit, and
+                  // boosting it anyway would leave behind an inherited
+                  // priority that no later unlock() would ever clear.
+                  if (owner_ == owner)
+                    {
+                      owner->priority_inherited (boosted_prio_);
+                    }
                   // ----- Exit uncritical section ----------------------------
                 }
 

@@ -1,7 +1,7 @@
 # Migration status
 
-**Updated:** 2026-09-21 · **Phase:** step 4 — **under way**. Four
-architecture projects exist; eleven board configurations build.
+**Updated:** 2026-09-22 · **Phase:** step 5 — **complete**. Five
+architecture projects exist; twelve board configurations build.
 
 This file is the cold-start entry point. Read it, then
 `docs/specs/2026-09-20-micro-os-plus-iii-smp-unification-design.md` for the
@@ -31,6 +31,14 @@ modelled. Its `board.cmake` sets no `UOS_BOARD_LINKER_QEMU`, so it builds one
 image per test rather than two, and `test/qemu.sh` says so if asked. This is
 not a gap to close later; do not reopen it.
 
+**Step 5 is complete.** `micro-os-plus-iii-posix-arch` exists: SMP on the
+development machine, one host thread per CPU, preemptive. One board, `native`,
+ten tests, **10 passed / 0 skipped / 0 failed** — nine SMP object tests carried
+unchanged at `OS_NCPU=4` and one upstream test at `OS_NCPU=1`. It is the only
+one of the four ports that is new work rather than a migration, and it earned
+its keep on the first day: it found a real SMP race in the kernel's mutex
+(see below). Written up in [`posix-arch-port.md`](posix-arch-port.md).
+
 **Step 4 is under way.** `micro-os-plus-iii-cortexm` exists, with six boards:
 three STM32F4 at `OS_NCPU=1` and three RP2350 boards at `OS_NCPU=2` — the
 Raspberry Pi Pico 2, the WeAct RP2350B with 8 MB of PSRAM, and the Pi-Zero
@@ -47,10 +55,12 @@ TMP7/
 │   ├── port/smp-common/          os-decls.h, shared by both ARM ports
 │   ├── test_smpl/                the two runners -- see test-smpl.md
 │   │   ├── run-qemu.sh           the shared QEMU suite runner
+│   │   ├── run-host.sh           the same, for the POSIX host
 │   │   └── run-hw.sh             the shared hardware session runner
 │   ├── cmake/                    toolchains + uos_add_app
 │   └── tools/verify-kernel-compiles.sh
-├── micro-os-plus-iii-devices/    flatfs, FatFs; SD per SoC (BCM2837, RK3506);
+├── micro-os-plus-iii-devices/    flatfs, FatFs; SD per SoC (BCM2837, RK3506,
+│                                 native — an image file);
 │                                 silicon support per SoC (BCM2837, STM32F4,
 │                                 RP2350)
 ├── micro-os-plus-iii-aarch64/    ARMv8-A port
@@ -67,6 +77,13 @@ TMP7/
 │   └── test/                     same shape
 │       ├── boards/{rpi-zero-2w,rpi3b,luckfox-lyra}/  BCM2837 · BCM2837 · RK3506
 │       └── rpi-zero-2w/ rpi3b/ luckfox-lyra/         12 · 12 · 19 applications
+├── micro-os-plus-iii-posix-arch/ POSIX host port — host threads as CPUs
+│   ├── src/ include/             the CPU model, the scheduler half, the
+│   │                             fault reporter, the free store
+│   └── test/
+│       ├── run.sh                dispatcher; BOARD picks the directory
+│       ├── boards/native/        board.cmake, include/, src/, run.sh
+│       └── native/               10 applications (9 at NCPU=4, 1 at NCPU=1)
 ├── micro-os-plus-iii-cortexm/    Cortex-M port — M4F and M33, 1 and 2 CPUs
 │   ├── src/ include/             upstream's single-core core (STM32 boards)
 │   ├── src/rtos/os-core-rp2350.cpp
@@ -89,7 +106,7 @@ trees. How that is laid out and how to run it is
 | | |
 |---|---|
 | Migration source (read-only) | `TMP7/micro-os-plus-iii-smp-old` |
-| Remotes | `GIT/micro-os-plus-iii-{smp,devices,aarch32,aarch64,cortexm}.git` |
+| Remotes | `GIT/micro-os-plus-iii-{smp,devices,aarch32,aarch64,cortexm,posix-arch}.git` |
 | Old remote | `GIT/micro-os-plus-iii-smp-old.git` |
 
 An architecture project holds **no copy** of the kernel or the devices repo.
@@ -128,6 +145,12 @@ neither the kernel nor the devices repo knows an architecture project exists.
    `test_smpl/run-hw.sh` plus a ~40-line `test/hw.sh` per port replace the
    predecessor's 48 per-test runner scripts.
 
+9. **Step 5 — the POSIX port.** A new SMP implementation, `OS_NCPU` host
+   threads as CPUs, preemptive from the start: per-CPU `timer_create` +
+   `SIGEV_THREAD_ID`, `pthread_sigmask` as per-CPU interrupt masking,
+   `pthread_kill` as the IPI, the context switch performed inside the signal
+   handler. Migration is allowed and native TLS is banned. 10/0/0.
+
 ## What hardware found that QEMU could not
 
 Five real defects, all in paths the emulator does not reach:
@@ -157,7 +180,7 @@ of twelve tests) and `test-console` (the mutex-guarded print helpers, in
 three). The shared boot helper generates thread names from `OS_NCPU` instead
 of listing four, so it no longer assumes a four-core BCM2837.
 
-## Two defects found and fixed on the way
+## Three defects found and fixed on the way
 
 - **The kernel exported all 63 sources as one target**, but the proven rpi
   builds compiled exactly 37. Linking the rest breaks the build:
@@ -171,6 +194,18 @@ of listing four, so it no longer assumes a four-core BCM2837.
   `lock_state[]`, which several cores read and write. The shared copy in
   `port/smp-common/` is the correct one, so adopting it fixes that port rather
   than merely deduplicating it.
+- **`mutex::internal_try_lock_()` dereferenced a null owner.** In the
+  priority-inheritance path it opens a `scheduler::uncritical_section` — which
+  *releases* the kernel lock, because `priority_inherited()` ends in a yield —
+  and then wrote through `owner_`. While that section is open the owner can
+  finish its own `unlock()` on another CPU, and `internal_unlock_()` ends by
+  setting `owner_` to `nullptr`. Every SMP port has the window; it is rare on
+  hardware because `scheduler::unlock()`/`lock()` is a handful of instructions,
+  but on the POSIX host it is two `pthread_sigmask()` system calls, so
+  `smp_test2` faulted in 21 runs out of 25 at four CPUs. The fix captures the
+  owner under the lock and re-checks ownership inside the uncritical section.
+  **This is what a synthetic SMP host is for**, and it is the whole
+  justification for step 5.
 
 ## Decisions — all resolved
 
@@ -223,8 +258,14 @@ Measurement changed the shape, for the better:
   port at all. Only `pico2` is carried so far.
 - The apps are one set copied four times, 99.0–99.5% identical.
 
-Then: step 5 (`posix-arch` — a new SMP implementation, one host thread per
-CPU).
+Step 5 (`posix-arch`) is **done**. *Gate:* the existing upstream tests pass at
+`OS_NCPU=1` **(met — `mutex-stress`, carried from the kernel's own
+`tests/sources/`; the nine SMP object tests cannot be built single-core,
+because they use `thread::cpu_affinity()`)**; the SMP object tests pass at
+`OS_NCPU>1` **(met, 9/9 at `OS_NCPU=4`)**; no use of `sigprocmask` or
+`setitimer` remains **(met — `pthread_sigmask` and per-CPU `timer_create`)**.
+Both ARM QEMU suites were re-run after the kernel mutex fix and after the
+shared test sources lost their last ARM assembly: 11/1/0 on each, unchanged.
 
 ## Things a fresh session should not rediscover
 
@@ -336,10 +377,32 @@ CPU).
   not re-run the bootrom/XIP setup and the new image never boots.
 - **The STM32 boards are the workspace's only `OS_NCPU=1` boards.** They are
   therefore the only ones that build the kernel's non-SMP branch at all.
-- **`posix-arch` is pristine upstream v1.0.1**, untracked in the old
-  workspace. Single host thread, `ucontext` coroutines, cooperative only.
-- **Three POSIX defects to fix when going multi-threaded:** `sigprocmask` is
-  unspecified in a multithreaded process (use `pthread_sigmask`);
-  `setitimer(ITIMER_REAL)` delivers to an arbitrary thread (use `timer_create`
-  with `SIGEV_THREAD_ID`); `errno`/`thread_local` are host-thread local, so
-  µOS++ thread migration between CPUs corrupts them.
+- **`posix-arch` was pristine upstream v1.0.1** — single host thread,
+  `ucontext` coroutines, cooperative only — and is now a preemptive SMP port.
+  The three POSIX defects D12 names are all fixed: `pthread_sigmask` for
+  `sigprocmask`, per-CPU `timer_create` + `SIGEV_THREAD_ID` for
+  `setitimer(ITIMER_REAL)`, and **native TLS is banned** rather than threads
+  being pinned — no port or application state may live in `errno` or a
+  `thread_local` across a switch point.
+- **The SMP picker reads `th->context_.port_.stack_ptr` directly**, and the
+  design spec does not say so. Null means "not safe to claim". The POSIX port
+  puts `stack_ptr` first in its thread context and uses it as the same flag,
+  published not by the CPU that leaves a thread but by **whoever arrives next
+  on that CPU** — because by the time `swapcontext()` returns, this CPU is
+  already running the incoming thread. Same hazard and same answer as
+  AArch64's `_smp_pub_addr`/`_smp_pub_val`; no kernel change was needed.
+- **On the POSIX host the tick handler runs with no `SA_ONSTACK`**, on the
+  µOS++ thread's own stack, so the signal frame migrates with the thread. That
+  is why `OS_INTEGER_RTOS_MIN_STACK_SIZE_BYTES` is 32 KiB there. The *fault*
+  handler is the opposite case and does use `SA_ONSTACK`.
+- **The POSIX free store is `first_fit_top`, not glibc `malloc`.** A µOS++
+  thread can be preempted inside an allocation and resumed on a different host
+  thread, and glibc's arena lock would then be released by a thread that never
+  took it.
+- **`hw_result::ok()`/`fail()` flush stdio before `_exit()` on the host.**
+  `_exit()` does not, and to a pipe stdout is fully buffered — a carried
+  upstream test ran, passed, and printed nothing at all.
+- **The POSIX fault reporter prints the faulting pc, the image's load bias and
+  a backtrace**, so `addr2line -e <image> <pc-bias>` names the line. It is how
+  the mutex race above was found, after three speculative fixes had resolved
+  nothing.

@@ -85,7 +85,7 @@ Roughly 2,300 lines of port and board code. One board. Ten test applications.
 
 | board | "silicon" | CPUs | tests | verdict |
 |---|---|---|---|---|
-| `native` | the host kernel | 4, `-DNCPU=` | 10 | 10 passed / 0 skipped / 0 failed |
+| `native` | the host kernel | 4, `-DNCPU=` | 11 | 11 passed / 0 skipped / 0 failed |
 
 The port depends on the kernel (`micro-os-plus-iii-smp`) and the device layer
 (`micro-os-plus-iii-devices`), holds no copy of either, and neither of them
@@ -651,7 +651,7 @@ why every log begins `join: c1=3 c2=3 c3=3 (0 ms)`.
 
 A `ucontext_t` plus a stack the kernel allocated, both living inside the
 kernel's `thread` object. There is no host thread per µOS++ thread — that
-alternative was considered and rejected (§21).
+alternative was considered and rejected (§22).
 
 ### `port::context::create()`
 
@@ -1742,10 +1742,10 @@ board's CPU count.
 
 ## 15. The tests
 
-Ten applications. Nine are the SMP object tests carried from the ARM boards —
-**not rewritten, not adapted**: the same `main.cpp`, compiled against the same
-`uart.hpp`/`led.hpp`/`smp.hpp`/`timer_arm.hpp` API. The tenth is upstream's
-own.
+Eleven applications. Nine are the SMP object tests carried from the ARM boards
+— **not rewritten, not adapted**: the same `main.cpp`, compiled against the
+same `uart.hpp`/`led.hpp`/`smp.hpp`/`timer_arm.hpp` API. The other two are
+upstream's own, and both run at `OS_NCPU=1` (§17).
 
 | test | CPUs | what it exercises | runtime |
 |---|---|---|---|
@@ -1759,6 +1759,7 @@ own.
 | `smp-num-test` | 4 | UART + LED + **SD** + FPU; writes `num.txt` to a flatfs volume | ~60 s |
 | `smp-pipeline-test` | 4 | 13 threads, shared queues, **SD persistence**, `yield()` stress | ~90 s |
 | `mutex-stress` | **1** | 10 threads on one mutex; fairness/uniformity statistics | ~15 s |
+| `rtos-apis` | **1** | upstream's API sweep: the C++ API, the C API, ISO threads, CMSIS-RTOS v1, the memory resources and posix-io | ~1 s |
 
 ### What each one actually proves *here*
 
@@ -1875,7 +1876,7 @@ producers block on I/O rather than on CPU, so the thread rarely reaches a
 preemption point and rarely moves. The same test on silicon shows a similar
 shape.
 
-**`mutex-stress`** — §17.
+**`mutex-stress`**, **`rtos-apis`** — §17.
 
 ### What is not carried
 
@@ -1926,6 +1927,7 @@ Logs land in `<build>/test/.host-logs/<app>.log`, and SD images beside them as
 
 ```
 mutex-stress             PASS
+rtos-apis                PASS
 smp-mat-test             PASS
 smp-num-test             PASS
 smp-pipeline-test        PASS
@@ -1936,7 +1938,7 @@ smp_test2                PASS
 smp_test3                PASS
 smp_test4                PASS
 
-host suite: 10 passed, 0 skipped, 0 failed
+host suite: 11 passed, 0 skipped, 0 failed
 ```
 
 ### The verdict is the exit status
@@ -2009,17 +2011,46 @@ reason about rather than two.
 
 The nine SMP object tests **cannot** be built single-core by construction: they
 call `thread::cpu_affinity()`, which does not exist without the SMP scheduler.
-So the single-core leg is `mutex-stress`, carried from the kernel's own
-`tests/sources/mutex-stress` — upstream's test, not one invented for the
-purpose, and the self-contained one of the two candidates (`rtos-apis` pulls in
-FatFs and posix-io).
+So the single-core leg is the two tests the kernel already owns, `mutex-stress`
+and `rtos-apis`, both carried from `tests/sources/` — upstream's tests, not
+ones invented for the purpose.
 
-It is wired through `board_test_ncpu`, and it is also
+Both are wired through `board_test_ncpu`, and both are
 `BOARD_TEST_SELF_CONTAINED`, because the board's shared test support is the SMP
 boot helper: `test-smp-boot.cpp` installs per-core idle threads through
 `scheduler::os_idle_thread_core[]`, which exists only under the SMP scheduler.
 
-Two changes were made to the carried copy, and no third: `RUN_SECONDS` defaults
+`rtos-apis` needed three things the other ten did not, and each one is a hook
+rather than a special case:
+
+| what it needs | how |
+|---|---|
+| `micro-os-plus::iii-posix-io`, for `os::posix::*` | a **seventh** per-test hook, `board_test_libraries()` — see below |
+| its own `os-app-config.h` (it calls `os_thread_stat_get_*`, which need `OS_INCLUDE_RTOS_STATISTICS_*`) | `board_test_defines()` returns `OS_USE_OS_APP_CONFIG_H`, and the config header is carried beside the test |
+| a second translation unit, `test-c-api.c` | `board_test_sources()`, with the directory captured at include time — `CMAKE_CURRENT_LIST_DIR` inside a CMake *function* is where the function runs, not where it was written |
+
+`board_test_libraries()` exists only in this port, and defaults to nothing:
+
+```cmake
+function (board_test_libraries _app _out)
+  set (${_out} "" PARENT_SCOPE)
+endfunction ()
+```
+
+Propagating it to `aarch32`, `aarch64` and `cortexm` would mean re-running
+their regressions, so it stays here until there is a reason.
+
+Linking posix-io into a **host** program is the one thing worth checking twice:
+it would be fatal if it took over `open`/`read`/`write` from glibc. It does
+not — its syscall layer is `__posix_*`-prefixed, and the host's C library is
+untouched.
+
+One carried thing is disabled: the test's chan-FatFs section. The kernel in
+this workspace carries no chan-fatfs at all (`find include src -name '*chan*'`
+is empty), so the include is commented out and the section's own `#if 1` is
+turned to `#if 0` — the file's own idiom for exactly this.
+
+Two changes were made to the carried `mutex-stress`, and no third: `RUN_SECONDS` defaults
 to 10 rather than 30 (the runner passes no argv, and upstream's 30 s was chosen
 for a person watching the distribution converge), and the `RESULT:` line plus
 `hw_result` at the end, which is the verdict convention every test in this
@@ -2331,10 +2362,9 @@ time does not match it. `board-contract.cpp` warns above 16.
 threads, not one per µOS++ thread, and `swapcontext` confuses its unwinder. The
 port's own backtrace works because it is taken from the frame that faulted.
 
-**Sanitizers do not work yet.** ASan and TSan both have opinions about
-`swapcontext` and about a signal handler that never returns to where it was
-raised. Making the port usable under them is its own piece of work — and it is
-the one thing a synthetic host ought eventually to be best at. See §22.
+**Two sanitizers out of three work.** ASan and UBSan both run the whole suite
+green; TSan does not, and cannot until the port is annotated for its fiber API.
+Measured numbers in §21.
 
 **Wake-ups are biased towards CPU 0.** Only CPU 0 advances the kernel clock —
 the BCM2837 arrangement this port copies — so a thread released by a timer,
@@ -2350,11 +2380,240 @@ card is a file, and the LED is a line of text. Three tests are not carried for
 exactly this reason.
 
 **`OS_NCPU=1` is a different kernel branch**, not a degenerate case of the SMP
-one, and only `mutex-stress` runs there.
+one, and only `mutex-stress` and `rtos-apis` run there — the nine SMP object
+tests call `cpu_affinity()`, which does not exist without the SMP scheduler.
 
 ---
 
-## 21. Decisions, and what was rejected
+## 21. Sanitizers
+
+This is the reason to have a host port at all. A Cortex-A53 cannot tell you
+that a pointer is dangling; a host can. So the claim is worth stating as a
+measurement rather than an intention: **the whole suite was built and run under
+each of the three sanitizers**, and this section is what came back.
+
+```sh
+cmake -S . -B build-asan -G Ninja -DBOARD=native \
+      -DCMAKE_BUILD_TYPE=RelWithDebInfo -DUOS_SANITIZE=address
+cmake --build build-asan -j8
+BUILD=$PWD/build-asan ./test/run.sh
+```
+
+`UOS_SANITIZE` is a cache string, so `address`, `undefined`,
+`address,undefined` and `thread` all work. It is applied to
+`target_compile_options` **and** `target_link_options` on the port's INTERFACE
+target, which is what every test links, so one variable covers the whole build.
+`RelWithDebInfo` or `Debug` is wanted with any of them, for the line numbers.
+
+| sanitizer | suite | reports | verdict |
+|---|---|---|---|
+| `address` | 11/11 pass | 0 | **a gate**; run it before every commit |
+| `undefined` | 11/11 pass | 29, all `vptr`, all in the kernel | **a gate** with `-DUOS_SANITIZE_NO_VPTR=ON` |
+| `thread` | runs, still reaches `RESULT: PASS` | 5,980 warnings, a 348,000-line log | not a gate, and won't be until the fiber annotations exist |
+
+### 21.1 ASan, and why the port had to be annotated for it
+
+`swapcontext()` moves the stack out from under ASan. Its shadow map still
+describes the frames of the *outgoing* stack, so the first thing the incoming
+thread touches is a false `stack-buffer-overflow`. Every single switch.
+
+ASan publishes a fiber API for exactly this, and the port uses it. Two shims in
+`host_cpu.cpp`, declared by hand under `UOS_HAVE_ASAN` so a toolchain without
+`<sanitizer/asan_interface.h>` still builds:
+
+```cpp
+#if defined(__SANITIZE_ADDRESS__) \
+    || (defined(__has_feature) && __has_feature (address_sanitizer))
+#define UOS_HAVE_ASAN 1
+extern "C" void
+__sanitizer_start_switch_fiber (void**, const void*, std::size_t);
+extern "C" void
+__sanitizer_finish_switch_fiber (void*, const void**, std::size_t*);
+#endif
+```
+
+and three call sites:
+
+```cpp
+// port/src/rtos/os-core.cpp, switch_stacks()
+void* asan_save = nullptr;
+host_cpu::asan_start_switch (&asan_save,
+                             new_thread->stack ().bottom (),
+                             new_thread->stack ().size ());
+if (os_impl_swapcontext (old_uc, new_uc) != 0) { … ::abort (); }
+host_cpu::asan_finish_switch (asan_save);
+host_cpu::publish_pending ();
+```
+
+```cpp
+// port/src/host_cpu.cpp, trampoline() -- a thread arriving for the first time
+// has no outgoing context to hand back to
+host_cpu::asan_finish_switch (nullptr);
+```
+
+The detail that matters: `asan_save` is an ordinary local, so it lives on the
+**outgoing thread's own stack**. That is deliberate. A µOS++ thread may resume
+on a different CPU than the one it left, and a per-CPU slot would be read by
+the wrong host thread; the thread's own stack travels with it. The same
+reasoning as the deferred publish in §7, for the same reason.
+
+### 21.2 What ASan found on its first run
+
+A real bug, in the first minute, in a test that had passed everywhere for
+months:
+
+```
+ERROR: AddressSanitizer: stack-use-after-scope
+READ of size 1 at 0x7fb7a02102e0 thread T0
+    #1 is_thread_allowed_on_cpu        os-core.cpp:506
+    #2 scheduler::internal_switch_threads()  os-core.cpp:610
+    #3 port::scheduler::switch_stacks()      os-core.cpp:318
+    …
+Address is located in stack of thread T0 at offset 736 in frame os_main
+  [736, 752) 'name' (line 482) <== Memory access at offset 736 is inside this
+```
+
+`smp-pro-cons-test` created its workers like this:
+
+```cpp
+for (unsigned i = 0; i < 4; ++i)
+  {
+    char name[16];                                   // <-- loop-local
+    snprintf (name, sizeof (name), "prod_%u", i);
+    …
+    s_prods[i] = new thread { name, producer_thread, …, attr };
+  }
+```
+
+`os::rtos::named_object` stores what it is given:
+
+```cpp
+const char* const name_ = nullptr;
+```
+
+The pointer, never a copy. So every one of the eight thread names dangled the
+instant its loop iteration ended — into a stack slot that later code in
+`os_main` reused. And it is not an inert dangle: `is_thread_allowed_on_cpu()`
+`strcmp()`s `thread::name()` against `"idle"`, `"idle0"`… **on every scheduling
+decision**, so the scheduler was reading rewritten stack bytes for the life of
+the program. It never misbehaved only because those bytes never happened to
+spell `idle`.
+
+The fix is four lines — give the names static storage beside the static stacks
+the test already declares:
+
+```cpp
+static char s_prod_names[4][16];
+static char s_cons_names[4][16];
+…
+char* name = s_prod_names[i];
+snprintf (name, sizeof (s_prod_names[i]), "prod_%u", i);
+```
+
+**This bug is upstream.** It is in `micro-os-plus-iii-smp-old`
+(`rpi/…/64b/smp-pro-cons-test/main.cpp:524` and `:540`) and therefore in all
+six shipped copies of the test: `aarch32` × {rpi3b, rpi-zero-2w,
+luckfox-lyra}, `aarch64` × {rpi3b, rpi-zero-2w}, and this one. Only this one is
+fixed, because fixing the other five means re-running their hardware
+regressions, and that is a decision rather than a patch.
+
+That is the whole argument for this port in one finding: the same test, the
+same source, on the same kernel — but on a host with a shadow map.
+
+### 21.3 UBSan
+
+Clean, except for one thing, and that thing is deliberate. All 29 reports are
+`-fsanitize=vptr`, and all 29 are in the **kernel**, not the port:
+
+| where | count | what |
+|---|---|---|
+| `os-lists.cpp:417`, `:446`, `:466` | 17 | `downcast of address … not an object of type 'timeout_thread_node'` |
+| `os-core.cpp:558`, `:589`, `:644` | 12 | `member call on address … not an object of type 'thread'` |
+
+These are the intrusive-list sentinel idiom: `head_` is a bare
+`static_double_list_links`, and `clock_timestamps_list::link()` downcasts it to
+`timeout_thread_node*` to use as a loop terminator. The resulting pointer is
+only ever asked for `->prev()`; it is never read as a whole node unless it
+really is one. The code knows: the casts sit inside `#pragma GCC diagnostic
+ignored` blocks upstream. It is UB by the letter of the standard and correct by
+every implementation's layout.
+
+So `vptr` is the one check to turn off, and there is a switch for it:
+
+```sh
+cmake -S . -B build-ubsan -G Ninja -DBOARD=native \
+      -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+      -DUOS_SANITIZE=undefined -DUOS_SANITIZE_NO_VPTR=ON
+```
+
+→ 11/11 pass, **0 reports**. Everything else UBSan checks — signed overflow,
+shifts, alignment, bounds, null, the lot — is already clean across the kernel,
+the port and eleven tests.
+
+One trap, found the hard way: `-DCMAKE_CXX_FLAGS=-fno-sanitize=vptr` does
+**not** work. `CMAKE_CXX_FLAGS` is emitted before the target's options, and the
+last `-f[no-]sanitize=` on the command line wins, so `-fsanitize=undefined`
+turns it straight back on. `UOS_SANITIZE_NO_VPTR` appends it to
+`_uos_sanitize_opts` *after* `-fsanitize=`, which is the only ordering that
+works.
+
+### 21.4 TSan, and why it is not a gate yet
+
+It builds. It runs. `smp_test1` still reaches `RESULT: PASS` — at line 348,343
+of its log, after 5,980 warnings:
+
+| kind | count |
+|---|---|
+| `data race` | 3,775 |
+| `signal handler spoils errno` | 2,203 |
+| `signal` (a handler running on a fiber stack) | 1 |
+
+Neither number is a verdict on the kernel. Both are TSan not being told what
+the port does.
+
+The **races** are the scheduler's own state — `current_thread_[]`,
+`context_.port_.stack_ptr`, the per-CPU flags. The kernel lock is a proper
+acquire/release atomic:
+
+```cpp
+while (__atomic_exchange_n (&_smp_klock.lock, 1u, __ATOMIC_ACQUIRE) != 0u) …
+```
+
+so TSan can see that edge. What it cannot see is that a µOS++ thread's stack
+migrates between host threads: its shadow memory is per-host-thread, and after
+a `swapcontext` the same bytes are legitimately touched by a different `T`.
+TSan has a fiber API — `__tsan_create_fiber`, `__tsan_switch_to_fiber`,
+`__tsan_destroy_fiber` — which is the same shape of work already done for ASan
+in §21.1, and which this port does not do yet.
+
+The **`errno`** reports are inherent rather than missing. The tick handler
+(§8) runs `swapcontext` *inside* a signal handler and by design never returns
+to where it was raised, so `errno` really is left as the handler found it. On
+silicon there is no `errno` to spoil. Fixing it for TSan means saving and
+restoring it around the switch — cheap, but it is a change made for a tool, so
+it is listed rather than done.
+
+Until both are addressed, TSan is a thing to run by hand and read carefully,
+not a gate.
+
+### 21.5 What to run, and when
+
+| when | command |
+|---|---|
+| every commit touching the port or the kernel | `-DUOS_SANITIZE=address` |
+| the same, if you have the cycles | `-DUOS_SANITIZE=address,undefined -DUOS_SANITIZE_NO_VPTR=ON` |
+| after touching the lists or the clock | `-DUOS_SANITIZE=undefined` *without* `NO_VPTR`, and check the 29 are still the same 29 |
+| investigating a suspected race | `-DUOS_SANITIZE=thread`, one test, and read it by hand |
+
+Cost is not an argument against any of this. Most of the suite is
+tick-bound, not CPU-bound, so the wall clock barely notices: on the
+compute-bound `smp-mat-test`, 0.108 s plain, 0.179 s under ASan (1.7×), 0.112 s
+under UBSan (1.04×); on the tick-driven `smp_test2`, 0.508 s / 0.561 s /
+0.510 s. The whole suite is dominated by the two ~90 s SD tests either way.
+
+---
+
+## 22. Decisions, and what was rejected
 
 | decision | chosen | rejected |
 |---|---|---|
@@ -2392,7 +2651,7 @@ async-signal-safe, and this lock is taken from signal handlers.
 
 ---
 
-## 22. Reference tables
+## 23. Reference tables
 
 ### Files
 
@@ -2456,12 +2715,12 @@ async-signal-safe, and this lock is taken from signal handlers.
 
 ---
 
-## 23. Worked examples
+## 24. Worked examples
 
 Everything below is complete and compiles as written, against this port at
 `OS_NCPU=4`. Paths are relative to `micro-os-plus-iii-posix-arch/`.
 
-### 23.1 The smallest application that runs
+### 24.1 The smallest application that runs
 
 Create one directory; that is the whole build change.
 
@@ -2610,10 +2869,10 @@ hello 1 from core 0 at 200 ms
 ```
 
 That is not the scheduler failing to balance — it is one runnable thread and
-one CPU that always hears about it first. §23.3 shows what happens when there
+one CPU that always hears about it first. §24.3 shows what happens when there
 is actual work to spread.
 
-### 23.2 The same thing, the upstream way
+### 24.2 The same thing, the upstream way
 
 If a file never has to compile for bare metal, the kernel's own weak `main()`
 will do everything above. The whole application is then:
@@ -2639,7 +2898,7 @@ creates `main` and `idle`, and starts the scheduler. The application free store
 is *not* installed in this path, so the kernel's `malloc` resource stays — fine
 for a test, wrong for anything that wants the deterministic heap of §11.
 
-### 23.3 Threads on several CPUs, with a mutex
+### 24.3 Threads on several CPUs, with a mutex
 
 The shape of `smp_test2`, reduced to what matters.
 
@@ -2759,7 +3018,7 @@ $ ./test/build/test/mytest-host | grep 'busy on core' | sort | uniq -c
 
 Four threads, four CPUs, an even split, and no affinity set anywhere. Replace
 the spin with `sysclock.sleep_for(50)` and the same program prints *core 0*
-every time — for the reason in §23.1, not because the scheduler stopped
+every time — for the reason in §24.1, not because the scheduler stopped
 working.
 
 `smp_test4` makes the stronger statement, because its eight workers are more
@@ -2784,7 +3043,7 @@ in purpose to the ARM boards' copy; its only POSIX-specific line is the idle
 body's `port::scheduler::wait_for_interrupt()`, which is the kernel's own port
 API and is `sigsuspend()` here, `dsb sy; wfi` on ARMv8-A.
 
-### 23.4 Using the SD card
+### 24.4 Using the SD card
 
 `sd::SdCard` is the same class on all three back-ends. Nothing in an
 application selects one — the board's `UOS_BOARD_DEVICES` does.
@@ -2845,7 +3104,7 @@ That is a real advantage of this back-end over the two silicon ones, not a
 compromise: the volume a failing test left behind can be examined with ordinary
 tools.
 
-### 23.5 A test that runs at a different CPU count
+### 24.5 A test that runs at a different CPU count
 
 `board_test_ncpu()` is per test, and `uos_add_app()` turns it into both
 `OS_NCPU` and `OS_USE_SMP_SCHEDULER`. To add a single-core test beside the
@@ -2880,7 +3139,7 @@ $ grep -c OS_USE_SMP_SCHEDULER \
 0
 ```
 
-### 23.6 A tripwire
+### 24.6 A tripwire
 
 When an invariant is in doubt, assert it where it would break and leave nothing
 behind. This is the "one CPU per thread" check that was compiled into
@@ -2925,7 +3184,7 @@ Three rules that make a tripwire useful rather than misleading:
   `printf` with extra steps, and the added call *changes timing* — one of these
   perturbed a 3-in-5 failure into 6 clean runs, which proved nothing at all.
 
-### 23.7 Counting an intermittent failure
+### 24.7 Counting an intermittent failure
 
 Never conclude from one run. This is the loop that turned "smp_test2 sometimes
 crashes" into "21 out of 25", and then into "0 out of 25".
@@ -2959,7 +3218,7 @@ smp_test2 at NCPU=8: pass=25 fail=0
 The kept logs of the failing runs are the evidence; the ones that passed are
 deleted so the directory holds only what matters.
 
-### 23.8 From a fault to a line
+### 24.8 From a fault to a line
 
 The complete recipe, from the report in §12.
 
@@ -3008,7 +3267,7 @@ Three things to remember:
   and you get `??:?`.
 - The backtrace entries are already bias-corrected by the reporter.
 
-### 23.9 A second host board
+### 24.9 A second host board
 
 The directory structure is ready; the work is in `host_cpu.cpp`. A macOS board
 would be:
@@ -3049,7 +3308,7 @@ file. What actually has to be written:
 Nothing in `src/rtos/os-core.cpp` should need to change. That file already
 guards on `defined(__APPLE__) || defined(__linux__)`.
 
-### 23.10 What *not* to write
+### 24.10 What *not* to write
 
 Four things that compile and are wrong on this port. Each one was an actual
 bug here.
@@ -3098,9 +3357,12 @@ void my_isr_work () { uart::uart1 << "tick " << n << "\n"; }   // write(2)
 
 ## What is not done
 
-- **`rtos-apis`**, upstream's larger API suite, at `OS_NCPU=1`. It needs FatFs
-  and posix-io wired to the host.
-- **Sanitizers** (§20). The highest-value remaining work on this port.
+- **TSan.** ASan and UBSan are done (§21); TSan needs the port annotated for
+  `__tsan_create_fiber` / `__tsan_switch_to_fiber`, and the `errno` clobber in
+  the tick handler dealt with. The highest-value remaining work on this port.
+- **chan-FatFs in `rtos-apis`.** The section is `#if 0`-ed because the kernel
+  in this workspace carries no chan-fatfs at all, not because the host cannot
+  do it.
 - **A second board.** It would be a different *host* — macOS, where
   `SIGEV_THREAD_ID` does not exist. The directory structure is ready for it;
   `host_cpu.cpp` is where the work is.

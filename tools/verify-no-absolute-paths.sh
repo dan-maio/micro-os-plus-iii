@@ -46,6 +46,12 @@
 # WHAT IS SCANNED: tracked *.sh, *.cmake, *.py, *.cfg and CMakeLists.txt, in
 # every sibling repository except the read-only migration source. Upstream's
 # own tree (tests/) is skipped -- it is carried as shipped (spec Section 10).
+#
+# This script is skipped too, and it has to be: the comment block above spells
+# every denied root out loud, so the gate matched itself four times the moment
+# it was committed and could never pass again. That is a narrow, deliberate
+# hole -- a real absolute path added to THIS file would not be caught -- and it
+# is the price of the denylist being readable. Nothing else is exempt.
 # Documentation is not scanned: a README may legitimately quote a path.
 #
 # Exit status: 0 if clean, 1 if anything is reported, 2 on a usage error.
@@ -105,7 +111,8 @@ for repo in "${repos[@]}"; do
     done < <(grep -nE "$PATTERN" "$repo/$f" 2>/dev/null)
   done < <(cd "$repo" && git ls-files \
              | grep -E '\.(sh|cmake|py|cfg)$|(^|/)CMakeLists\.txt$' \
-             | grep -v '^tests/')
+             | grep -v '^tests/' \
+             | grep -v '^tools/verify-no-absolute-paths\.sh$')
 done
 
 printf 'files     : %d scanned, %d permitted occurrence(s) (toolchains, OpenOCD)\n' \

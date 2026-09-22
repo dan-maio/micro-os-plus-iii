@@ -33,11 +33,14 @@ not a gap to close later; do not reopen it.
 
 **Step 5 is complete.** `micro-os-plus-iii-posix-arch` exists: SMP on the
 development machine, one host thread per CPU, preemptive. One board, `native`,
-ten tests, **10 passed / 0 skipped / 0 failed** — nine SMP object tests carried
-unchanged at `OS_NCPU=4` and one upstream test at `OS_NCPU=1`. It is the only
-one of the four ports that is new work rather than a migration, and it earned
-its keep on the first day: it found a real SMP race in the kernel's mutex
-(see below). Written up in [`posix-arch-port.md`](posix-arch-port.md).
+eleven tests, **11 passed / 0 skipped / 0 failed** — nine SMP object tests
+carried unchanged at `OS_NCPU=4`, and `mutex-stress` and `rtos-apis` from the
+kernel's own `tests/sources/` at `OS_NCPU=1`. It is the only one of the four
+ports that is new work rather than a migration, and it has now earned its keep
+twice: it found a real SMP race in the kernel's mutex (see below), and, the
+first time it was run under ASan, a dangling thread name that has shipped in
+every copy of `smp-pro-cons-test` since the test was written (see *Sanitizers*
+below). Written up in [`posix-arch-port.md`](posix-arch-port.md).
 
 **Step 4 is under way.** `micro-os-plus-iii-cortexm` exists, with six boards:
 three STM32F4 at `OS_NCPU=1` and three RP2350 boards at `OS_NCPU=2` — the
@@ -152,7 +155,7 @@ neither the kernel nor the devices repo knows an architecture project exists.
    threads as CPUs, preemptive from the start: per-CPU `timer_create` +
    `SIGEV_THREAD_ID`, `pthread_sigmask` as per-CPU interrupt masking,
    `pthread_kill` as the IPI, the context switch performed inside the signal
-   handler. Migration is allowed and native TLS is banned. 10/0/0.
+   handler. Migration is allowed and native TLS is banned. 11/0/0.
 
 10. **The two Section 9 gate scripts.** `verify-no-duplicate-sources.py`
    pools the tracked sources of *every* repository and compares them —
@@ -166,15 +169,20 @@ neither the kernel nor the devices repo knows an architecture project exists.
 | gate | command | state |
 |---|---|---|
 | kernel compiles on a port's headers | `tools/verify-kernel-compiles.sh <port>/include` | 61/61 on every port |
-| no duplicate sources, across repos | `tools/verify-no-duplicate-sources.py` | **22 unexplained pairs** — see below |
-| no machine-specific absolute paths | `tools/verify-no-absolute-paths.sh` | PASS (104 files) |
+| no duplicate sources, across repos | `tools/verify-no-duplicate-sources.py` | **22 unexplained pairs** — see below (493 sources compared) |
+| no machine-specific absolute paths | `tools/verify-no-absolute-paths.sh` | PASS (105 files) |
 
 The duplicate gate has **three** outcomes, not two, because this workspace
 duplicates some code on purpose and a flat pass/fail would have to lie about
 it:
 
 - **exempt** — never compared: upstream's `tests/`, vendored `xpacks/`,
-  TinyUSB, and ARM's own CMSIS core headers (415 files).
+  TinyUSB, and ARM's own CMSIS core headers (415 files). One consequence is
+  worth knowing: the two single-core tests the POSIX board carries,
+  `mutex-stress` and `rtos-apis`, are near-copies of `tests/sources/`, and the
+  gate cannot see the pairing because the originals are on the exempt side. It
+  is deliberate — `tests/` is carried as shipped (spec Section 10) — but it is
+  not the gate proving those copies are justified.
 - **expected** — reported and counted, but not a failure: *the same test file
   carried by two boards*. Every board owns its tests, deliberately, so that
   changing a test reaches exactly one board. **257 pairs.** The spec's
@@ -183,6 +191,14 @@ it:
   exemption.
 - **unexplained** — everything else, and the only thing that fails the gate.
   **22 pairs**, listed in the next section.
+
+The absolute-path gate skips exactly two things: upstream's `tests/`, and
+**itself**. The second is not tidiness — its header comment spells every denied
+root out loud, so the moment it was committed it matched itself four times and
+could never pass again. A real absolute path added to that one file would go
+uncaught; that is the price of the denylist being readable, and it is the only
+exemption. Both gates have been negative-tested against an injected violation,
+before and after that change.
 
 ## What the duplicate gate found
 
@@ -314,10 +330,10 @@ Measurement changed the shape, for the better:
 - The apps are one set copied four times, 99.0–99.5% identical.
 
 Step 5 (`posix-arch`) is **done**. *Gate:* the existing upstream tests pass at
-`OS_NCPU=1` **(met — `mutex-stress`, carried from the kernel's own
-`tests/sources/`; the nine SMP object tests cannot be built single-core,
-because they use `thread::cpu_affinity()`)**; the SMP object tests pass at
-`OS_NCPU>1` **(met, 9/9 at `OS_NCPU=4`)**; no use of `sigprocmask` or
+`OS_NCPU=1` **(met — `mutex-stress` *and* `rtos-apis`, both carried from the
+kernel's own `tests/sources/`; the nine SMP object tests cannot be built
+single-core, because they use `thread::cpu_affinity()`)**; the SMP object tests
+pass at `OS_NCPU>1` **(met, 9/9 at `OS_NCPU=4`)**; no use of `sigprocmask` or
 `setitimer` remains **(met — `pthread_sigmask` and per-CPU `timer_create`)**.
 Both ARM QEMU suites were re-run after the kernel mutex fix and after the
 shared test sources lost their last ARM assembly: 11/1/0 on each, unchanged.
@@ -329,6 +345,51 @@ The counter-example matters as much — the same four threads with a
 `sleep_for()` in the loop report core 0 every time, because only CPU 0 advances
 the kernel clock. See the cold-start facts below before reading anything into a
 per-core distribution.
+
+### Sanitizers on the POSIX port
+
+Measured, not asserted — the whole eleven-test suite was built and run under
+each. `-DUOS_SANITIZE=<set>` on the `native` board; details in
+[`posix-arch-port.md` §21](posix-arch-port.md).
+
+| sanitizer | suite | reports | usable as a gate? |
+|---|---|---|---|
+| `address` | 11/11 pass | 0 | **yes** |
+| `undefined` | 11/11 pass | 29, all `vptr`, all in the kernel | **yes**, with `-DUOS_SANITIZE_NO_VPTR=ON` → 0 reports |
+| `thread` | runs, still reaches `RESULT: PASS` | 5,980 (3,775 races, 2,203 `errno`) | no |
+
+Three things a fresh session should not have to rediscover:
+
+- **The port is annotated for the ASan fiber API** and has to be. Without
+  `__sanitizer_start_switch_fiber` / `__sanitizer_finish_switch_fiber` around
+  `swapcontext`, every context switch is a false `stack-buffer-overflow`. The
+  save slot is a **local**, so it rides the outgoing thread's own stack — a
+  per-CPU slot would be read by the wrong host thread after a migration, the
+  same hazard as the deferred publish.
+- **ASan's first run found a real bug, and it is upstream.**
+  `smp-pro-cons-test` named its eight workers from a loop-local `char
+  name[16]`, and `os::rtos::named_object` stores `const char* const name_` —
+  the pointer, never a copy. `scheduler::is_thread_allowed_on_cpu()` then
+  `strcmp()`s that dead stack slot on **every scheduling decision**. It is in
+  `micro-os-plus-iii-smp-old` (`rpi/…/64b/smp-pro-cons-test/main.cpp:524`,
+  `:540`) and therefore in all **six** shipped copies of the test — `aarch32` ×
+  {rpi3b, rpi-zero-2w, luckfox-lyra}, `aarch64` × {rpi3b, rpi-zero-2w}, and
+  `posix-arch/native`. **Only the `native` copy is fixed.** Fixing the other
+  five means re-running two QEMU suites and three hardware boards, which is a
+  decision, not a patch. It is open work.
+- **The 29 UBSan reports are the kernel's intrusive-list sentinel idiom**, not
+  a defect: `clock_timestamps_list::link()` downcasts the bare `head_` links to
+  `timeout_thread_node*` to use as a loop terminator and only ever asks it for
+  `->prev()`. Upstream already wraps those casts in `#pragma GCC diagnostic`.
+  If that count ever changes, something else changed. Also:
+  `-DCMAKE_CXX_FLAGS=-fno-sanitize=vptr` does **not** suppress them —
+  `CMAKE_CXX_FLAGS` is emitted before the target's options and the last
+  `-f[no-]sanitize=` wins. That is why there is a `UOS_SANITIZE_NO_VPTR`
+  option.
+
+TSan needs `__tsan_create_fiber` / `__tsan_switch_to_fiber` (the same shape of
+work already done for ASan) and an `errno` save/restore around the switch in
+the tick handler. Until then it is a by-hand tool, not a gate.
 
 ## Things a fresh session should not rediscover
 

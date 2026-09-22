@@ -267,6 +267,14 @@ because they use `thread::cpu_affinity()`)**; the SMP object tests pass at
 Both ARM QEMU suites were re-run after the kernel mutex fix and after the
 shared test sources lost their last ARM assembly: 11/1/0 on each, unchanged.
 
+That the port really is SMP is **measured, not claimed**: four CPU-bound
+threads with no affinity set report 40 runs each on cores 0, 1, 2 and 3, and
+`smp_test4`'s eight workers each accumulate thousands of runs on all four CPUs.
+The counter-example matters as much — the same four threads with a
+`sleep_for()` in the loop report core 0 every time, because only CPU 0 advances
+the kernel clock. See the cold-start facts below before reading anything into a
+per-core distribution.
+
 ## Things a fresh session should not rediscover
 
 - **Two RP2350 tests compile no kernel**, and that is the point of them:
@@ -406,3 +414,24 @@ shared test sources lost their last ARM assembly: 11/1/0 on each, unchanged.
   a backtrace**, so `addr2line -e <image> <pc-bias>` names the line. It is how
   the mutex race above was found, after three speculative fixes had resolved
   nothing.
+- **Wake-ups on the POSIX host are biased towards CPU 0, and that is not a
+  bug.** Only CPU 0 calls `os_systick_handler()` — the BCM2837 arrangement,
+  where all four cores take the 1 ms PPI but one advances the kernel clock —
+  so a thread released by `sleep_for()`, a timer or a timeout is normally
+  re-picked by CPU 0 before any other CPU's tick comes round. **CPU-bound work
+  spreads evenly; clock-bound and I/O-bound work does not.** Measured: four
+  CPU-bound threads report 40 runs each on c0/c1/c2/c3 with no affinity set
+  anywhere, while the same four with a `sleep_for()` in the loop report core 0
+  every time. Both are correct. This is also why `smp-pipeline-test` prints
+  `Produced by Core: c0=3275 c1=0 c2=0 c3=0`, and why `smp_test4` — whose
+  workers are CPU-bound — shows every worker on every CPU. **Before suspecting
+  the scheduler because a test reports all its work on core 0, check whether
+  its threads are CPU-bound or clock-bound.** Distributing the clock across
+  CPUs would change this and would also stop the port resembling the silicon
+  it stands in for; do not "fix" it.
+- **On the POSIX host, install the per-core idle threads BEFORE releasing the
+  cores**: `smp_install_boot_threads()` then `smp::start_secondary_cores()`,
+  never the reverse. A released CPU enters `reschedule()` at once, and with no
+  idle thread of its own it finds nothing to run and aborts with
+  `!!! no ready thread and no idle thread on CPU 1 !!!`. Every carried test
+  already does it in that order.

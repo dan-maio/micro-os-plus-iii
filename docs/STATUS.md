@@ -58,7 +58,10 @@ TMP7/
 │   │   ├── run-host.sh           the same, for the POSIX host
 │   │   └── run-hw.sh             the shared hardware session runner
 │   ├── cmake/                    toolchains + uos_add_app
-│   └── tools/verify-kernel-compiles.sh
+│   └── tools/                    the verification gates
+│       ├── verify-kernel-compiles.sh        kernel builds on a port's headers
+│       ├── verify-no-duplicate-sources.py   spec Section 9, cross-repo
+│       └── verify-no-absolute-paths.sh      spec Section 9
 ├── micro-os-plus-iii-devices/    flatfs, FatFs; SD per SoC (BCM2837, RK3506,
 │                                 native — an image file);
 │                                 silicon support per SoC (BCM2837, STM32F4,
@@ -150,6 +153,58 @@ neither the kernel nor the devices repo knows an architecture project exists.
    `SIGEV_THREAD_ID`, `pthread_sigmask` as per-CPU interrupt masking,
    `pthread_kill` as the IPI, the context switch performed inside the signal
    handler. Migration is allowed and native TLS is banned. 10/0/0.
+
+10. **The two Section 9 gate scripts.** `verify-no-duplicate-sources.py`
+   pools the tracked sources of *every* repository and compares them —
+   running it one repository at a time would miss precisely the duplication
+   D9's multi-repo layout permits. `verify-no-absolute-paths.sh` looks for
+   machine-specific roots. Both were checked against injected violations, not
+   only against a clean tree.
+
+## The three verification gates
+
+| gate | command | state |
+|---|---|---|
+| kernel compiles on a port's headers | `tools/verify-kernel-compiles.sh <port>/include` | 61/61 on every port |
+| no duplicate sources, across repos | `tools/verify-no-duplicate-sources.py` | **22 unexplained pairs** — see below |
+| no machine-specific absolute paths | `tools/verify-no-absolute-paths.sh` | PASS (104 files) |
+
+The duplicate gate has **three** outcomes, not two, because this workspace
+duplicates some code on purpose and a flat pass/fail would have to lie about
+it:
+
+- **exempt** — never compared: upstream's `tests/`, vendored `xpacks/`,
+  TinyUSB, and ARM's own CMSIS core headers (415 files).
+- **expected** — reported and counted, but not a failure: *the same test file
+  carried by two boards*. Every board owns its tests, deliberately, so that
+  changing a test reaches exactly one board. **257 pairs.** The spec's
+  Section 9 says "target: zero findings" and was written before that decision;
+  this is where the two are reconciled, in the open rather than by a silent
+  exemption.
+- **unexplained** — everything else, and the only thing that fails the gate.
+  **22 pairs**, listed in the next section.
+
+## What the duplicate gate found
+
+Nothing in the kernel and nothing in a port's scheduler. The 22 pairs are, by
+kind:
+
+| what | pairs | verdict |
+|---|---|---|
+| `aarch32`/`aarch64` `hw_result.hpp` and `board-contract.cpp`, byte-identical | 2 | **real** — candidates for the kernel repo |
+| FatFs: `devices/fatfs/ff.c` vs the Lyra board's `fatfs-cpp/ff.cpp` (0.993, 5727 lines) | 1 | **real**, and the largest |
+| RK3506 SD driver: `devices/soc/rk3506/sdmmc.*` vs `smp_test_int4`'s private copy | 2 | **real** — a test carrying its own driver |
+| Lyra USB glue: the board's `usb/src/*` vs `smp_test6`/`smp_test7`'s copies | 6 | **real** — same shape as above |
+| Lyra interrupt tests `smp_test_int3`/`int4` sharing host and USB sources | 2 | **real** |
+| `cortexm` `syscalls.c`, four boards | 3 | **real**, small |
+| RP2350 `smp-test-nested-clock{,_200,_250}`, differing only in a clock constant | 3 | a `board_test_defines()` job |
+| `pico2-pizero` `sc-test-ko` vs `smp-test-ko` (0.912) | 1 | the single-core/SMP pair; arguably `board_test_ncpu()` |
+| `cortexm` `os-decls.h` vs `include-rp2350/…` (0.936) | 1 | **known and deliberate** — the two port cores, see `cortexm-port.md` |
+| TinyUSB `tusb_config.h` cdc vs hid (0.852, 26 lines) | 1 | class-specific by design |
+
+Every one of them is in the Lyra's or cortexm's test trees — that is, in the
+parts of steps 3 and 4 that have never run on hardware. None is in code any
+passing suite exercises.
 
 ## What hardware found that QEMU could not
 

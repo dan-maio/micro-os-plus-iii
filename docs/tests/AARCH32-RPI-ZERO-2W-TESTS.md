@@ -141,6 +141,8 @@ Because of the alias collision, the harness for AArch32 must be a **separate
 project** whose "library under test" is the **AArch32 port** — which itself
 brings the SMP kernel and the devices package. The cleanest layout:
 
+*Layout*
+
 ```
 workspace/
 ├── micro-os-plus-iii-smp/          # kernel + shared tests
@@ -160,7 +162,10 @@ Copy the `tests/` folder to `aarch32-tests/` and change exactly one thing at
 the top of `cmake/tests-main.cmake`: replace the `add_subdirectory("..")` that
 builds the plain kernel with an `add_subdirectory` of the AArch32 port.
 
+*File:* [`aarch32-tests/cmake/tests-main.cmake`](aarch32-tests/cmake/tests-main.cmake)
+
 ```cmake
+# aarch32-tests/cmake/tests-main.cmake
 # aarch32-tests/cmake/tests-main.cmake  (edited excerpt)
 # Instead of add_subdirectory(".." "top-bin"):
 add_subdirectory ("${UOS_AARCH32_DIR}" "port-bin")   # → iii + devices + aarch32
@@ -169,7 +174,10 @@ add_subdirectory ("${UOS_AARCH32_DIR}" "port-bin")   # → iii + devices + aarch
 Resolve the directory as a sibling in `CMakeLists.txt` (the convention the
 AArch32 project already uses):
 
+*File:* [`aarch32-tests/cmake/tests-main.cmake`](aarch32-tests/cmake/tests-main.cmake)
+
 ```cmake
+# aarch32-tests/cmake/tests-main.cmake
 get_filename_component (_sib "${CMAKE_CURRENT_SOURCE_DIR}/.." ABSOLUTE)
 set (UOS_AARCH32_DIR "${_sib}/micro-os-plus-iii-aarch32" CACHE PATH "")
 # The port finds the SMP kernel and the devices package as its own siblings;
@@ -189,7 +197,10 @@ Create `platforms/aarch32-rpi-zero-2w/` with the standard four files.
 
 **`cmake/definitions.cmake`**
 
+*File:* [`aarch32-tests/platforms/aarch32-rpi-zero-2w/cmake/definitions.cmake`](aarch32-tests/platforms/aarch32-rpi-zero-2w/cmake/definitions.cmake)
+
 ```cmake
+# aarch32-tests/platforms/aarch32-rpi-zero-2w/cmake/definitions.cmake
 set (xpack_platform_compile_definition "MICRO_OS_PLUS_PLATFORM_AARCH32_RPI_ZERO_2W")
 # The port supplies its own startup.S and vectors; there is no separate
 # device xPack. xpack_device_* is therefore not used here.
@@ -197,7 +208,10 @@ set (xpack_platform_compile_definition "MICRO_OS_PLUS_PLATFORM_AARCH32_RPI_ZERO_
 
 **`cmake/dependencies-folders.cmake`** — the test sources plus the port.
 
+*File:* [`aarch32-tests/platforms/aarch32-rpi-zero-2w/cmake/dependencies-folders.cmake`](aarch32-tests/platforms/aarch32-rpi-zero-2w/cmake/dependencies-folders.cmake)
+
 ```cmake
+# aarch32-tests/platforms/aarch32-rpi-zero-2w/cmake/dependencies-folders.cmake
 set (
   xpack_dependencies_folders
   "${CMAKE_SOURCE_DIR}/sources/mutex-stress"
@@ -218,7 +232,10 @@ be repeated here. If instead you keep `tests-main.cmake` untouched and let the
 **`cmake/platform-library.cmake`** — the per-target glue. This is where the
 board flags and the port link live.
 
+*File:* [`aarch32-tests/platforms/aarch32-rpi-zero-2w/cmake/platform-library.cmake`](aarch32-tests/platforms/aarch32-rpi-zero-2w/cmake/platform-library.cmake)
+
 ```cmake
+# aarch32-tests/platforms/aarch32-rpi-zero-2w/cmake/platform-library.cmake
 add_library (platform-aarch32-rpi-zero-2w-interface INTERFACE EXCLUDE_FROM_ALL)
 
 target_include_directories (platform-aarch32-rpi-zero-2w-interface INTERFACE "include")
@@ -277,7 +294,10 @@ The executable link set is the same as any other platform, except that
 `micro-os-plus::iii` and `micro-os-plus::platform` both resolve inside the
 SMP/port tree:
 
+*File:* [`aarch32-tests/platforms/aarch32-rpi-zero-2w/CMakeLists.txt`](aarch32-tests/platforms/aarch32-rpi-zero-2w/CMakeLists.txt)
+
 ```cmake
+# aarch32-tests/platforms/aarch32-rpi-zero-2w/CMakeLists.txt
 include ("cmake/platform-library.cmake")
 
 function (add_test_executable name)
@@ -319,7 +339,10 @@ therefore needs the port's 20-line AArch64 stub that drops to AArch32 and jumps
 to the image. The AArch32 repository already builds it as `shim8.img` from
 `test/boards/rpi-zero-2w/qemu-raspi3-shim/`. A minimal wrapper:
 
+*Wrapper script* (the AArch32 QEMU shim)
+
 ```bash
+# wrapper script
 #!/usr/bin/env bash
 # run-qemu-aarch32.sh <image.bin>
 set -euo pipefail
@@ -362,6 +385,8 @@ the Cortex-M ones, with three differences:
 A CTest wrapper can simply run the port's session and map the log to an exit
 code:
 
+*CTest wrapper script*
+
 ```bash
 #!/usr/bin/env bash
 # run-hw-aarch32.sh <app-name> [run-seconds]
@@ -370,6 +395,8 @@ exec "${UOS_AARCH32_DIR}/test/hw.sh" "$1" "${2:-}"
 
 If you drive OpenOCD directly instead, grep the log for the `RESULT:` line
 (and treat a lost debug link as an error, not a test failure):
+
+*OpenOCD command*
 
 ```bash
 timeout 300 openocd -f "$UOS_HW_CFG" -c init -c halt \
@@ -390,7 +417,10 @@ Because hardware is one-test-per-power-cycle, mark these CTest tests
 
 Add a pair (debug/release) for the QEMU run, and optionally for hardware:
 
+*File:* [`aarch32-tests/package.json`](aarch32-tests/package.json)
+
 ```jsonc
+// aarch32-tests/package.json
 "aarch32-rpi-zero-2w-cmake-gcc-debug": {
   "inherit": [
     "cmake-actions",
@@ -411,7 +441,10 @@ Add a pair (debug/release) for the QEMU run, and optionally for hardware:
 The hidden dependency block pins the toolchain and, if the harness copies the
 repos rather than using siblings, the QEMU/AArch64 tools:
 
+*File:* [`aarch32-tests/package.json`](aarch32-tests/package.json)
+
 ```jsonc
+// aarch32-tests/package.json
 "aarch32-dependencies": {
   "hidden": true,
   "devDependencies": {
@@ -425,7 +458,10 @@ repos rather than using siblings, the QEMU/AArch64 tools:
 Wire the new configuration into an aggregate action so it participates in
 `test-all`:
 
+*File:* [`aarch32-tests/package.json`](aarch32-tests/package.json)
+
 ```jsonc
+// aarch32-tests/package.json
 "test-aarch32-rpi-zero-2w-cmake": [
   "xpm run prepare --config aarch32-rpi-zero-2w-cmake-gcc-debug",
   "xpm run build   --config aarch32-rpi-zero-2w-cmake-gcc-debug",
@@ -482,6 +518,8 @@ is compiled with `arm-none-eabi-gcc` 15; the AArch64 shim with
 
 ### 4.7 Running
 
+*Commands*
+
 ```sh
 # once
 npm --prefix aarch32-tests install
@@ -508,6 +546,8 @@ SMP bring-up and the hardware session are already solved.
 
 Put each suite in the shared test tree so every port can build it:
 
+*Layout*
+
 ```
 micro-os-plus-iii-smp/test_smpl/common/
 ├── mutex-stress/          # copied from the harness, adapted
@@ -519,7 +559,10 @@ micro-os-plus-iii-smp/test_smpl/common/
 
 and register them in the board's `test/<board>/tests.cmake`:
 
+*File:* [`micro-os-plus-iii-aarch32/test/rpi-zero-2w/tests.cmake`](micro-os-plus-iii-aarch32/test/rpi-zero-2w/tests.cmake)
+
 ```cmake
+# micro-os-plus-iii-aarch32/test/rpi-zero-2w/tests.cmake
 set (UOS_TEST_APPS
      sd_test smp_test0 smp_test1 smp_test2 smp_test3 smp_test4
      smp-mat-test smp-mat-sdcard-test smp-num-test
@@ -536,6 +579,8 @@ Then `uos_add_test_app` finds them by name, because it globs
 The SMP tests use `test_smpl/common/include/test-console.hpp`
 (`console()`, `console_uart()`, `report_per_core()`) and stop the run through
 `hw_result.hpp`. Adapt the harness tests to the same helpers:
+
+*Test source* (`os_main` adapter)
 
 ```cpp
 #include <test-console.hpp>     // console(), console_uart() — serialised, multi-core safe
@@ -572,6 +617,8 @@ Nothing else is needed: the AArch32 `test/CMakeLists.txt` loops over
 `UOS_TEST_APPS` and builds each for `{qemu, hwd}`. Adding the suite to the list
 is sufficient.
 
+*Commands*
+
 ```sh
 cd micro-os-plus-iii-aarch32
 cmake -S . -B build \
@@ -584,6 +631,8 @@ ls build/test/mutex-stress-*        # mutex-stress-qemu, mutex-stress-hwd, .bin,
 
 **QEMU** (A53 + shim, the port's supported path):
 
+*Commands*
+
 ```sh
 UOS_QEMU_SHIM=build/test/shim8.img UOS_QEMU_LOAD_ADDR=0x10000 \
 ../micro-os-plus-iii-smp/test_smpl/run-qemu.sh build/test \
@@ -592,6 +641,8 @@ UOS_QEMU_SHIM=build/test/shim8.img UOS_QEMU_LOAD_ADDR=0x10000 \
 ```
 
 **Hardware** (J-Link, one test per power cycle):
+
+*Commands*
 
 ```sh
 cd micro-os-plus-iii-aarch32
@@ -633,6 +684,8 @@ harness already supports.
 | CMake ≥ 3.20 | all builds | xPack or system |
 
 Pin exact versions when it matters:
+
+*Commands*
 
 ```sh
 cmake -DUOS_TOOLCHAIN_BIN=~/.local/xPacks/@xpack-dev-tools/arm-none-eabi-gcc/15.2.1-1.1.1/.content/bin ...
@@ -676,7 +729,9 @@ Once one suite runs on the Zero 2 W, the same pattern covers:
 - **One test per power cycle** on hardware; mark hardware tests `RUN_SERIAL`
   and keep them out of unattended suites.
 - **Rebuild before you test.** A stale AArch32 image is indistinguishable from
-  a firmware bug.
+  a firmware bug. The per-test `test-*` actions now reconfigure + build before
+  they run `ctest`, so that is handled for you; the bare `test` action still
+  runs `ctest` only.
 - **`-Werror` and the port's `-Wno-*`.** The port already suppresses the few
   warnings it needs; a copied suite may need its own local `#pragma` push/pop.
 - **Two QEMU suites at once starve a vCPU** and look like a deadlock; run one
@@ -693,6 +748,8 @@ Once one suite runs on the Zero 2 W, the same pattern covers:
 
 This chapter is the concrete recipe for taking the working folder
 
+*Layout*
+
 ```
 ~/Work/micro-os-plus-iii/micro-os-plus-iii.git/     # plain kernel + tests/
 ```
@@ -705,7 +762,10 @@ and replacing the plain kernel with the SMP family, then adapting the harness's
 **Only one project may define `micro-os-plus::iii`.** The AArch32 port already
 adds the SMP kernel and the devices repository *itself*:
 
+*File:* [`micro-os-plus-iii-aarch32/CMakeLists.txt`](micro-os-plus-iii-aarch32/CMakeLists.txt)
+
 ```cmake
+# micro-os-plus-iii-aarch32/CMakeLists.txt
 # micro-os-plus-iii-aarch32/CMakeLists.txt
 add_subdirectory ("${UOS_SMP_DIR}"     micro-os-plus-iii-smp)   # micro-os-plus::iii
 add_subdirectory ("${UOS_DEVICES_DIR}" micro-os-plus-iii-devices)
@@ -722,6 +782,8 @@ duplicate-alias trap.
 Keep the old tree for diffing against upstream, clone the SMP family beside it,
 and copy the harness into the AArch32 project:
 
+*Commands*
+
 ```sh
 cd ~/Work/micro-os-plus-iii
 
@@ -736,6 +798,8 @@ cp -a micro-os-plus-iii.git/tests micro-os-plus-iii-aarch32/tests
 ```
 
 Resulting layout:
+
+*Layout*
 
 ```
 ~/Work/micro-os-plus-iii/
@@ -759,7 +823,10 @@ and only the harness runs. Keep the names distinct (`test` vs `tests`) anyway.
 `tests/cmake/tests-main.cmake` contains exactly one line that binds the harness
 to "the library under test":
 
+*File:* [`micro-os-plus-iii-aarch32/tests/cmake/tests-main.cmake`](micro-os-plus-iii-aarch32/tests/cmake/tests-main.cmake)
+
 ```cmake
+# micro-os-plus-iii-aarch32/tests/cmake/tests-main.cmake
 add_subdirectory (".." "top-bin")
 ```
 
@@ -767,6 +834,8 @@ With `tests/` inside the AArch32 repository, `..` **is** the AArch32 project, so
 that single line now adds the port, which in turn adds the SMP kernel and the
 devices package. No edit is needed, and there is still exactly one
 `micro-os-plus::iii`.
+
+*Layout*
 
 ```
 tests/CMakeLists.txt
@@ -781,6 +850,8 @@ tests/CMakeLists.txt
 If the SMP and devices trees are **not** siblings of the AArch32 repo, point at
 them explicitly at configure time:
 
+*Commands*
+
 ```sh
 cmake ... -DUOS_SMP_DIR=/abs/path/micro-os-plus-iii-smp \
           -DUOS_DEVICES_DIR=/abs/path/micro-os-plus-iii-devices
@@ -794,6 +865,8 @@ port and does not compile alone. If you really want that layout, insert a thin
 **wrapper** project and put the harness under it, leaving the SMP repo
 merge-clean:
 
+*Layout*
+
 ```
 micro-os-plus-iii-aarch32-harness/
 ├── CMakeLists.txt          # adds the port (which adds SMP + devices)
@@ -801,7 +874,10 @@ micro-os-plus-iii-aarch32-harness/
 └── tests/                  # the harness
 ```
 
+*File:* [`micro-os-plus-iii-aarch32-harness/CMakeLists.txt`](micro-os-plus-iii-aarch32-harness/CMakeLists.txt)
+
 ```cmake
+# micro-os-plus-iii-aarch32-harness/CMakeLists.txt
 # micro-os-plus-iii-aarch32-harness/CMakeLists.txt
 cmake_minimum_required (VERSION 3.20)
 get_filename_component (_sib "${CMAKE_CURRENT_SOURCE_DIR}/.." ABSOLUTE)
@@ -837,7 +913,10 @@ this chapter applies unchanged.
 Two standards change because the port is built as bare metal with the SMP
 kernel's expectations:
 
+*File:* [`micro-os-plus-iii-aarch32-harness/tests/CMakeLists.txt`](micro-os-plus-iii-aarch32-harness/tests/CMakeLists.txt)
+
 ```cmake
+# micro-os-plus-iii-aarch32-harness/tests/CMakeLists.txt
 # tests/CMakeLists.txt
 set (CMAKE_C_STANDARD 11)
 set (CMAKE_C_STANDARD_REQUIRED ON)
@@ -857,7 +936,10 @@ Create `tests/platforms/aarch32-rpi-zero-2w/`. The port is already added by
 `add_subdirectory("..")`, so `dependencies-folders.cmake` lists only the test
 sources and the portable xPacks — **not** the port, kernel or devices:
 
+*File:* [`micro-os-plus-iii-aarch32-harness/tests/platforms/aarch32-rpi-zero-2w/cmake/dependencies-folders.cmake`](micro-os-plus-iii-aarch32-harness/tests/platforms/aarch32-rpi-zero-2w/cmake/dependencies-folders.cmake)
+
 ```cmake
+# micro-os-plus-iii-aarch32-harness/tests/platforms/aarch32-rpi-zero-2w/cmake/dependencies-folders.cmake
 # tests/platforms/aarch32-rpi-zero-2w/cmake/dependencies-folders.cmake
 set (
   xpack_dependencies_folders
@@ -870,14 +952,20 @@ set (
 
 `definitions.cmake` just names the platform:
 
+*File:* [`micro-os-plus-iii-aarch32-harness/tests/platforms/aarch32-rpi-zero-2w/cmake/definitions.cmake`](micro-os-plus-iii-aarch32-harness/tests/platforms/aarch32-rpi-zero-2w/cmake/definitions.cmake)
+
 ```cmake
+# micro-os-plus-iii-aarch32-harness/tests/platforms/aarch32-rpi-zero-2w/cmake/definitions.cmake
 set (xpack_platform_compile_definition "MICRO_OS_PLUS_PLATFORM_AARCH32_RPI_ZERO_2W")
 ```
 
 `platform-library.cmake` links the port and adds what `uos_add_app()` would
 otherwise have added (bare-metal flags, the linker script, `OS_NCPU`):
 
+*File:* [`micro-os-plus-iii-aarch32-harness/tests/platforms/aarch32-rpi-zero-2w/cmake/platform-library.cmake`](micro-os-plus-iii-aarch32-harness/tests/platforms/aarch32-rpi-zero-2w/cmake/platform-library.cmake)
+
 ```cmake
+# micro-os-plus-iii-aarch32-harness/tests/platforms/aarch32-rpi-zero-2w/cmake/platform-library.cmake
 add_library (platform-aarch32-rpi-zero-2w-interface INTERFACE EXCLUDE_FROM_ALL)
 target_include_directories (platform-aarch32-rpi-zero-2w-interface INTERFACE "include")
 
@@ -918,7 +1006,10 @@ add_library (micro-os-plus::platform ALIAS platform-aarch32-rpi-zero-2w-interfac
 in §4.3, with one addition: because the harness does not use `uos_add_app()`,
 add an explicit raw-image step for the QEMU shim:
 
+*File:* [`micro-os-plus-iii-aarch32-harness/tests/platforms/aarch32-rpi-zero-2w/CMakeLists.txt`](micro-os-plus-iii-aarch32-harness/tests/platforms/aarch32-rpi-zero-2w/CMakeLists.txt)
+
 ```cmake
+# micro-os-plus-iii-aarch32-harness/tests/platforms/aarch32-rpi-zero-2w/CMakeLists.txt
 add_custom_command (
   TARGET ${name} POST_BUILD
   COMMAND ${CMAKE_OBJCOPY} -O binary "$<TARGET_FILE:${name}>" "$<TARGET_FILE:${name}>.bin"
@@ -929,7 +1020,10 @@ add_custom_command (
 and build `shim8.img` once (the port's own `test/CMakeLists.txt` is not active
 when the port is a subdirectory):
 
+*File:* [`micro-os-plus-iii-aarch32-harness/tests/platforms/aarch32-rpi-zero-2w/CMakeLists.txt`](micro-os-plus-iii-aarch32-harness/tests/platforms/aarch32-rpi-zero-2w/CMakeLists.txt)
+
 ```cmake
+# micro-os-plus-iii-aarch32-harness/tests/platforms/aarch32-rpi-zero-2w/CMakeLists.txt
 set (_a64 "${UOS_AARCH32_DIR}/test/boards/rpi-zero-2w/qemu-raspi3-shim")
 add_custom_command (
   OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/shim8.img"
@@ -969,6 +1063,8 @@ a FatFS backend from `micro-os-plus::devices`.
 
 ### 10.9 Build and run
 
+*Commands*
+
 ```sh
 cd ~/Work/micro-os-plus-iii/micro-os-plus-iii-aarch32
 npm --prefix tests install
@@ -984,6 +1080,8 @@ xpm run test    --config aarch32-rpi-zero-2w-cmake-gcc-debug -C tests
 Hardware stays with the port's own runner, which is far more reliable than a
 CTest wrapper (it knows `__smp_spin`, the CPSR resume mode and the
 one-test-per-power-cycle rule):
+
+*Commands*
 
 ```sh
 cd ~/Work/micro-os-plus-iii/micro-os-plus-iii-aarch32
@@ -1020,6 +1118,8 @@ test/hw.sh mutex-stress
 ---
 
 ## 11. Command cheat sheet
+
+*Commands*
 
 ```sh
 # --- Strategy B: build and run the port's own suite -------------------------

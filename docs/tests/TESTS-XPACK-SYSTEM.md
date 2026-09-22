@@ -62,6 +62,8 @@ tree and all with pinned tool versions.
 
 The system has five layers. Each layer only depends on the one below it.
 
+*Layout*
+
 ```
 ┌───────────────────────────────────────────────────────────────────────┐
 │ 5. CI / human entry points                                            │
@@ -90,6 +92,8 @@ The key idea: **layer 2 (the test sources) is invariant**; layers 3–5 select
 ---
 
 ## 4. Repository layout
+
+*Layout*
 
 ```
 micro-os-plus-iii.git/
@@ -126,6 +130,8 @@ micro-os-plus-iii.git/
 ```
 
 A platform folder has a consistent internal shape:
+
+*Layout*
 
 ```
 tests/platforms/<platform>/
@@ -168,7 +174,10 @@ named actions.
 The tests package pins the *orchestration* tools at the top level
 (`tests/package.json:27-45`):
 
+*File:* [`micro-os-plus-iii.git/tests/package.json`](micro-os-plus-iii.git/tests/package.json)
+
 ```jsonc
+// micro-os-plus-iii.git/tests/package.json
 "devDependencies": {
   "@xpack-dev-tools/cmake": "3.26.5-1.1",
   "@xpack-dev-tools/ninja-build": "1.11.1-3.1",
@@ -185,6 +194,8 @@ The *compiler / emulator / debugger* tools are pinned per configuration, so a
 
 After `xpm install` (and one `xpm install --config <name>` per configuration),
 the tree contains:
+
+*Layout*
 
 ```
 tests/xpacks/
@@ -222,6 +233,8 @@ changes immediately. The `git-clone-deps` action
 `tests/package.json` → `xpack.buildConfigurations` is the heart of the
 system. Each entry is a named configuration. The naming convention is:
 
+*Layout*
+
 ```
 <platform>-cmake-<toolchain>-<buildtype>
     native-cmake-gcc14-debug
@@ -251,7 +264,10 @@ fragments that configurations `inherit` from:
 
 Example (`tests/package.json:958-974`), abbreviated:
 
+*File:* [`micro-os-plus-iii.git/tests/package.json`](micro-os-plus-iii.git/tests/package.json)
+
 ```jsonc
+// micro-os-plus-iii.git/tests/package.json
 "qemu-cortex-m0-cmake-gcc-debug": {
   "inherit": [
     "cortexm-actions", "cmake-actions", "cortexm-dependencies",
@@ -326,7 +342,10 @@ configurations:
 
 Example (`tests/package.json:377-384`):
 
+*File:* [`micro-os-plus-iii.git/tests/package.json`](micro-os-plus-iii.git/tests/package.json)
+
 ```jsonc
+// micro-os-plus-iii.git/tests/package.json
 "test-qemu-cortex-m7f-cmake": [
   "xpm run prepare --config qemu-cortex-m7f-cmake-gcc-debug",
   "xpm run build   --config qemu-cortex-m7f-cmake-gcc-debug",
@@ -359,7 +378,10 @@ configuration, repeated for debug and release.
 `tests/cmake/tests-main.cmake` is the orchestrator (marked *auto-generated*
 from build-helper templates). In order it:
 
+*File:* [`micro-os-plus-iii.git/tests/cmake/tests-main.cmake`](micro-os-plus-iii.git/tests/cmake/tests-main.cmake)
+
 ```cmake
+# micro-os-plus-iii.git/tests/cmake/tests-main.cmake
 include("cmake/common-options.cmake")                    # micro-os-plus::common-options
 include("platforms/${PLATFORM_NAME}/cmake/definitions.cmake")
 include("platforms/${PLATFORM_NAME}/cmake/dependencies-folders.cmake")
@@ -393,7 +415,10 @@ Each platform provides three CMake fragments:
 
 **`definitions.cmake`** — names used by the device package and toolchain:
 
+*File:* [`micro-os-plus-iii.git/tests/platforms/<platform>/cmake/definitions.cmake`](micro-os-plus-iii.git/tests/platforms/<platform>/cmake/definitions.cmake)
+
 ```cmake
+# micro-os-plus-iii.git/tests/platforms/<platform>/cmake/definitions.cmake
 set(xpack_device_compile_definition  "MICRO_OS_PLUS_DEVICE_QEMU_CORTEX_M7")
 set(xpack_platform_compile_definition "MICRO_OS_PLUS_PLATFORM_QEMU_CORTEX_M7F")
 set(xpack_device_linker_script_file_name "mem-mps2-an500.ld")
@@ -405,7 +430,10 @@ set(xpack_device_linker_script_file_name "mem-mps2-an500.ld")
 `add_subdirectory()`. It always includes the test sources, the tested library
 dependency, the CMSIS package, the portable xPacks, and the device package:
 
+*File:* [`micro-os-plus-iii.git/tests/platforms/<platform>/cmake/dependencies-folders.cmake`](micro-os-plus-iii.git/tests/platforms/<platform>/cmake/dependencies-folders.cmake)
+
 ```cmake
+# micro-os-plus-iii.git/tests/platforms/<platform>/cmake/dependencies-folders.cmake
 set(xpack_dependencies_folders
   "${CMAKE_SOURCE_DIR}/sources/rtos-apis"
   "${CMAKE_SOURCE_DIR}/sources/mutex-stress"
@@ -464,6 +492,8 @@ executable links them) and expose their `include/` folder. Example:
 The platform `CMakeLists.txt` is where the two halves meet. It defines an
 `add_test_executable()` helper and, for each enabled test, an executable that
 links:
+
+*Libraries linked*
 
 ```
 micro-os-plus::common-options   # flags/warnings
@@ -608,11 +638,15 @@ Other reproducibility features:
 `.github/workflows/ci.yml` runs on every push (ignoring docs-only paths) on a
 matrix of:
 
+*CI matrix*
+
 ```
 ubuntu-24.04, ubuntu-24.04-arm, macos-15-intel, macos-15, windows-2025
 ```
 
 Steps:
+
+*CI workflow* (`micro-os-plus-iii.git/.github/workflows/`)
 
 ```yaml
 - npm install -g xpm@0.20.8
@@ -634,7 +668,10 @@ referenced in `tests/README.md`) is planned to run the full matrix.
 
 The suites are enabled by switches in `tests/cmake/global-definitions.cmake`:
 
+*File:* [`micro-os-plus-iii.git/tests/CMakeLists.txt`](micro-os-plus-iii.git/tests/CMakeLists.txt)
+
 ```cmake
+# micro-os-plus-iii.git/tests/CMakeLists.txt
 set(ENABLE_RTOS_APIS_TEST true)
 set(ENABLE_MUTEX_STRESS_TEST true)
 set(ENABLE_CMSIS_OS_VALIDATOR_TEST true)
@@ -663,6 +700,8 @@ on embedded targets). Trace output is routed to `stdout` either through POSIX
 ## 11. Running the tests
 
 Prerequisites: Node.js ≥ 20 and a recent `xpm`.
+
+*Commands*
 
 ```sh
 # 0. install the top-level JS deps
@@ -695,6 +734,8 @@ xpm run deep-clean -C tests
 
 The QEMU invocations run *forever* reliably, which is useful for stress
 testing:
+
+*CI script*
 
 ```sh
 set -e
@@ -732,6 +773,8 @@ on native they are the process arguments. Tests may use them to tune runtime
 
 ### 12.2 Directory layout of a test
 
+*Layout*
+
 ```
 tests/sources/<name>/
 ├── CMakeLists.txt                 # INTERFACE library + test::<name> alias
@@ -756,7 +799,10 @@ stack sizes, tick frequency, memory pools and trace switches independently.
 one (`tests/sources/mutex-stress/include/cmsis-plus/os-app-config.h` is a good
 starting point) and adjust:
 
+*File:* [`micro-os-plus-iii.git/tests/sources/<name>/include/cmsis-plus/os-app-config.h`](micro-os-plus-iii.git/tests/sources/<name>/include/cmsis-plus/os-app-config.h)
+
 ```c
+// micro-os-plus-iii.git/tests/sources/<name>/include/cmsis-plus/os-app-config.h
 #ifndef CMSIS_PLUS_RTOS_OS_APP_CONFIG_H_
 #define CMSIS_PLUS_RTOS_OS_APP_CONFIG_H_
 
@@ -775,7 +821,10 @@ starting point) and adjust:
 
 `tests/sources/counter/include/counter.h`:
 
+*File:* [`micro-os-plus-iii.git/tests/sources/<name>/include/counter.h`](micro-os-plus-iii.git/tests/sources/<name>/include/counter.h)
+
 ```c
+// micro-os-plus-iii.git/tests/sources/<name>/include/counter.h
 #ifndef COUNTER_H_
 #define COUNTER_H_
 
@@ -795,7 +844,10 @@ extern "C"
 
 `tests/sources/counter/src/main.cpp`:
 
+*File:* [`micro-os-plus-iii.git/tests/sources/<name>/src/counter.cpp`](micro-os-plus-iii.git/tests/sources/<name>/src/counter.cpp)
+
 ```cpp
+// micro-os-plus-iii.git/tests/sources/<name>/src/counter.cpp
 #include <cmsis-plus/rtos/os.h>
 #include <cmsis-plus/diag/trace.h>
 
@@ -814,7 +866,10 @@ os_main (int argc __attribute__ ((unused)),
 
 The test body uses the public RTOS API. A typical worker-thread pattern:
 
+*File:* [`micro-os-plus-iii.git/tests/sources/<name>/src/counter.cpp`](micro-os-plus-iii.git/tests/sources/<name>/src/counter.cpp)
+
 ```cpp
+// micro-os-plus-iii.git/tests/sources/<name>/src/counter.cpp
 using namespace os;
 using namespace os::rtos;
 
@@ -904,7 +959,10 @@ aggressive (GCC: `-Wall -Wextra` plus dozens of flags; clang: `-Weverything`).
 When a warning is genuinely unavoidable, disable it **locally** with a push/pop
 pair, as the existing tests do:
 
+*File:* [`micro-os-plus-iii.git/tests/sources/<name>/src/counter.cpp`](micro-os-plus-iii.git/tests/sources/<name>/src/counter.cpp)
+
 ```cpp
+// micro-os-plus-iii.git/tests/sources/<name>/src/counter.cpp
 #pragma GCC diagnostic push
 #if defined(__clang__)
 #pragma clang diagnostic ignored "-Wpadded"
@@ -931,7 +989,10 @@ Wiring a new suite into the harness touches four places. Using a test named
 Create `tests/sources/counter/` with the files from section 12, including a
 `CMakeLists.txt` modelled on `tests/sources/mutex-stress/CMakeLists.txt`:
 
+*File:* [`micro-os-plus-iii.git/tests/sources/counter/CMakeLists.txt`](micro-os-plus-iii.git/tests/sources/counter/CMakeLists.txt)
+
 ```cmake
+# micro-os-plus-iii.git/tests/sources/counter/CMakeLists.txt
 # tests/sources/counter/CMakeLists.txt
 cmake_minimum_required (VERSION 3.20)
 
@@ -964,7 +1025,10 @@ The target name **must** be `test-<name>-interface` and the alias
 
 Edit `tests/cmake/global-definitions.cmake`:
 
+*File:* [`micro-os-plus-iii.git/tests/CMakeLists.txt`](micro-os-plus-iii.git/tests/CMakeLists.txt)
+
 ```cmake
+# micro-os-plus-iii.git/tests/CMakeLists.txt
 set (ENABLE_COUNTER_TEST true)
 ```
 
@@ -978,7 +1042,10 @@ Add the source folder to `xpack_dependencies_folders` in **every** platform
 that should run the test, e.g.
 `tests/platforms/qemu-cortex-m7f/cmake/dependencies-folders.cmake`:
 
+*File:* [`micro-os-plus-iii.git/tests/platforms/<platform>/cmake/dependencies-folders.cmake`](micro-os-plus-iii.git/tests/platforms/<platform>/cmake/dependencies-folders.cmake)
+
 ```cmake
+# micro-os-plus-iii.git/tests/platforms/<platform>/cmake/dependencies-folders.cmake
 set (xpack_dependencies_folders
   "${CMAKE_SOURCE_DIR}/sources/rtos-apis"
   "${CMAKE_SOURCE_DIR}/sources/mutex-stress"
@@ -998,7 +1065,10 @@ In each platform's `CMakeLists.txt`, add a guarded block using the platform's
 
 **Native** (`tests/platforms/native/CMakeLists.txt`):
 
+*File:* [`micro-os-plus-iii.git/tests/platforms/<platform>/CMakeLists.txt`](micro-os-plus-iii.git/tests/platforms/<platform>/CMakeLists.txt)
+
 ```cmake
+# micro-os-plus-iii.git/tests/platforms/<platform>/CMakeLists.txt
 if (ENABLE_COUNTER_TEST)
   add_test_executable (counter-test)
 
@@ -1020,7 +1090,10 @@ endif ()
 already sets `OS_USE_TRACE_SEMIHOSTING_STDOUT` and the cross post-build steps,
 so only the link and the runner are added:
 
+*File:* [`micro-os-plus-iii.git/tests/platforms/<platform>/CMakeLists.txt`](micro-os-plus-iii.git/tests/platforms/<platform>/CMakeLists.txt)
+
 ```cmake
+# micro-os-plus-iii.git/tests/platforms/<platform>/CMakeLists.txt
 if (ENABLE_COUNTER_TEST)
   add_test_executable (counter-test)
 
@@ -1044,7 +1117,10 @@ endif ()
 
 **OpenOCD / physical board** (e.g. `tests/platforms/nucleo-f767zi/CMakeLists.txt`):
 
+*File:* [`micro-os-plus-iii.git/tests/platforms/<platform>/CMakeLists.txt`](micro-os-plus-iii.git/tests/platforms/<platform>/CMakeLists.txt)
+
 ```cmake
+# micro-os-plus-iii.git/tests/platforms/<platform>/CMakeLists.txt
 if (ENABLE_COUNTER_TEST)
   add_test_executable (counter-test)
 
@@ -1089,6 +1165,8 @@ enough for `xpm run test-native-cmake-gcc14`, `test-qemu-cortex-m7f-cmake`,
 
 ### 13.7 Step 6 — build and verify
 
+*Commands*
+
 ```sh
 # fast feedback on the host
 xpm run install-native-cmake-sys -C tests
@@ -1105,6 +1183,8 @@ xpm run test-all    -C tests
 
 To debug a single failure, configure with the toolchain and run `ctest`
 directly with a filter:
+
+*Commands*
 
 ```sh
 xpm run prepare --config qemu-cortex-m7f-cmake-gcc-debug -C tests
@@ -1224,7 +1304,10 @@ The rules are:
 
 This is why the repo can express an entire matrix with a handful of mixins:
 
+*File:* [`micro-os-plus-iii.git/tests/package.json`](micro-os-plus-iii.git/tests/package.json)
+
 ```jsonc
+// micro-os-plus-iii.git/tests/package.json
 // release inherits debug and only overrides the build type
 "qemu-cortex-m0-cmake-gcc-release": {
   "inherit": [ "qemu-cortex-m0-cmake-gcc-debug" ],
@@ -1258,6 +1341,8 @@ Practical consequences:
 
 Properties are evaluated **before** actions, and a property may reference
 another property. In this repo the chain is explicit:
+
+*Properties* (`package.json`)
 
 ```
 commandCMakePrepare          = "{{ commandCMakeReconfigure }} --log-level=VERBOSE"
@@ -1305,6 +1390,8 @@ strings**. The rules are:
 
 The lifecycle is a three-level chain:
 
+*Actions* (`package.json`)
+
 ```
 test-all
   └─ test-cortex-cmake
@@ -1321,6 +1408,8 @@ with `add_test()` is automatically part of every aggregate that reaches it.
 ### 15.4 `CMakeLists.txt` — include / configure chain
 
 CMake processing is strictly ordered. The configure-time chain is:
+
+*Layout*
 
 ```
 tests/CMakeLists.txt
@@ -1382,6 +1471,8 @@ Rules:
 
 CMake `INTERFACE` libraries propagate their requirements transitively. For a
 test executable the chain is:
+
+*Output*
 
 ```
 rtos-apis-test

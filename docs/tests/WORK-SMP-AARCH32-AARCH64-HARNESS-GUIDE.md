@@ -1505,7 +1505,120 @@ Same shape as AArch32 (see §16 for the full walk-through): clone
 
 ---
 
-## 21. Glossary
+## 21. Running the harness from the TMP7 working copy
+
+The guide above builds everything in `~/Work-smp`, where the ports are
+**clones** named `micro-os-plus-iii-aarch32.git` (with the `.git` suffix). TMP7
+is the other half of the picture: the **working copies** where the ports are
+actually edited, named *without* the suffix. This chapter is only what changes
+when you run the harness there.
+
+### 21.1 What TMP7 looks like
+
+`/home/dan/Downloads/luckfox_lyra/TMP7/` holds one working copy per repository:
+
+```
+TMP7/
+  micro-os-plus-iii-smp        the SMP kernel + the harness (tests/)
+  micro-os-plus-iii-aarch32    the AArch32 port
+  micro-os-plus-iii-aarch64    the AArch64 port
+  micro-os-plus-iii-devices    the devices package
+```
+
+Each is a normal clone whose `origin` is the matching **bare** under
+`/home/dan/Downloads/GIT/` (`micro-os-plus-iii-smp.git`, `…-aarch32.git`, …).
+That bare is the shared point: TMP7 pushes to it, and the Work-smp clones pull
+from it.
+
+### 21.2 Point the harness at the ports
+
+The harness finds the port by a fixed relative path, in
+`tests/cmake/tests-main.cmake`:
+
+```cmake
+set (UOS_AARCH32_DIR "${CMAKE_SOURCE_DIR}/../../micro-os-plus-iii-aarch32.git"
+     CACHE PATH "µOS++ III AArch32 port working copy")
+```
+
+`CMAKE_SOURCE_DIR` is `TMP7/micro-os-plus-iii-smp/tests`, so `../../` is
+`TMP7/` — and the harness asks for the **`.git`-suffixed** name that TMP7 does
+not use. Two ways to satisfy it:
+
+- **Symlinks** (simplest — one per port, once):
+
+  ```bash
+  cd /home/dan/Downloads/luckfox_lyra/TMP7
+  ln -s micro-os-plus-iii-aarch32 micro-os-plus-iii-aarch32.git
+  ln -s micro-os-plus-iii-aarch64 micro-os-plus-iii-aarch64.git
+  ```
+
+- **Override the path** — `UOS_AARCH32_DIR` is a `CACHE PATH`, so add
+  `-D UOS_AARCH32_DIR=/home/dan/Downloads/luckfox_lyra/TMP7/micro-os-plus-iii-aarch32`
+  (and the AArch64 twin) to the configure command.
+
+### 21.3 The xpm flow — install → prepare → build → test
+
+The order is the same as §14, and it matters for the same reason: the pinned
+toolchain lives **inside the build folder**.
+
+```bash
+# cwd: /home/dan/Downloads/luckfox_lyra/TMP7/micro-os-plus-iii-smp/tests
+
+# 1. the top-level tools (cmake, ninja, build-helper, validator, chan-fatfs)
+npm install
+xpm install
+
+# 2. the pinned cross tools for this configuration
+xpm run install --config aarch32-luckfox-lyra-cmake-gcc-debug
+
+# 3. configure — this is where -D CMAKE_TOOLCHAIN_FILE is applied
+xpm run prepare --config aarch32-luckfox-lyra-cmake-gcc-debug
+
+# 4. build
+xpm run build --config aarch32-luckfox-lyra-cmake-gcc-debug
+
+# 5. run (hardware: one test per power cycle)
+xpm run test-mutex-stress --config aarch32-luckfox-lyra-cmake-gcc-debug
+```
+
+`xpm run install --config X` installs X's tools into `build/X/xpacks/.bin` and
+is what puts the pinned `arm-none-eabi-gcc` on `PATH`; `prepare` is what passes
+`-D CMAKE_TOOLCHAIN_FILE=…`. Do both before `build`, and **do not delete
+`build/X/`** — it holds the toolchain. Skipping `install` is the usual cause of
+`found /usr/bin/cc` from the platform's version guard.
+
+The `test-*` actions run `prepare` + `build` themselves (so a rebuild picks up
+the right compiler), but a *fresh* configuration still needs its `install`
+once. To run one test from a clean tree in a single step, install first:
+
+```bash
+xpm run install --config aarch32-luckfox-lyra-cmake-gcc-release
+xpm run test-mutex-stress --config aarch32-luckfox-lyra-cmake-gcc-release
+```
+
+### 21.4 Keeping TMP7 and Work-smp in step
+
+TMP7 is where a port test is written; Work-smp is where the harness builds it
+(§15.1). They meet at the bare:
+
+```bash
+# in TMP7 — commit, then push to the bare
+git -C /home/dan/Downloads/luckfox_lyra/TMP7/micro-os-plus-iii-aarch32 \
+    commit -am "…" && \
+git -C /home/dan/Downloads/luckfox_lyra/TMP7/micro-os-plus-iii-aarch32 push
+
+# in Work-smp — pull the same commits from the bare
+git -C /home/dan/Work-smp/micro-os-plus-iii/micro-os-plus-iii-aarch32.git pull
+```
+
+Nothing is copied by hand: the harness reads `test/<board>/` straight from the
+Work-smp port clone, so a test is only visible to it once TMP7 has pushed and
+Work-smp has pulled. The same applies to the kernel and the docs (the harness
+`tests/` and `docs/tests/` live in `micro-os-plus-iii-smp`).
+
+---
+
+## 22. Glossary
 
 | Term | Meaning |
 |---|---|

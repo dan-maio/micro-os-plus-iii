@@ -605,6 +605,26 @@ Expected:
 100% tests passed, 0 tests failed out of 3
 ```
 
+### From TMP7 instead
+
+TMP7’s working copies have **no `.git` suffix**, so the harness’s fixed
+`../../micro-os-plus-iii-aarch32.git` does not resolve. Symlink the ports once,
+then the same lifecycle runs from `TMP7/micro-os-plus-iii-smp/tests`:
+
+```sh
+cd /home/dan/Downloads/luckfox_lyra/TMP7
+ln -s micro-os-plus-iii-aarch32 micro-os-plus-iii-aarch32.git
+ln -s micro-os-plus-iii-aarch64 micro-os-plus-iii-aarch64.git
+
+cd micro-os-plus-iii-smp/tests
+xpm run install --config aarch32-luckfox-lyra-cmake-gcc-debug
+xpm run test-mutex-stress --config aarch32-luckfox-lyra-cmake-gcc-debug
+```
+
+TMP7 is where a port test is written; Work-smp is where the harness builds it —
+they meet at the bare (`GIT/micro-os-plus-iii-smp.git`), so commit + push in
+TMP7, then `git pull` in the Work-smp clone. Full chapter: guide §21.
+
 ---
 
 ## 8. Quick troubleshooting

@@ -253,9 +253,9 @@ Tests that need `micro-os-plus::devices` (the `BOARD_TEST_NEED_DEVICES` list):
 >
 > ```json
 > "actions": {
->   "test-mutex-stress": "{{ properties.commandCMakeReconfigure }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R mutex-stress",
->   "test-smp-pipeline": "{{ properties.commandCMakeReconfigure }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R smp-pipeline",
->   "test-smp-pro-cons": "{{ properties.commandCMakeReconfigure }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R smp-pro-cons"
+>   "test-mutex-stress": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R mutex-stress",
+>   "test-smp-pipeline": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R smp-pipeline",
+>   "test-smp-pro-cons": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R smp-pro-cons"
 > }
 > ```
 >
@@ -357,10 +357,10 @@ CTest entry invokes the port's `hw.sh`.
   ```json
   "actions": {
     "test":                     "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE hw",
-    "test-mutex-stress":        "{{ properties.commandCMakeReconfigure }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R mutex-stress",
-    "test-smp_test4":           "{{ properties.commandCMakeReconfigure }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R smp_test4",
-    "test-smp-mat-sdcard-test": "{{ properties.commandCMakeReconfigure }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R smp-mat-sdcard-test",
-    "test-smp_test5":           "{{ properties.commandCMakeReconfigure }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R smp_test5"
+    "test-mutex-stress":        "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R mutex-stress",
+    "test-smp_test4":           "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R smp_test4",
+    "test-smp-mat-sdcard-test": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R smp-mat-sdcard-test",
+    "test-smp_test5":           "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R smp_test5"
   }
   ```
 
@@ -369,6 +369,11 @@ CTest entry invokes the port's `hw.sh`.
   > hardware tests), so a stray `test` cannot start a board run — use the named
   > `test-*` actions, one per power cycle. The QEMU platforms keep the inherited
   > `test` action unchanged.
+  >
+  > Each `test-*` action configures the build tree with
+  > `commandCMakePrepareWithToolchain` — the pinned `-D CMAKE_TOOLCHAIN_FILE` —
+  > before it builds, so a rebuild picks up the right compiler. A fresh
+  > configuration still needs `xpm run install` once.
 
 **B. Three hardware quirks.** All are read at run time (no rebuild):
 

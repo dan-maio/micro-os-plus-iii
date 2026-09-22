@@ -13,6 +13,9 @@ cmake-build*/
 output/
 target/
 
+# Node dependencies (the harness under tests/ has its own package.json).
+node_modules/
+
 *.o
 *.obj
 *.d

@@ -33,9 +33,9 @@ micro-os-plus-iii-cortexm/
 | `nucleof411` | STM32F411RE, Cortex-M4F | 1 | 1 |
 | `weactf411` | STM32F411CE, Cortex-M4F | 1 | 2 |
 | `weactf412` | STM32F412RE, Cortex-M4F | 1 | 2 |
-| `pico2` | RP2350, 2× Cortex-M33, 4 MB flash | **2** | 10 |
-| `pico2-rp2350b-psram` | RP2350B, 16 MB flash + 8 MB PSRAM | **2** | 12 |
-| `pico2-pizero` | RP2350B, 16 MB flash, Pi-Zero form factor | **2** | 8 |
+| `pico2` | RP2350, 2× Cortex-M33, 4 MB flash | **2** | 12 |
+| `pico2-rp2350b-psram` | RP2350B, 16 MB flash + 8 MB PSRAM | **2** | 14 |
+| `pico2-pizero` | RP2350B, 16 MB flash, Pi-Zero form factor | **2** | 10 |
 
 All six are **hardware-only**: none sets `UOS_BOARD_LINKER_QEMU`, so each
 builds one image per test and `test/qemu.sh` answers by naming `hw.sh`.
@@ -67,7 +67,7 @@ result from `pico2-pizero` with that in mind.
 Their test sets differ because the predecessor's did:
 
 - all three carry `smp-test1`…`smp-test5`, `smp-mat-test`, `sc-test-ko`,
-  `smp-test-ko`
+  `smp-test-ko`, and the two kernel-less probes `smp-test0` and `exc-test`
 - `pico2` adds the two **USB gadget** tests, because both link the 4 MB script
 - `pico2-rp2350b-psram` adds `smp-test-nested` and the three
   `smp-test-nested-clock` variants, which exist in the predecessor for the
@@ -217,6 +217,7 @@ therefore invisible to every board that does not use them:
 | `board_test_ncpu()` | how many CPUs **one** test runs on | `smp-test1`, `sc-test-ko` at `OS_NCPU=1` on a two-core board |
 | `board_test_linker()` | a linker script instead of the board's | the four PSRAM tests |
 | `board_test_options()` | compile options on the test's **own** sources | the four nested-interrupt tests |
+| `BOARD_TEST_NO_KERNEL` | that a test compiles **no kernel at all** | `smp-test0`, `exc-test` |
 
 The first replaced a mistake: `OS_USE_SMP_SCHEDULER` used to be a board-wide
 define, and the predecessor's `smp-test1` (the single-core RTOS bring-up) and
@@ -236,6 +237,30 @@ XIP flash, and their Makefiles compiled `main.cpp` — only `main.cpp` — with
 `.data` function is out of a Thumb `BL`'s reach, and GCC's location views
 cannot describe a function whose section moved. Without it the assembler stops
 with `Error: leb128 operand is an undefined symbol: .LVU59`.
+
+### Two tests that compile no kernel
+
+`smp-test0` and `exc-test` are the bare-metal probes that run *before* a
+scheduler exists — `smp-test0` starts the second core itself and checks the
+two can talk, `exc-test` asks whether exception **entry** works at all. Their
+Makefiles list nine files and seven files, and not one is the kernel. Their
+value is precisely that they run without one, so they are not to be rewritten
+as RTOS tests.
+
+Expressing that took a split in the port. `micro-os-plus::cortexm` is now the
+**board** half — flags, include path, start-up, silicon support, all of it
+true before any scheduler — plus the kernel and the ISA scheduler on top. The
+board half is exported on its own as `micro-os-plus::cortexm-bare`, a test
+named in `BOARD_TEST_NO_KERNEL` links that instead, and the shared
+`uos_add_app()` grew a `NO_KERNEL` option that skips the kernel and `OS_NCPU`
+— there is nothing there to configure.
+
+It is visible in the images: `smp-test0` and `exc-test` carry **zero**
+`os::rtos` symbols and no `_Exit`, at 2.6 KB and 2.3 KB of text, where
+`smp-test2` on the same board carries 145 and 21.7 KB.
+
+A port that has no such test simply leaves `UOS_PORT_BARE_LIB` unset, and the
+test loop refuses the request rather than quietly linking a kernel.
 
 ---
 
@@ -301,17 +326,9 @@ Verified in the linked image:
 ## 8. What is not done
 
 - **Nothing on this port has been run on hardware.** The five STM32
-  applications and the thirty RP2350 images link, and the ELFs show the right
+  applications and the thirty-six RP2350 images link, and the ELFs show the right
   CPU count, the right memory and the right class driver in each. That is all
   that is claimed.
-- **`smp-test0` and `exc-test`.** Both compile **no kernel at all** — they are
-  the bare-metal probes that run *before* any scheduler exists (`smp-test0` is
-  the dual-core bring-up, `exc-test` the first-exception probe).
-  `uos_add_app()` always links `micro-os-plus::iii`, so there is no way to
-  express that today, and adding one is a change to the helper every
-  architecture project shares. `smp-test0` is parked in
-  `test/pico2/.pending/`; `exc-test` is not carried. Neither is to be
-  rewritten as an RTOS test — their value is that they run without one.
 - **`sc-test-ko` is the pair's missing half, and it *is* carried.** Together
   with `smp-test-ko` it is the same ten kernel objects run single-core and
   cross-core, which makes it the closest thing this port has to a regression

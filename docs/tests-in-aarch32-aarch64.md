@@ -99,6 +99,13 @@ function (board_test_defines _app _out)
 endfunction ()
 ```
 
+`BOARD_TEST_NO_KERNEL` names the tests that compile **no kernel at all** —
+the bare-metal probes that run before a scheduler exists. They link the port's
+bare target (`UOS_PORT_BARE_LIB`) instead of its full one and are declared
+`NO_KERNEL`, so no kernel, no port scheduler and no `OS_NCPU` reach them. Only
+the Cortex-M port has such tests today; a port that declares no bare target
+rejects the request rather than quietly linking a kernel.
+
 `BOARD_TEST_SELF_CONTAINED` exists because a test carried over whole from the
 predecessor defines its own `smp_install_boot_threads()`. Linking the board's
 shared copy as well is a duplicate definition, and picking one of them would

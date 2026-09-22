@@ -77,7 +77,7 @@ TMP7/
 │       ├── boards/{pico2,pico2-rp2350b-psram,pico2-pizero}/
 │       │                         RP2350 4 MB · RP2350B +PSRAM · RP2350B
 │       │                         the last two include pico2's board.cmake
-│       └── <board>/              1 · 2 · 2 · 10 · 12 · 8 applications
+│       └── <board>/              1 · 2 · 2 · 12 · 14 · 10 applications
 └── micro-os-plus-iii-smp-old/    READ ONLY — the migration source
 
 Outside `src/` and `include/` — which are the ISA and nothing else — an
@@ -199,12 +199,13 @@ Emulating the Lyra is **not** open. It was considered and closed: see above.
 Step 4 (`cortexm`) is **under way**. *Gate:* no app source exists more than
 once; STM32 boards pass at `OS_NCPU=1`; pico2 passes at `OS_NCPU=2`. The
 repository exists and all six boards build — three STM32F4 (5 applications)
-and three RP2350 (30 images). **Nothing on this port has been run on
+and three RP2350 (36 images). **Nothing on this port has been run on
 hardware**, so the two `pass` clauses of the gate are not met and are not
 claimed. What the ELFs do show: the single-core tests carry no `launch_core1`
 and no per-core idle table while the SMP ones carry both, the PSRAM tests put
 `.bss` and the heap at `0x11000000` while their board-mates keep them in
-internal SRAM, and each USB image carries only its own class driver.
+internal SRAM, each USB image carries only its own class driver, and the two kernel-less
+probes carry zero `os::rtos` symbols where their board-mates carry 145.
 
 The spec framed this step as "merge pico2's SMP core with the STM32 boards".
 Measurement changed the shape, for the better:
@@ -227,6 +228,11 @@ CPU).
 
 ## Things a fresh session should not rediscover
 
+- **Two RP2350 tests compile no kernel**, and that is the point of them:
+  `smp-test0` (dual-core bring-up) and `exc-test` (first-exception probe) run
+  before a scheduler exists. `uos_add_app()` takes `NO_KERNEL`, the port
+  exports a board-only `micro-os-plus::cortexm-bare` beside the full target,
+  and `BOARD_TEST_NO_KERNEL` names them. Do not rewrite them as RTOS tests.
 - **On the RP2350 boards, SMP is a per-TEST fact, not a board fact.**
   `smp-test1` (single-core RTOS bring-up) and `sc-test-ko` (single-core
   kernel-object test) define `OS_USE_SMP_SCHEDULER` in no Makefile.

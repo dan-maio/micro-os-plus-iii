@@ -19,7 +19,7 @@
 include_guard (GLOBAL)
 
 function (uos_add_app _name)
-  set (_opts)
+  set (_opts NO_KERNEL)
   set (_one  LINKER_SCRIPT PORT NCPU OUTPUT_NAME)
   set (_many SOURCES INCLUDES DEFINES OPTIONS LIBRARIES)
   cmake_parse_arguments (A "${_opts}" "${_one}" "${_many}" ${ARGN})
@@ -30,15 +30,27 @@ function (uos_add_app _name)
 
   add_executable (${_name} ${A_SOURCES})
 
-  # The kernel is always linked; the port is whatever architecture repo is
-  # driving this build. Everything else -- drivers, silicon support -- comes
-  # through LIBRARIES, named by the caller.
+  # The kernel is linked unless the caller says NO_KERNEL; the port is whatever
+  # architecture repo is driving this build. Everything else -- drivers,
+  # silicon support -- comes through LIBRARIES, named by the caller.
   #
   # micro-os-plus::devices used to be linked here whenever the target existed,
   # which quietly compiled the SD/USB drivers into applications that never
   # asked for them. That is invisible on a board those drivers happen to
   # support and a build failure on one they do not, so the caller names them.
-  target_link_libraries (${_name} PRIVATE micro-os-plus::iii)
+  #
+  # NO_KERNEL exists for a small, real category: the bare-metal probes that run
+  # BEFORE any scheduler does. The RP2350 has two -- smp-test0, which proves
+  # the second core starts and that the two can talk, and exc-test, which
+  # asks whether exception ENTRY works at all. Their value is precisely that
+  # they run without a kernel, so they must not be rewritten as RTOS tests,
+  # and linking one under them would change what they prove. Such an
+  # application links its board'"'"'s startup and its own main(), nothing else:
+  # no kernel, no port scheduler, no OS_NCPU -- there is nothing there to
+  # configure.
+  if (NOT A_NO_KERNEL)
+    target_link_libraries (${_name} PRIVATE micro-os-plus::iii)
+  endif ()
   if (A_PORT)
     target_link_libraries (${_name} PRIVATE ${A_PORT})
   endif ()
@@ -80,8 +92,10 @@ function (uos_add_app _name)
   endif ()
 
   # OS_NCPU is how a board selects its CPU count from a shared port (D11:
-  # the STM32 boards build the SMP cortexm port at OS_NCPU=1).
-  if (A_NCPU)
+  # the STM32 boards build the SMP cortexm port at OS_NCPU=1). It configures
+  # the kernel, so an application without one does not get it -- smp-test0
+  # starts the second core itself, with its own code.
+  if (A_NCPU AND NOT A_NO_KERNEL)
     target_compile_definitions (${_name} PRIVATE OS_NCPU=${A_NCPU})
     if (A_NCPU GREATER 1)
       target_compile_definitions (${_name} PRIVATE OS_USE_SMP_SCHEDULER=1)

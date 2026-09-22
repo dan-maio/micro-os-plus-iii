@@ -351,6 +351,14 @@ CTest entry invokes the port's `hw.sh`.
   cleared suffix. `SECONDS` is the run budget; the CTest `TIMEOUT` is that plus
   a margin, so CTest never kills a run the runner would still allow.
 
+- **The tests come from the port clone, not from `tests/`.** `_port_test_dir`
+  is `${UOS_AARCH32_DIR}/test/<board>`, and `UOS_AARCH32_DIR` is
+  `../../micro-os-plus-iii-aarch32.git` — the Work-smp **port clone**, whose
+  origin is the TMP7 working copy. Write and commit the test in TMP7; it
+  reaches Work-smp with a `git pull` in the clone. Nothing is copied into the
+  harness. The harness does **not** glob the port's tests — `add_hw_test(...)`
+  lists the ones to build, so a new test needs a line here too.
+
 - `package.json` — one **named action per test**, so the xPack VS Code plugin
   (which lists actions, not CTest tests) shows each test by name:
 

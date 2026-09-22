@@ -947,6 +947,16 @@ silicon through OpenOCD.
   suffix. `SECONDS` is the run budget the runner gets; the CTest `TIMEOUT` is
   that plus a margin, so CTest never kills a run the runner would still allow.
 
+- **The tests come from the port clone, not from `tests/`.** `_port_test_dir`
+  is `${UOS_AARCH32_DIR}/test/luckfox-lyra`, and `UOS_AARCH32_DIR` is
+  `../../micro-os-plus-iii-aarch32.git` — the Work-smp **port clone**, whose
+  origin is the TMP7 working copy (`tests/cmake/tests-main.cmake`). So a test
+  is written and committed in TMP7 and reaches Work-smp with a `git pull` in
+  the clone; nothing is copied into the harness tree. The harness also does
+  **not** glob the port's tests: `add_hw_test(...)` enumerates the ones to
+  build, so a new test needs its line here (and, for the port's own build, a
+  registration in `test/luckfox-lyra/tests.cmake`).
+
 - `package.json` gets one **named action per test** (the xPack VS Code plugin
   lists actions, not CTest tests, so this is what gives each test its own name):
 

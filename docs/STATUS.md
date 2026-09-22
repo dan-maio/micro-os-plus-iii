@@ -139,9 +139,17 @@ neither the kernel nor the devices repo knows an architecture project exists.
    test name and no board name appears in either port's build files.
    24 targets per Pi board. The Lyra is 19: it is hardware-only, so it builds
    one image per test rather than two.
-6. **QEMU suites green.** `11 passed, 1 skipped, 0 failed` on both, with
-   gcc 15 and one suite at a time. `usb_test` skips by design — QEMU emulates
-   no USB device mode — as the predecessor suite also recorded.
+6. **QEMU suites green — on three of the four board/port pairs.** Both ports'
+   `rpi-zero-2w` and `aarch64`'s `rpi3b` give `11 passed, 1 skipped, 0 failed`,
+   with gcc 15 and one suite at a time. `usb_test` skips by design — QEMU
+   emulates no USB device mode — as the predecessor suite also recorded.
+   **`aarch32` + `rpi3b` is `10 / 1 / 1`**: `smp-mat-sdcard-test` TIMEOUTs
+   after 2000 s, hanging in the thread pool after task 14 of 20 and printing
+   nothing further. It is not a regression — the image predates the only change
+   made to that repo — and `aarch64` + `rpi3b` runs the same test green, so it
+   is specific to that arch/board pair. That suite had simply never been run
+   before; it was run for the first time as the regression for the
+   dangling-name fix. Open work.
 7. **Documentation.** `docs/smp-construction.md` (the port contract, the
    division of labour, and the defines per folder) and
    `docs/building-aarch32-aarch64.md`, both with PDFs, rendered by a single
@@ -337,6 +345,8 @@ pass at `OS_NCPU>1` **(met, 9/9 at `OS_NCPU=4`)**; no use of `sigprocmask` or
 `setitimer` remains **(met — `pthread_sigmask` and per-CPU `timer_create`)**.
 Both ARM QEMU suites were re-run after the kernel mutex fix and after the
 shared test sources lost their last ARM assembly: 11/1/0 on each, unchanged.
+All four board/port pairs were run again after the dangling-name fix; see
+item 6 above for the one that is not green.
 
 That the port really is SMP is **measured, not claimed**: four CPU-bound
 threads with no affinity set report 40 runs each on cores 0, 1, 2 and 3, and
@@ -374,9 +384,12 @@ Three things a fresh session should not have to rediscover:
   `micro-os-plus-iii-smp-old` (`rpi/…/64b/smp-pro-cons-test/main.cpp:524`,
   `:540`) and therefore in all **six** shipped copies of the test — `aarch32` ×
   {rpi3b, rpi-zero-2w, luckfox-lyra}, `aarch64` × {rpi3b, rpi-zero-2w}, and
-  `posix-arch/native`. **Only the `native` copy is fixed.** Fixing the other
-  five means re-running two QEMU suites and three hardware boards, which is a
-  decision, not a patch. It is open work.
+  `posix-arch/native`. **All six are now fixed**, and the five ARM copies are
+  still byte-identical to each other. Four emulated boards rebuilt and re-run,
+  `smp-pro-cons-test` green on all four; the Lyra copy builds and its image
+  carries the fix, but it is hardware and was not run. A sweep found no second
+  instance — `pool_thread_names`, `solver_thread_names` and
+  `test-smp-boot.cpp`'s `idle_name[]` were already static.
 - **The 29 UBSan reports are the kernel's intrusive-list sentinel idiom**, not
   a defect: `clock_timestamps_list::link()` downcasts the bare `head_` links to
   `timeout_thread_node*` to use as a loop terminator and only ever asks it for

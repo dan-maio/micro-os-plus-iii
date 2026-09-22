@@ -2513,9 +2513,17 @@ snprintf (name, sizeof (s_prod_names[i]), "prod_%u", i);
 **This bug is upstream.** It is in `micro-os-plus-iii-smp-old`
 (`rpi/…/64b/smp-pro-cons-test/main.cpp:524` and `:540`) and therefore in all
 six shipped copies of the test: `aarch32` × {rpi3b, rpi-zero-2w,
-luckfox-lyra}, `aarch64` × {rpi3b, rpi-zero-2w}, and this one. Only this one is
-fixed, because fixing the other five means re-running their hardware
-regressions, and that is a decision rather than a patch.
+luckfox-lyra}, `aarch64` × {rpi3b, rpi-zero-2w}, and this one. **All six are
+fixed**, and the five ARM copies stayed byte-identical to each other through
+it. The four emulated boards were rebuilt and re-run; `smp-pro-cons-test`
+passes on every one. The Lyra copy builds and its image carries the fix
+(`nm -C … | grep s_prod_names`), but it is a hardware board and has not been
+run.
+
+A sweep for the same shape elsewhere found none: `pool_thread_names`,
+`solver_thread_names` and `test-smp-boot.cpp`'s `idle_name[]` are all already
+static, and the last of them even carries the comment explaining why. This test
+was the only one that got it wrong.
 
 That is the whole argument for this port in one finding: the same test, the
 same source, on the same kernel — but on a host with a shadow map.

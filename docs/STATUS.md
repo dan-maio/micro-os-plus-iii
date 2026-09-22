@@ -1,7 +1,7 @@
 # Migration status
 
 **Updated:** 2026-09-21 · **Phase:** step 4 — **under way**. Four
-architecture projects exist; nine board configurations build.
+architecture projects exist; eleven board configurations build.
 
 This file is the cold-start entry point. Read it, then
 `docs/specs/2026-09-20-micro-os-plus-iii-smp-unification-design.md` for the
@@ -31,12 +31,13 @@ modelled. Its `board.cmake` sets no `UOS_BOARD_LINKER_QEMU`, so it builds one
 image per test rather than two, and `test/qemu.sh` says so if asked. This is
 not a gap to close later; do not reopen it.
 
-**Step 4 is under way.** `micro-os-plus-iii-cortexm` exists, with four boards:
-three STM32F4 at `OS_NCPU=1` and the Raspberry Pi Pico 2 (RP2350, 2× Cortex-M33)
-at `OS_NCPU=2`. The STM32 boards are the first `OS_NCPU=1` boards in the
+**Step 4 is under way.** `micro-os-plus-iii-cortexm` exists, with six boards:
+three STM32F4 at `OS_NCPU=1` and three RP2350 boards at `OS_NCPU=2` — the
+Raspberry Pi Pico 2, the WeAct RP2350B with 8 MB of PSRAM, and the Pi-Zero
+RP2350B. The STM32 boards are the first `OS_NCPU=1` boards in the
 workspace, so they are also the first to build the kernel's **non**-SMP branch
 — every board before them had more than one CPU. Nothing on this port has run
-on hardware yet. The port, its four boards and where its SMP lives are written
+on hardware yet. The port, its six boards and where its SMP lives are written
 up in [`cortexm-port.md`](cortexm-port.md).
 
 ```
@@ -71,9 +72,12 @@ TMP7/
 │   ├── src/rtos/os-core-rp2350.cpp
 │   │   include-rp2350/           the same core plus an SMP branch (pico2)
 │   └── test/                     same shape
-│       ├── boards/{nucleof411,weactf411,weactf412,pico2}/
-│       │                         STM32F411RE · F411CE · F412RE · RP2350
-│       └── nucleof411/ weactf411/ weactf412/ pico2/   1 · 2 · 2 · 6 apps
+│       ├── boards/{nucleof411,weactf411,weactf412}/
+│       │                         STM32F411RE · F411CE · F412RE
+│       ├── boards/{pico2,pico2-rp2350b-psram,pico2-pizero}/
+│       │                         RP2350 4 MB · RP2350B +PSRAM · RP2350B
+│       │                         the last two include pico2's board.cmake
+│       └── <board>/              1 · 2 · 2 · 10 · 12 · 8 applications
 └── micro-os-plus-iii-smp-old/    READ ONLY — the migration source
 
 Outside `src/` and `include/` — which are the ISA and nothing else — an
@@ -194,9 +198,13 @@ Emulating the Lyra is **not** open. It was considered and closed: see above.
 
 Step 4 (`cortexm`) is **under way**. *Gate:* no app source exists more than
 once; STM32 boards pass at `OS_NCPU=1`; pico2 passes at `OS_NCPU=2`. The
-repository exists and all four boards build — three STM32F4 (5 applications)
-and pico2 (6). **Nothing on this port has been run on hardware**, so the two
-`pass` clauses of the gate are not met and are not claimed.
+repository exists and all six boards build — three STM32F4 (5 applications)
+and three RP2350 (30 images). **Nothing on this port has been run on
+hardware**, so the two `pass` clauses of the gate are not met and are not
+claimed. What the ELFs do show: the single-core tests carry no `launch_core1`
+and no per-core idle table while the SMP ones carry both, the PSRAM tests put
+`.bss` and the heap at `0x11000000` while their board-mates keep them in
+internal SRAM, and each USB image carries only its own class driver.
 
 The spec framed this step as "merge pico2's SMP core with the STM32 boards".
 Measurement changed the shape, for the better:
@@ -219,6 +227,29 @@ CPU).
 
 ## Things a fresh session should not rediscover
 
+- **On the RP2350 boards, SMP is a per-TEST fact, not a board fact.**
+  `smp-test1` (single-core RTOS bring-up) and `sc-test-ko` (single-core
+  kernel-object test) define `OS_USE_SMP_SCHEDULER` in no Makefile.
+  `uos_add_app()` derives that define from `NCPU`, and `board_test_ncpu()`
+  names the two tests. `sc-test-ko` is the only test on that silicon
+  exercising the kernel's **non-SMP** branch.
+- **The nested-interrupt tests need `-g0 -mlong-calls` on `main.cpp` alone.**
+  They place handlers in `.data` to run from RAM instead of XIP flash. Without
+  those two options the assembler stops with `Error: leb128 operand is an
+  undefined symbol`. A call from flash to a `.data` function is also out of a
+  Thumb `BL`'s reach.
+- **`pico2-pizero` builds a different port branch.** It forces
+  `__ARM_ARCH_8M_MAIN__` where the other two RP2350 boards force
+  `__ARM_ARCH_7EM__`. The M33 is ARMv8-M Mainline and the predecessor's
+  Makefiles for that board said so; the two branches have never been compared
+  on the desk.
+- **TinyUSB is carried once.** The predecessor kept `src/usb-cdc/` and
+  `src/usb-hid/` byte-identical apart from one class driver each. The per-test
+  include directory must come first — TinyUSB includes `tusb_config.h` by
+  plain name.
+- **`smp-test-mini-a-usb-cdc-acm_agy` is a byte-identical duplicate** of its
+  sibling, `main.cpp` and `Makefile` both. Like `pico2-sdk-min`, it is not a
+  separate thing.
 - The four patched kernel copies are **byte-identical** (`diff -rq`).
 - The kernel differs from pristine upstream in exactly **6 files**, all under
   `rtos/`. That is the entire SMP delta.

@@ -104,12 +104,36 @@ predecessor defines its own `smp_install_boot_threads()`. Linking the board's
 shared copy as well is a duplicate definition, and picking one of them would
 mean editing a test that already passed on hardware.
 
+Three more hooks answer "what if **one** test disagrees with its board", and
+each defaults to the board's own answer, so a board that does not use them
+never sees them:
+
+```cmake
+# A linker script instead of the board's -- the RP2350B PSRAM tests link
+# .data/.bss/heap into external memory at 0x11000000.
+function (board_test_linker _app _out) … endfunction ()
+
+# How many CPUs ONE test runs on. uos_add_app() derives
+# OS_USE_SMP_SCHEDULER from NCPU, so returning 1 on a two-core board is how a
+# single-core test is expressed.
+function (board_test_ncpu _app _out) … endfunction ()
+
+# Compile options on the test's OWN sources, not on the kernel it links --
+# the RP2350 nested-interrupt tests need "-g0 -mlong-calls" because their
+# handlers live in .data.
+function (board_test_options _app _out) … endfunction ()
+```
+
+`board_test_linker()` is also the per-test linker override that
+`smp-pro-cons-test` wanted here: it carries its own script in the predecessor,
+and until now the build had no way to say so.
+
 ### Which tests a board has is not configured — it is observed
 
 There is no `if (BOARD STREQUAL …)` and no capability list gating tests. A
 board with no SD card has no `sd_test` directory. A single-CPU board will have
-no `smp_*` directories. This is what makes the coming `cortexm` port tractable,
-with a dozen boards, half of them non-SMP.
+no `smp_*` directories. This is what makes the `cortexm` port tractable,
+with six boards, half of them non-SMP.
 
 ---
 
@@ -125,9 +149,12 @@ Every application is built once per variant, from the same sources:
 > **This file describes the AArch32 and AArch64 ports.** The Cortex-M port
 > carries the same `test/CMakeLists.txt`, the same dispatchers and the same
 > hooks — `board_test_defines()`, `board_test_sources()`,
-> `board_test_includes()`, `BOARD_TEST_SELF_CONTAINED` — so everything here
-> about layout and per-test composition applies to it too. What it does not
-> have is a QEMU suite: all four of its boards are hardware-only. See
+> `board_test_includes()`, `board_test_linker()`, `board_test_ncpu()`,
+> `board_test_options()`, `BOARD_TEST_SELF_CONTAINED` — so everything here
+> about layout and per-test composition applies to it too. The last three
+> hooks arrived *from* that port, where one board's tests disagree with their
+> board about CPU count, memory map and compile options. What it does not have
+> is a QEMU suite: all six of its boards are hardware-only. See
 > [`cortexm-port.md`](cortexm-port.md).
 
 **How many variants is the board's decision, not this file's.** A board that

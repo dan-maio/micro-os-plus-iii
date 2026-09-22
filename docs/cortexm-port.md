@@ -1,12 +1,13 @@
 # The Cortex-M port
 
-*How `micro-os-plus-iii-cortexm` is built, what its four boards are, and where
+*How `micro-os-plus-iii-cortexm` is built, what its six boards are, and where
 its SMP lives.*
 
 This is the third architecture project, beside `-aarch32` and `-aarch64`. It
 is built the same way and from the same kernel, and it is the first port here
-with boards on **both** sides of the SMP line: three at `OS_NCPU=1` and one at
-`OS_NCPU=2`.
+with boards on **both** sides of the SMP line: three at `OS_NCPU=1` and three
+at `OS_NCPU=2` — and, on the RP2350 boards, with the line drawn per *test*
+rather than per board.
 
 ---
 
@@ -23,19 +24,59 @@ micro-os-plus-iii-cortexm/
 └── test/
     ├── CMakeLists.txt  hw.sh  qemu.sh
     ├── boards/<id>/     board.cmake, include/, src/, linker.ld,
-    │                    openocd.cfg, hw.sh   (pico2 also: glue/)
+    │                    openocd.cfg, hw.sh   (pico2 also: glue/, usb/)
     └── <id>/            that board's test applications
 ```
 
-| board | part | CPUs | applications |
+| board | part | CPUs | tests |
 |---|---|---|---|
-| `nucleof411` | STM32F411RE, Cortex-M4F | 1 | `mos-test1` |
-| `weactf411` | STM32F411CE, Cortex-M4F | 1 | `mos-test1`, `spi-pipeline` |
-| `weactf412` | STM32F412RE, Cortex-M4F | 1 | `mos-test1`, `uart-test1` |
-| `pico2` | RP2350, 2× Cortex-M33 | **2** | `smp-test1`…`smp-test5`, `smp-mat-test` |
+| `nucleof411` | STM32F411RE, Cortex-M4F | 1 | 1 |
+| `weactf411` | STM32F411CE, Cortex-M4F | 1 | 2 |
+| `weactf412` | STM32F412RE, Cortex-M4F | 1 | 2 |
+| `pico2` | RP2350, 2× Cortex-M33, 4 MB flash | **2** | 10 |
+| `pico2-rp2350b-psram` | RP2350B, 16 MB flash + 8 MB PSRAM | **2** | 12 |
+| `pico2-pizero` | RP2350B, 16 MB flash, Pi-Zero form factor | **2** | 8 |
 
-All four are **hardware-only**: none sets `UOS_BOARD_LINKER_QEMU`, so each
+All six are **hardware-only**: none sets `UOS_BOARD_LINKER_QEMU`, so each
 builds one image per test and `test/qemu.sh` answers by naming `hw.sh`.
+
+### The three RP2350 boards
+
+They are one piece of silicon and one set of board code. `pico2` owns all of
+it — `src/`, `glue/`, `include/`, `usb/` and the three linker scripts — and
+the other two `include` its `board.cmake` and then state only what differs.
+That works because `CMAKE_CURRENT_LIST_DIR` is per **file**: every path that
+file sets still resolves into *its* directory, not the includer's, so nothing
+is copied and nothing is repeated.
+
+| | `pico2` | `pico2-rp2350b-psram` | `pico2-pizero` |
+|---|---|---|---|
+| flash | 4 MB | 16 MB | 16 MB |
+| UART | GPIO0/1 | GPIO12/13 | GPIO0/1 |
+| LED | GPIO25 | GPIO25 | GPIO5 |
+| arch define | `__ARM_ARCH_7EM__` | `__ARM_ARCH_7EM__` | **`__ARM_ARCH_8M_MAIN__`** |
+| PSRAM | — | window 1 @ `0x11000000`, CS GPIO0 | — |
+| probe | `0xc251:0xf001` @1000 | same | `0x0416:0x5951` @2000 |
+
+The arch define is the one that is not wiring. The M33 **is** ARMv8-M
+Mainline, and the predecessor's Pi-Zero Makefiles said so, while every other
+board on this silicon forces the v7E-M path. They select different branches of
+the port headers, and the two have never been compared on the desk. Read a
+result from `pico2-pizero` with that in mind.
+
+Their test sets differ because the predecessor's did:
+
+- all three carry `smp-test1`…`smp-test5`, `smp-mat-test`, `sc-test-ko`,
+  `smp-test-ko`
+- `pico2` adds the two **USB gadget** tests, because both link the 4 MB script
+- `pico2-rp2350b-psram` adds `smp-test-nested` and the three
+  `smp-test-nested-clock` variants, which exist in the predecessor for the
+  16 MB part alone
+
+Not carried, deliberately: everything under `*-loader-*` and `*xip*` (they
+need fixture images), the `mini-a` board (a USB-CDC console and a WS2812 in
+place of the UART and the LED), and `smp-test-mini-a-usb-cdc-acm_agy` —
+`main.cpp` and `Makefile` are byte-identical to the test that *is* carried.
 
 ---
 
@@ -126,26 +167,75 @@ them out as separate targets in the first place.
 
 ---
 
-## 5. `src/` and `glue/` on pico2
+## 5. `src/` and `glue/` on the RP2350 boards
 
 pico2 is the only board whose sources split in two, and the split is read off
-the predecessor's seven Makefiles, not invented:
+the predecessor's Makefiles, not invented:
 
 | | |
 |---|---|
-| `src/` | `boot.S`, `interrupt-vectors.S`, `init-fini-stubs.c`, `clocks.cpp`, `led.cpp`, `multicore.cpp` — every Makefile listed them |
-| `glue/` | `uart.cpp`, `rtos-glue.cpp`, `trace-uart.cpp`, `syscalls.c` — **not** every Makefile listed them |
+| `src/` | `boot.S`, `interrupt-vectors.S`, `init-fini-stubs.c`, `clocks.cpp`, `led.cpp` — every Makefile listed them |
+| `glue/` | `uart.cpp`, `rtos-glue.cpp`, `trace-uart.cpp`, `syscalls.c`, `multicore.cpp`, `psram.cpp`, `adc.cpp`, `ws2812.cpp` — the Makefiles disagree, one test at a time |
+| `usb/` | TinyUSB and its two class drivers, for the two gadget tests |
 
-Two tests replace one of the second group:
+Who takes what, and why:
 
 - `smp-test5` defines its own `uart::` in `main.cpp`, so it must not also get
   the board's `uart.cpp`.
+- `smp-test1` and `sc-test-ko` are **single-core**: no `multicore.cpp`.
+- the four PSRAM tests take `psram.cpp`; the three `nested-clock` tests take
+  `adc.cpp`; the CDC test takes `ws2812.cpp`.
 - `smp-test0` has no RTOS at all, so no glue, no trace, no syscalls.
 
 A glob over `src/` linked both copies and failed on duplicate definitions —
-`uart::init()`, `uart::put_char()`, `HardFault_Handler`. `test/pico2/tests.cmake`
-composes them per test through the `board_test_sources()` hook, which is the
-same hook the Lyra uses for the same reason.
+`uart::init()`, `uart::put_char()`, `HardFault_Handler`. Each board's
+`test/<board>/tests.cmake` composes them per test through the
+`board_test_sources()` hook, which is the same hook the Lyra uses for the same
+reason.
+
+### TinyUSB, carried once
+
+The predecessor kept two copies of TinyUSB, `src/usb-cdc/` and `src/usb-hid/`,
+byte-identical apart from the one class driver each keeps. Here it is one tree
+under `boards/pico2/usb/` carrying both classes, and only what genuinely
+differs stays split — `tusb_config.h`, `usb_descriptors.c` and the class glue,
+in `usb/cdc/` and `usb/hid/`.
+
+`tusb_config.h` is why the per-test include directory has to come **first**:
+TinyUSB includes it by plain name, and the two tests configure different
+device classes. The images show it worked — the CDC image carries eight
+`cdcd_*` symbols and no `hidd_*`, the HID image the reverse.
+
+### Three facts that are per test, not per board
+
+The RP2350 boards needed three hooks that no earlier board did. All three are
+in the shared test loop, default to "the board's own answer", and are
+therefore invisible to every board that does not use them:
+
+| hook | what it decides | who uses it |
+|---|---|---|
+| `board_test_ncpu()` | how many CPUs **one** test runs on | `smp-test1`, `sc-test-ko` at `OS_NCPU=1` on a two-core board |
+| `board_test_linker()` | a linker script instead of the board's | the four PSRAM tests |
+| `board_test_options()` | compile options on the test's **own** sources | the four nested-interrupt tests |
+
+The first replaced a mistake: `OS_USE_SMP_SCHEDULER` used to be a board-wide
+define, and the predecessor's `smp-test1` (the single-core RTOS bring-up) and
+`sc-test-ko` (the single-core kernel-object test) define it in no Makefile.
+`uos_add_app()` derives the define from `NCPU`, so the hook is the whole fix.
+`sc-test-ko` matters more than its name suggests: it is the only test on this
+silicon that exercises the kernel's **non-SMP** branch.
+
+The second is visible in the ELF. On `pico2-rp2350b-psram`, `smp-mat-test`
+has 1.27 MB of `.bss` and a 128 KB heap at `0x11000000` — external PSRAM —
+while `smp-test2`, on the same board, has everything at `0x20000000`.
+
+The third is a build failure waiting for anyone who skips it. The nested tests
+place their interrupt handlers in `.data` so the code runs from RAM instead of
+XIP flash, and their Makefiles compiled `main.cpp` — only `main.cpp` — with
+`-g0 -mlong-calls`. Both halves are load bearing: a call from flash to a
+`.data` function is out of a Thumb `BL`'s reach, and GCC's location views
+cannot describe a function whose section moved. Without it the assembler stops
+with `Error: leb128 operand is an undefined symbol: .LVU59`.
 
 ---
 
@@ -154,17 +244,19 @@ same hook the Lyra uses for the same reason.
 OpenOCD only. No GDB anywhere in this path, and nothing redirected.
 
 ```sh
-BOARD=nucleof411 ./test/hw.sh            # list what is built
-BOARD=nucleof411 ./test/hw.sh mos-test1
-BOARD=pico2      ./test/hw.sh smp-test2
+BOARD=nucleof411           ./test/hw.sh            # list what is built
+BOARD=nucleof411           ./test/hw.sh mos-test1
+BOARD=pico2                ./test/hw.sh smp-test2
+BOARD=pico2-rp2350b-psram  ./test/hw.sh smp-mat-test
+BOARD=pico2-pizero         ./test/hw.sh sc-test-ko
 ```
 
 The STM32 boards: program, `arm semihosting enable`, `reset run`. Semihosting
 must be enabled **before** the image runs — `os::trace::printf()` issues
 `BKPT 0xAB`, which faults if the debugger is not listening for it.
 
-The Pico 2 is different in two ways, both learned on the board and both
-carried in its `hw.sh`:
+The three RP2350 boards are different in two ways, both learned on the board
+and both carried in each `hw.sh`:
 
 - **`reset init`, not `reset`.** A bare reset does not re-run the RP2350
   bootrom/XIP setup, so the freshly programmed image never boots.
@@ -175,8 +267,9 @@ carried in its `hw.sh`:
   waiting for the bootrom readiness word. Resuming `cm1` first leaves it in
   the bootrom core-1 launch loop, where it answers the FIFO handshake.
 
-pico2 traces over its own UART, not semihosting, so OpenOCD exits once both
-cores are running and the console is the board's serial port.
+They trace over their own UART, not semihosting, so OpenOCD exits once both
+cores are running and the console is the board's serial port — on whichever
+pins that board wires it to.
 
 ---
 
@@ -208,18 +301,26 @@ Verified in the linked image:
 ## 8. What is not done
 
 - **Nothing on this port has been run on hardware.** The five STM32
-  applications and the six pico2 tests link. That is all that is claimed.
-- **`smp-test0`**, parked in `test/pico2/.pending/`. It compiles no kernel —
-  nine files, none of them µOS++ — because it is the bare-metal dual-core
-  bring-up test that runs *before* any scheduler exists. `uos_add_app()`
-  always links `micro-os-plus::iii`, so there is no way to express that today,
-  and adding one is a change to the helper every architecture project shares.
-  It is not to be rewritten as an RTOS test; its value is that it runs without
-  one.
+  applications and the thirty RP2350 images link, and the ELFs show the right
+  CPU count, the right memory and the right class driver in each. That is all
+  that is claimed.
+- **`smp-test0` and `exc-test`.** Both compile **no kernel at all** — they are
+  the bare-metal probes that run *before* any scheduler exists (`smp-test0` is
+  the dual-core bring-up, `exc-test` the first-exception probe).
+  `uos_add_app()` always links `micro-os-plus::iii`, so there is no way to
+  express that today, and adding one is a change to the helper every
+  architecture project shares. `smp-test0` is parked in
+  `test/pico2/.pending/`; `exc-test` is not carried. Neither is to be
+  rewritten as an RTOS test — their value is that they run without one.
+- **`sc-test-ko` is the pair's missing half, and it *is* carried.** Together
+  with `smp-test-ko` it is the same ten kernel objects run single-core and
+  cross-core, which makes it the closest thing this port has to a regression
+  suite once a board is on the desk.
 - **The other three pico2 trees.** `pico2-std` (Peterson's algorithm in
   software), `pico2-sdk` (the Pico SDK) and `pico2-sdk-min` (**byte-identical**
   port files to `pico2-sdk` — not a separate port). They differ from `pico2`
   in the kernel lock and nothing else, so each is a sibling board when wanted.
 - **Merging the two port cores** (§3).
-- **The rest of pico2's ~40 application directories** — XIP loaders, USB,
-  PSRAM. None of them is about SMP.
+- **The rest of pico2's 36 application directories** — the XIP loaders and
+  the `*xip*` set, which need fixture images, plus the `mini-a` board's own
+  pair. None of them is about SMP.

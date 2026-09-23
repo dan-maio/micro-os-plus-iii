@@ -9,8 +9,6 @@ full design and the measurements behind it.
 
 ---
 
-## Where things stand
-
 ## Where everything stands, measured
 
 Re-run from a clean tree at the head of every repository, one QEMU suite at a
@@ -109,7 +107,7 @@ TMP7/
 │   └── test/
 │       ├── run.sh                dispatcher; BOARD picks the directory
 │       ├── boards/native/        board.cmake, include/, src/, run.sh
-│       └── native/               10 applications (9 at NCPU=4, 1 at NCPU=1)
+│       └── native/               11 applications (9 at NCPU=4, 2 at NCPU=1)
 ├── micro-os-plus-iii-cortexm/    Cortex-M port — M4F and M33, 1 and 2 CPUs
 │   ├── src/ include/             upstream's single-core core (STM32 boards)
 │   ├── src/rtos/os-core-rp2350.cpp
@@ -204,9 +202,30 @@ green. Do not read the two tables as one.
 
 | gate | command | state |
 |---|---|---|
-| kernel compiles on a port's headers | `tools/verify-kernel-compiles.sh <port>/include` | 61/61 on every port |
+| kernel compiles on a port's headers | `tools/verify-kernel-compiles.sh ../micro-os-plus-iii-posix-arch/include` | 61/61 — **on `posix-arch` only**, see below |
 | no duplicate sources, across repos | `tools/verify-no-duplicate-sources.py` | **PASS** — see below |
 | no machine-specific absolute paths | `tools/verify-no-absolute-paths.sh` | PASS (105 files) |
+
+**The kernel-compiles gate runs on one port of the four, and that is a
+limitation of the gate, not a verdict on the other three.** It takes a single
+include directory, and only `posix-arch` keeps a complete port header set in
+one:
+
+| port | what happens | why |
+|---|---|---|
+| `posix-arch` | **61/61 PASS** | `include/` holds `os-decls.h`, `os-c-decls.h` and `os-inlines.h` together |
+| `aarch32`, `aarch64` | refuses to start — "does not look like a port" | their `os-decls.h` is the shared one in the kernel's `port/smp-common/`; the port repo has only the other two, and the script takes one directory, not two |
+| `cortexm` | 27/61 | the remaining sources need a board's vendor headers (`cmsis_device.h`) |
+
+Supplying both directories by hand gets the ARM ports further, and then they
+stop on `OS_NCPU` and on board headers — because at that depth the kernel no
+longer compiles against *a port*, it compiles against *a board*. That is the
+honest shape of it: this gate proved what it was built for in step 1, and
+`port/smp-common` moving the shared `os-decls.h` out of the ports is what took
+it out of reach of the ARM two. Those three ports are covered by the suites
+and by the build-coverage gate (spec Section 9), not by this script. Fixing
+the script to accept several include directories would restore it; that has
+not been done.
 
 The duplicate gate has **three** outcomes, not two, because this workspace
 duplicates some code on purpose and a flat pass/fail would have to lie about
@@ -419,21 +438,28 @@ Measurement changed the shape, for the better:
   port at all. **Only `pico2` is of interest**; the other variants are out of
   scope and are not open work.
 - **What is uncarried inside `pico2` is not a duplicate — it is a capability.**
-  Of that tree's 33 application directories, `cortexm` carries 16: the kernel
-  object tests, `smp-test0`…`smp-test5`, the nested-interrupt set and the two
-  USB images. The other 18 are one subject area, and `cortexm` has none of its
-  infrastructure (`find . -iname '*xip*' -o -iname '*loader*'` returns nothing
-  but the PSRAM board files):
+  Of that tree's **37** application directories, `cortexm` carries 16: the
+  kernel object tests, `smp-test0`…`smp-test5`, the nested-interrupt set and
+  the two USB images. Of the **21** left, 20 are one subject area, and
+  `cortexm` has none of its infrastructure (`find . -iname '*xip*' -o -iname
+  '*loader*'` returns nothing but the PSRAM board files):
 
   | group | dirs | source lines |
   |---|---|---|
-  | XIP: `smp-test-xip`, `-core1park`, `-fs`, plus `shared-xip` and `xip-glue` | 5 | ~7,400 |
-  | XIP loader: `smp-test-xip-loader-{apps,apps-mos++,dyn,dyn-no-list,static}` | 5 | ~11,500 |
-  | RAM loader: `smp-test-loader-{dynamic,over,reloc,static}` | 4 | ~1,500 |
-  | pizero PSRAM execution: `pizero-psram-exec{,-main,-main_1,-main_2}` | 4 | ~1,550 |
-  | `mem-diag`, `smp-test-nested_latency` | 2 | ~550 |
+  | XIP: `smp-test-xip`, `-core1park`, `-fs`, plus `shared-xip` and `xip-glue` | 5 | 7,454 |
+  | XIP loader: `smp-test-xip-loader-{apps,apps-mos++,dyn,dyn-no-list,static}` | 5 | 6,004 |
+  | RAM loader: `smp-test-loader-{dynamic,over,reloc,static}` | 4 | 1,527 |
+  | pizero PSRAM execution: `pizero-psram-exec{,-main,-main_1,-main_2}` | 4 | 1,551 |
+  | `mem-diag`, `smp-test-nested_latency` | 2 | 544 |
 
-  About 22,000 lines in total. Execute-in-place and a dynamic loader are a
+  **17,080 lines in total**, counting `.c`, `.cpp`, `.h`, `.hpp` and `.S` —
+  the convention four of the five rows above were already written in. Counting
+  every non-binary file as well (linker scripts, CMake, Makefiles, scripts,
+  notes) gives 22,955, which is where this page's earlier "about 22,000" came
+  from; the per-row figures were never on that footing. The twenty-first
+  directory is
+  `smp-test-mini-a-usb-cdc-acm_agy`, a variant of a USB test that *is* carried,
+  and it belongs to no group above. Execute-in-place and a dynamic loader are a
   different piece of work from carrying another test, and neither was in
   step 4's gate. Recorded so the gap is not mistaken for a finished migration.
 

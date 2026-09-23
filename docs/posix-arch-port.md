@@ -38,9 +38,10 @@ interleaving to appear will appear.
 18. [The defect this port found](#18-the-defect-this-port-found)
 19. [Tips, tricks and traps](#19-tips-tricks-and-traps)
 20. [Honest limits](#20-honest-limits)
-21. [Decisions, and what was rejected](#21-decisions-and-what-was-rejected)
-22. [Reference tables](#22-reference-tables)
-23. [Worked examples](#23-worked-examples)
+21. [Sanitizers](#21-sanitizers)
+22. [Decisions, and what was rejected](#22-decisions-and-what-was-rejected)
+23. [Reference tables](#23-reference-tables)
+24. [Worked examples](#24-worked-examples)
 
 ---
 

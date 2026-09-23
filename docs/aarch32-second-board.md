@@ -153,14 +153,14 @@ cmake -S . -B build-lyra -DBOARD=luckfox-lyra \
 
 | knob | zero2w / rpi3b | luckfox-lyra |
 |---|---|---|
-| `UOS_BOARD_DIR` | `rpi-zero-2w` | `luckfox-lyra` |
+| `BOARD` | `rpi-zero-2w` | `luckfox-lyra` |
 | CPU flags | `-mcpu=cortex-a53 -mfpu=neon-fp-armv8` | `-mcpu=cortex-a7 -mfpu=neon-vfpv4` |
 | SoC define | `SOC_BCM2837` | `SOC_RK3506` |
 | extra library | `micro-os-plus::soc-bcm2837` | — |
-| `NCPU` | 4 | 3 |
+| `UOS_BOARD_NCPU` | 4 | 3 |
 | `hwd` linker script | `linker.ld` | `linker.ld` |
 | `qemu` linker script | `linker.ld` | — none; hardware-only board (§6) |
-| test applications | all twelve | the seven SoC-neutral ones |
+| test applications | all twelve | eleven of the twelve, plus eight of its own |
 
 Two of those rows are new shapes, not just new values:
 
@@ -171,14 +171,21 @@ Two of those rows are new shapes, not just new values:
   board QEMU does not model is a different machine with a different console,
   a different interrupt controller and a different DRAM base.
 
-### Why seven applications and not twelve
+### Why eleven applications and not twelve
 
 `sd_test`, `smp-mat-sdcard-test`, `smp-num-test`, `smp-pipeline-test` and
-`usb_test` link `micro-os-plus::devices`, whose backends are written against
-the BCM2837's EMMC and DWC2. The RK3506 has neither at those addresses. Until
-those drivers grow a second backend the Lyra builds the subset that needs only
-CPUs, a timer and a console — which is also the only subset its predecessor
-project ever had.
+`usb_test` link `micro-os-plus::devices`, whose backends were written against
+the BCM2837's EMMC and DWC2. The RK3506 has neither at those addresses, so
+when this chapter was first written the Lyra built only the seven that need
+nothing but CPUs, a timer and a console — which was also the only subset its
+predecessor project ever had.
+
+**Four of those five have since come back**, and the count in the table above
+is the current one: eleven of the twelve shared applications, plus eight the
+Lyra owns — `smp_test5`, `smp_test6`, `smp_test7` and the five `smp_test_int*`,
+which drive the USB gadget, the C++ FatFs and the GIC-400 SGI paths no other
+board has. Nineteen images in all. Only `usb_test` is still missing, waiting
+on the RK3506 DWC2 device stack. What changed is below.
 
 The selection is not configured at all any more — it is observed. Every board
 owns its tests in `test/<board>/`, and the port builds the directories that
@@ -192,8 +199,8 @@ Since this chapter was first written, the Lyra **has** gained its SD card: the
 predecessor's RK3506 DesignWare MSHC driver is now
 `micro-os-plus-iii-devices/soc/rk3506/`, reached through
 `micro-os-plus::devices-rk3506`, and the board builds 11 of the 12 shared
-applications plus two of its own. Only `usb_test` is still missing, waiting on
-the RK3506 DWC2 device stack.
+applications plus eight of its own. Only `usb_test` is still missing, waiting
+on the RK3506 DWC2 device stack.
 
 > **`UOS_BOARD_CAPS` is about the port, not the board.** It lists what *this
 > port can drive on this board* — not the connectors the board carries. The

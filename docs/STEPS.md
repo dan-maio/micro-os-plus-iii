@@ -118,6 +118,60 @@ xpm run build   --config aarch32-rpi-zero-2w-cmake-gcc-debug
 xpm run test    --config aarch32-rpi-zero-2w-cmake-gcc-debug
 ```
 
+### Debug and release are separate build folders
+
+`-release` is not a mode of the debug folder. Every configuration is its own
+`build/<config>/` — there are 62 of them (31 debug + 31 release) — and a
+release config inherits the debug config's *properties* but **not** its build
+folder, so it needs its own `install`. Skip that and `prepare` fails as soon as
+the dependencies are added:
+
+```
+CMake Error at xpacks/@micro-os-plus/build-helper/cmake/micro-os-plus-build-helper.cmake:112 (message):
+  Missing …/build/native-cmake-clang17-release/xpacks/@xpack-3rd-party/libucontext/CMakeLists.txt
+```
+
+`native-dependencies` brings in `libucontext` (and posix-arch), so that folder
+has to exist before the configure; it is empty when `install` was never run.
+The clang configs also pin their own compiler — `native-cmake-clang17-release`
+wants `clang 17.0.6-3.1`, not whatever `clang` is on `PATH`.
+
+### All the release configurations
+
+The emulated/host set, release, four steps each:
+
+```sh
+cd "$HOME/TMP/micro-os-plus-iii-smp.git/tests"
+for C in \
+  native-cmake-gcc-release \
+  qemu-cortex-m0-cmake-gcc-release qemu-cortex-m3-cmake-gcc-release \
+  qemu-cortex-m4f-cmake-gcc-release qemu-cortex-m7f-cmake-gcc-release \
+  cortexm-pico2-cmake-gcc-release \
+  cortexm-pico2-rp2350b-psram-cmake-gcc-release \
+  aarch32-rpi-zero-2w-cmake-gcc-release aarch64-rpi-zero-2w-cmake-gcc-release ; do
+  xpm run install --config "$C" && xpm run prepare --config "$C" && \
+  xpm run build   --config "$C" && xpm run test    --config "$C"
+done
+```
+
+The hardware set, release, build only — their cases are all `hwd`:
+
+```sh
+for C in \
+  cortexm-pico2-pizero-cmake-gcc-release \
+  cortexm-nucleof411-cmake-gcc-release cortexm-weactf411-cmake-gcc-release \
+  cortexm-weactf412-cmake-gcc-release \
+  nucleo-f411re-cmake-gcc-release nucleo-f767zi-cmake-gcc-release \
+  nucleo-h743zi-cmake-gcc-release raspberrypi-pico-cmake-gcc-release ; do
+  xpm run install --config "$C" && xpm run prepare --config "$C" && \
+  xpm run build   --config "$C"
+done
+```
+
+The host toolchain variants are the same recipe with a different toolchain
+file: `native-cmake-{gcc,gcc11,gcc12,gcc13,gcc14,clang,clang13,clang14,clang15,clang16,clang17,clang18,clang19,sys}-release`.
+`aarch32-luckfox-lyra-cmake-gcc-release` builds its all-`hwd` set.
+
 ## Step 5 — put **all** the port's tests into the paradigm
 
 The port owns its tests (`micro-os-plus-iii-aarch32.git/test/rpi-zero-2w/<app>/`)
@@ -568,6 +622,13 @@ xpm run test    --config aarch32-rpi-zero-2w-cmake-gcc-debug   # emulated set
 # or a whole emulated family, four steps each
 for c in qemu-cortex-m0 qemu-cortex-m3 qemu-cortex-m4f qemu-cortex-m7f; do
   C="$c-cmake-gcc-debug"
+  xpm run install --config "$C" && xpm run prepare --config "$C" && \
+  xpm run build   --config "$C" && xpm run test    --config "$C"
+done
+
+# the same set on release -- a separate build folder, so its own install too
+for c in qemu-cortex-m0 qemu-cortex-m3 qemu-cortex-m4f qemu-cortex-m7f; do
+  C="$c-cmake-gcc-release"
   xpm run install --config "$C" && xpm run prepare --config "$C" && \
   xpm run build   --config "$C" && xpm run test    --config "$C"
 done

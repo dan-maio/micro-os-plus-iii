@@ -11,6 +11,28 @@ full design and the measurements behind it.
 
 ## Where things stand
 
+## Where everything stands, measured
+
+Re-run from a clean tree at the head of every repository, one QEMU suite at a
+time on an idle host:
+
+| what | result |
+|---|---|
+| `aarch32` / `rpi-zero-2w`, QEMU | 11 passed, 1 skipped, 0 failed |
+| `aarch32` / `rpi3b`, QEMU | 11 passed, 1 skipped, 0 failed |
+| `aarch64` / `rpi-zero-2w`, QEMU | 11 passed, 1 skipped, 0 failed |
+| `aarch64` / `rpi3b`, QEMU | 11 passed, 1 skipped, 0 failed |
+| `posix-arch` / `native`, host | 11 passed, 0 skipped, 0 failed |
+| `posix-arch` / `native`, under ASan | 11 passed, 0 skipped, 0 failed |
+| `posix-arch` / `native`, under UBSan (`NO_VPTR`) | 11 passed, 0 skipped, 0 failed |
+| every build directory — both Pi boards × 2 ports, the Lyra, 4× `cortexm`, the host | builds |
+
+`usb_test` is the skip, by design: QEMU emulates no USB device mode.
+
+**Nothing in this workspace is failing a test.** The one gate that reports
+FAIL is the duplicate-source lint, which is not a test and never was; see
+*The three verification gates* below before reading anything into it.
+
 **Steps 1 and 2 are complete.** Six repositories exist; both A-profile
 architecture projects build all 24 of their targets from a single copy of
 every test, and all twelve tests pass on a Raspberry Pi Zero 2 W on **both**
@@ -176,6 +198,12 @@ neither the kernel nor the devices repo knows an architecture project exists.
 
 ## The three verification gates
 
+**None of these is a test.** They are lints over the source tree, and they are
+recorded separately from the suites for that reason: the duplicate gate has
+reported FAIL throughout, while every test suite on every board has been green
+at the same time. A FAIL here means "the same file exists twice", never "a test
+failed". Do not read the two tables as one.
+
 | gate | command | state |
 |---|---|---|
 | kernel compiles on a port's headers | `tools/verify-kernel-compiles.sh <port>/include` | 61/61 on every port |
@@ -201,6 +229,38 @@ it:
   exemption.
 - **unexplained** — everything else, and the only thing that fails the gate.
   **22 pairs**, listed in the next section.
+
+### Why the 22 are still there
+
+A pass was attempted at removing them and was **reverted in full**, which is
+worth recording so it is not attempted again the same way.
+
+The three that are safe were easy: `hw_result.hpp` and `board-contract.cpp`
+(one copy each in the kernel's `test_smpl/`, both ARM ports linking it) and
+`syscalls.c` (one copy for the four `cortexm` boards). Those built.
+
+The rest are not safe, for two different reasons:
+
+- **Eleven pairs are Luckfox Lyra code, and the Lyra is hardware-tested.**
+  Six of them are byte-identical files, so sharing one copy looked free. It is
+  not: rebuilding after the move changed **all 19** Lyra images. Link order
+  moved, which is almost certainly harmless — but "almost certainly" is not
+  something to conclude about a board that can only be checked by putting it
+  on the desk. The standing rule is that a change must not impact a board
+  already tested, and this is exactly that case.
+- **Three pairs are not duplicates at all.** The RP2350
+  `smp-test-nested-clock{,_200,_250}` trio was recorded here as "differing
+  only in a clock constant". That was wrong. They differ in N and B, in
+  whether the solver keeps one working matrix or two, and in comments
+  recording a measured PSRAM aliasing failure at N=500 on 2 MB. Merging them
+  would delete findings, and `cortexm` has never run on hardware either.
+
+The remaining pairs — `os-decls.h` against `include-rp2350/os-decls.h`, and
+the TinyUSB `tusb_config.h` cdc/hid pair — are deliberate and documented as
+such; they are noise in this gate, not work.
+
+So: the gate stays FAIL, honestly, and the 22 stay listed. Clearing them needs
+hardware in the loop, not a refactor.
 
 The absolute-path gate skips exactly two things: upstream's `tests/`, and
 **itself**. The second is not tidiness — its header comment spells every denied
@@ -448,14 +508,19 @@ The annotation was reverted rather than shipped behind an option that could
 only crash; the probe was kept, and answers in one second whether a future
 toolchain has changed its mind.
 
-The `errno` half was also tried: save it in a local before the switch, restore
-after, the trick that makes `asan_save` work. It removed **none** of the 2,203
-reports (TSan compares `errno` at handler entry, and the save happens long
-after) and it reads and writes TLS across a switch point, which this port bans
-outright. Reverted. Fixing `errno` properly is still worth doing — it is
-per-thread state and here the thread is the µOS++ one — but on its own
-evidence, at handler entry and at the resume point, not as an accessory to
-this.
+The `errno` half **is fixed**, separately and on its own evidence. `errno`
+belongs to the thread, and here the thread is the µOS++ one, not the host
+thread it is borrowing; the tick and IPI handlers now read it into a local on
+entry and put it back after their epilogue returns — the local rides the
+interrupted thread's own stack, and the restore goes through a
+`[[gnu::noinline]]` helper so no TLS address is carried across the switch
+point (which §19 of the port doc bans). **2,203 reports to 0**, measured.
+
+The first attempt at it failed and the reason is the useful part: it put the
+save and restore in `switch_stacks()` instead of the handlers, and removed
+none of them, because TSan compares `errno` at handler **entry** against
+handler **exit** and `switch_stacks()` runs long after entry. The place was
+wrong, not the idea.
 
 ## Things a fresh session should not rediscover
 

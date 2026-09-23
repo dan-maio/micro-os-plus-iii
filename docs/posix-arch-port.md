@@ -2656,28 +2656,53 @@ cc -fsanitize=thread -g -O1 -o probe tools/tsan-fiber-probe.c -lpthread
 ./probe        # "done" -> try again;  CHECK failed -> still N:1
 ```
 
-#### The `errno` reports, and a fix that was tried and dropped
+#### The `errno` reports — fixed, after the first attempt failed
 
-The tick handler (§8) runs `swapcontext` *inside* a signal handler and by
-design never returns to where it was raised, so `errno` really is left as the
-handler found it. On silicon there is no `errno` to spoil.
+The tick and IPI handlers (§8) run `swapcontext` *inside* a signal handler and
+by design do not return to where they were raised: control leaves on one
+thread's stack and comes back — possibly on another CPU, possibly much later —
+when that thread is resumed. So `errno` was left as the handler, and every
+thread scheduled in between, happened to leave it. On silicon there is no
+`errno` to spoil; here there was.
 
-Saving it into a local before the switch and restoring it after — the same
-trick that makes `asan_save` work, riding the outgoing thread's own stack — was
-implemented and measured. It removed **none** of the reports: TSan compares
-`errno` at handler *entry* against handler *exit*, and the save happens well
-after entry, with `trace::printf` and `pthread_sigmask` in between. It also
-reads and writes `errno`, which is `*__errno_location()`, across a switch
-point — and native TLS across a switch point is the one thing this port bans
-outright (§19), because the compiler may cache the address and write it to the
-host thread the µOS++ thread *left*. A change that violates the port's own
-rule and demonstrably buys nothing is not a change. It was reverted.
+`errno` belongs to the **thread**, and on this port the thread is the µOS++
+one, not the host thread it is borrowing. Each handler now reads it into a
+local on entry and puts it back after its epilogue returns:
 
-Doing it properly means saving `errno` at signal-handler entry and restoring it
-at the point the thread resumes, in the handler's own frame. That is worth
-doing for correctness — `errno` is per-thread state and on this port the thread
-is the µOS++ one — but it is worth doing on its own evidence, not as an
-accessory to a TSan annotation that cannot work.
+```cpp
+void tick_handler (int, siginfo_t*, void*)
+{
+  const int saved = errno;      // this thread's, on this thread's stack
+  …
+  irq_epilogue (cpu);           // switches; returns when THIS thread resumes
+  restore_errno (saved);
+}
+```
+
+Two details carry the whole thing. `saved` is a **local**, so like `asan_save`
+it rides the interrupted thread's own stack and is still correct wherever that
+thread comes back. And `restore_errno()` is **`[[gnu::noinline]]`**, because
+`errno` is `*__errno_location()` — native TLS, read before a `swapcontext()`
+that may resume the thread on a different host thread with a different
+`errno`. A compiler that cached the address across the switch would write the
+value into the host thread the thread *left*, which is exactly what §19 bans.
+An out-of-line call is how the ban is honoured: the address is resolved inside
+that function, after the switch, on whichever CPU is running now.
+
+Measured on `smp_test1` under `-fsanitize=thread`:
+
+| | data race | signal handler spoils errno |
+|---|---|---|
+| before | 3,775 | **2,203** |
+| after | 6,104 | **0** |
+
+**The first attempt at this failed, and the reason is worth keeping.** It put
+the save and restore in `switch_stacks()` rather than in the handlers, and
+removed *none* of the reports: TSan compares `errno` at handler **entry**
+against handler **exit**, and `switch_stacks()` runs long after entry, with
+`trace::printf` and `pthread_sigmask` in between. The place was wrong, not the
+idea. (The remaining races are the migration false positives that only the
+fiber API could fix, and it cannot.)
 
 #### What this leaves
 
@@ -3453,11 +3478,10 @@ void my_isr_work () { uart::uart1 << "tick " << n << "\n"; }   // write(2)
   and re-answers the question in one second whenever the toolchain changes.
   §21.4 has the measurements. This is an upstream limitation, not work waiting
   to be done here.
-- **`errno` across the tick handler.** Worth fixing on its own merits —
-  `errno` is per-thread state and here the thread is the µOS++ one — but it
-  must be saved at handler entry and restored where the thread resumes, and it
-  must not read or write TLS across the switch point (§19). The obvious
-  version was tried, bought nothing, and broke that rule; see §21.4.
+- ~~**`errno` across the tick handler.**~~ **Done** — saved at handler entry,
+  restored where the thread resumes, through a `[[gnu::noinline]]` helper so
+  no TLS address is carried across the switch point. 2,203 TSan reports to 0.
+  See §21.4.
 - **chan-FatFs in `rtos-apis`.** The section is `#if 0`-ed because the kernel
   in this workspace carries no chan-fatfs at all, not because the host cannot
   do it.

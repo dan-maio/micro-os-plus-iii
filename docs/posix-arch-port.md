@@ -2525,6 +2525,14 @@ A sweep for the same shape elsewhere found none: `pool_thread_names`,
 static, and the last of them even carries the comment explaining why. This test
 was the only one that got it wrong.
 
+All four emulated board/port pairs run 11/1/0 after the fix. One caveat worth
+carrying: the first regression run launched those suites two at a time, and
+`smp-mat-sdcard-test` on `aarch32`/`rpi3b` stalled and was reported as a
+pre-existing defect. It was not one — it was contention, the failure mode
+`STATUS.md` already warns about under *QEMU suites must run one at a time*. Run
+alone it passes. One four-core QEMU suite at a time, on an otherwise idle
+host, or the result means nothing.
+
 That is the whole argument for this port in one finding: the same test, the
 same source, on the same kernel — but on a host with a shadow map.
 

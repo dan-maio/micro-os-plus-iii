@@ -139,17 +139,19 @@ neither the kernel nor the devices repo knows an architecture project exists.
    test name and no board name appears in either port's build files.
    24 targets per Pi board. The Lyra is 19: it is hardware-only, so it builds
    one image per test rather than two.
-6. **QEMU suites green — on three of the four board/port pairs.** Both ports'
-   `rpi-zero-2w` and `aarch64`'s `rpi3b` give `11 passed, 1 skipped, 0 failed`,
-   with gcc 15 and one suite at a time. `usb_test` skips by design — QEMU
-   emulates no USB device mode — as the predecessor suite also recorded.
-   **`aarch32` + `rpi3b` is `10 / 1 / 1`**: `smp-mat-sdcard-test` TIMEOUTs
-   after 2000 s, hanging in the thread pool after task 14 of 20 and printing
-   nothing further. It is not a regression — the image predates the only change
-   made to that repo — and `aarch64` + `rpi3b` runs the same test green, so it
-   is specific to that arch/board pair. That suite had simply never been run
-   before; it was run for the first time as the regression for the
-   dangling-name fix. Open work.
+6. **QEMU suites green on all four board/port pairs.** Both ports ×
+   {`rpi-zero-2w`, `rpi3b`} give `11 passed, 1 skipped, 0 failed`, with gcc 15
+   and **one suite at a time**. `usb_test` skips by design — QEMU emulates no
+   USB device mode — as the predecessor suite also recorded.
+
+   `aarch32` + `rpi3b` was briefly recorded here as `10 / 1 / 1`, with
+   `smp-mat-sdcard-test` TIMEOUTing after 2000 s. That was wrong, and the cause
+   was procedural: the four suites had been launched two at a time, which is
+   exactly what the "QEMU suites must run one at a time" rule below forbids,
+   and the stall had that rule's documented signature — a worker frozen
+   mid-loop with no fault. Run alone, that test passes in 113 lines, and the
+   whole suite passes 11/1/0. **Re-run before investigating** is in that rule
+   for a reason; it was not followed.
 7. **Documentation.** `docs/smp-construction.md` (the port contract, the
    division of labour, and the defines per folder) and
    `docs/building-aarch32-aarch64.md`, both with PDFs, rendered by a single
@@ -303,10 +305,14 @@ repo **(met)**.
 Step 3 (`aarch32` gains the RK3506) is **under way**. *Gate:*
 `exception_handler.cpp` shared unmodified by both boards **(met)**; the board
 builds **(met, 19 targets)**; neither existing port regressed **(met, QEMU
-11/1/0 on each)**. Open: running the RK3506-specific tests, which are hardware
-only — the six carried over from the predecessor (the USB gadget pair, the SD
-pair, the interrupt pair and the Cortex-M0) have never been run, and
-`smp_test4` is reported not to work.
+11/1/0 on each)**. **The board has been run on hardware** — the maintainer
+confirms it, and this workspace retains one log of it,
+`test/build-lyra/test/.hw-logs/smp_test5.log`, which shows all three A7 cores
+up, the heartbeat running past 42 s and a clean shutdown. What is *not*
+recorded here is a per-test verdict table: the logs for the other eighteen
+targets are not in this tree, so this document does not claim pass/fail for
+them one by one. The earlier statement that the six RK3506-specific tests "have
+never been run" was wrong and is withdrawn.
 
 Emulating the Lyra is **not** open. It was considered and closed: see above.
 
@@ -334,8 +340,26 @@ Measurement changed the shape, for the better:
   in software (the RP2350 has no global exclusive monitor, so LDREX/STREX does
   not work across the cores), `pico2-sdk` the Pico SDK — and `pico2-sdk-min`
   has **byte-identical** port files to `pico2-sdk`, so it is not a separate
-  port at all. Only `pico2` is carried so far.
-- The apps are one set copied four times, 99.0–99.5% identical.
+  port at all. **Only `pico2` is of interest**; the other variants are out of
+  scope and are not open work.
+- **What is uncarried inside `pico2` is not a duplicate — it is a capability.**
+  Of that tree's 33 application directories, `cortexm` carries 16: the kernel
+  object tests, `smp-test0`…`smp-test5`, the nested-interrupt set and the two
+  USB images. The other 18 are one subject area, and `cortexm` has none of its
+  infrastructure (`find . -iname '*xip*' -o -iname '*loader*'` returns nothing
+  but the PSRAM board files):
+
+  | group | dirs | source lines |
+  |---|---|---|
+  | XIP: `smp-test-xip`, `-core1park`, `-fs`, plus `shared-xip` and `xip-glue` | 5 | ~7,400 |
+  | XIP loader: `smp-test-xip-loader-{apps,apps-mos++,dyn,dyn-no-list,static}` | 5 | ~11,500 |
+  | RAM loader: `smp-test-loader-{dynamic,over,reloc,static}` | 4 | ~1,500 |
+  | pizero PSRAM execution: `pizero-psram-exec{,-main,-main_1,-main_2}` | 4 | ~1,550 |
+  | `mem-diag`, `smp-test-nested_latency` | 2 | ~550 |
+
+  About 22,000 lines in total. Execute-in-place and a dynamic loader are a
+  different piece of work from carrying another test, and neither was in
+  step 4's gate. Recorded so the gap is not mistaken for a finished migration.
 
 Step 5 (`posix-arch`) is **done**. *Gate:* the existing upstream tests pass at
 `OS_NCPU=1` **(met — `mutex-stress` *and* `rtos-apis`, both carried from the
@@ -345,8 +369,8 @@ pass at `OS_NCPU>1` **(met, 9/9 at `OS_NCPU=4`)**; no use of `sigprocmask` or
 `setitimer` remains **(met — `pthread_sigmask` and per-CPU `timer_create`)**.
 Both ARM QEMU suites were re-run after the kernel mutex fix and after the
 shared test sources lost their last ARM assembly: 11/1/0 on each, unchanged.
-All four board/port pairs were run again after the dangling-name fix; see
-item 6 above for the one that is not green.
+All four board/port pairs were run again after the dangling-name fix, one
+suite at a time: 11/1/0 on every one.
 
 That the port really is SMP is **measured, not claimed**: four CPU-bound
 threads with no affinity set report 40 runs each on cores 0, 1, 2 and 3, and

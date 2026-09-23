@@ -881,6 +881,10 @@ namespace os
 
         bool th_enable_assert_reuse = false;
 
+#if defined(OS_USE_SMP_SCHEDULER)
+        uint32_t th_cpu_affinity = 0xFFFFFFFFu;
+#endif
+
         // Add more attributes here.
 
         /**

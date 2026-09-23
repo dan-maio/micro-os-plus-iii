@@ -541,6 +541,10 @@ extern "C"
      */
     bool th_enable_assert_reuse;
 
+#if defined(OS_USE_SMP_SCHEDULER)
+    uint32_t th_cpu_affinity;
+#endif
+
   } os_thread_attr_t;
 
   /**

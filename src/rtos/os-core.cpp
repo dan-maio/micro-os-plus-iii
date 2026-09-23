@@ -609,7 +609,8 @@ namespace os
                 thread* th = node->thread_;
                 if (th != nullptr && is_thread_allowed_on_cpu (th, cpu)
                     && (th == old_thread
-                        || th->context_.port_.stack_ptr != nullptr))
+                        || (th->state_ != thread::state::running
+                            && th->context_.port_.stack_ptr != nullptr)))
                   {
                     next_thread = th;
                     node->unlink ();

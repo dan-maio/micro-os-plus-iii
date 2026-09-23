@@ -3505,6 +3505,11 @@ osThreadCreate (const osThreadDef_t* thread_def, void* args)
   thread::attributes attr;
   attr.th_priority = thread_def->tpriority;
   attr.th_stack_size_bytes = thread_def->stacksize;
+#if defined(OS_USE_SMP_SCHEDULER)
+  // CMSIS-RTOS v1 assumes a single-core priority scheduling model;
+  // pin threads created through the CMSIS-RTOS v1 API to Core 0 at construction.
+  attr.th_cpu_affinity = (1u << 0);
+#endif
 
   // Creating thread with invalid priority should fail (validator requirement).
   if (thread_def->tpriority >= osPriorityError)
@@ -3542,6 +3547,12 @@ osThreadCreate (const osThreadDef_t* thread_def, void* args)
                       reinterpret_cast<thread::func_t> (thread_def->pthread),
                       args, attr);
 #pragma GCC diagnostic pop
+
+#if defined(OS_USE_SMP_SCHEDULER)
+          // CMSIS-RTOS v1 assumes a single-core priority scheduling model;
+          // pin threads created through the CMSIS-RTOS v1 API to Core 0.
+          th->cpu_affinity (1u << 0);
+#endif
 
           // No need to yield here, already done by constructor.
           return reinterpret_cast<osThreadId> (th);

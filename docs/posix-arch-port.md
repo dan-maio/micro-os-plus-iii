@@ -2409,7 +2409,7 @@ target, which is what every test links, so one variable covers the whole build.
 |---|---|---|---|
 | `address` | 11/11 pass | 0 | **a gate**; run it before every commit |
 | `undefined` | 11/11 pass | 29, all `vptr`, all in the kernel | **a gate** with `-DUOS_SANITIZE_NO_VPTR=ON` |
-| `thread` | runs, still reaches `RESULT: PASS` | 5,980 warnings, a 348,000-line log | not a gate, and won't be until the fiber annotations exist |
+| `thread` | runs, still reaches `RESULT: PASS` | 5,980 warnings, a 348,000-line log | **cannot** be a gate: TSan's fiber API is N:1 and this port is M:N — §21.4 |
 
 ### 21.1 ASan, and why the port had to be annotated for it
 
@@ -2573,7 +2573,7 @@ turns it straight back on. `UOS_SANITIZE_NO_VPTR` appends it to
 `_uos_sanitize_opts` *after* `-fsanitize=`, which is the only ordering that
 works.
 
-### 21.4 TSan, and why it is not a gate yet
+### 21.4 TSan, and why it cannot be a gate
 
 It builds. It runs. `smp_test1` still reaches `RESULT: PASS` — at line 348,343
 of its log, after 5,980 warnings:
@@ -2595,22 +2595,95 @@ acquire/release atomic:
 while (__atomic_exchange_n (&_smp_klock.lock, 1u, __ATOMIC_ACQUIRE) != 0u) …
 ```
 
-so TSan can see that edge. What it cannot see is that a µOS++ thread's stack
-migrates between host threads: its shadow memory is per-host-thread, and after
-a `swapcontext` the same bytes are legitimately touched by a different `T`.
-TSan has a fiber API — `__tsan_create_fiber`, `__tsan_switch_to_fiber`,
-`__tsan_destroy_fiber` — which is the same shape of work already done for ASan
-in §21.1, and which this port does not do yet.
+so TSan can see that edge. What it cannot see is that a µOS++ thread migrates:
+its shadow state is per-host-thread, and after a `swapcontext` the same bytes
+are legitimately touched by a different `T`. The mirror-image problem is worse
+and silent — two µOS++ threads that time-share one CPU get **one** TSan
+identity between them, so a genuine unsynchronised access from one to the
+other is invisible.
 
-The **`errno`** reports are inherent rather than missing. The tick handler
-(§8) runs `swapcontext` *inside* a signal handler and by design never returns
-to where it was raised, so `errno` really is left as the handler found it. On
-silicon there is no `errno` to spoil. Fixing it for TSan means saving and
-restoring it around the switch — cheap, but it is a change made for a tool, so
-it is listed rather than done.
+#### The annotation was written, and it does not work
 
-Until both are addressed, TSan is a thing to run by hand and read carefully,
-not a gate.
+TSan publishes a fiber interface for exactly this, and this port was annotated
+for it: `__tsan_create_fiber()` per thread in `context::create()`,
+`__tsan_set_fiber_name()` so reports read `prod_2` rather than `T7`, and
+`__tsan_switch_to_fiber()` immediately before every `swapcontext()` — the same
+shape of work as the ASan annotation in §21.1, which does work.
+
+It crashed. Non-deterministically, at different depths each run, inside
+`libtsan` rather than in the port:
+
+```
+ThreadSanitizer: SEGV on unknown address 0x7f92b84ffff8
+  (pc 0x7f92b86c1ba5 bp 0x72c00000ffe0 sp 0x72c00000ffb8)
+ThreadSanitizer: nested bug in the same thread, aborting.
+```
+
+Four configurations were measured, and all four fail:
+
+| configuration | result |
+|---|---|
+| every switch, `OS_NCPU=4` | SEGV, at a different point every run |
+| every switch, `OS_NCPU=1` (one host thread) | SEGV |
+| voluntary switches only (no fiber switch from the tick handler) | SEGV |
+| the same, without rebinding the boot context's fiber | SEGV |
+
+The fault is **not in the port**, and `tools/tsan-fiber-probe.c` is the proof:
+forty lines, no µOS++ in them, one fiber, two host threads. It parks the fiber
+on host A and resumes it on host B — which is what a migrating µOS++ thread
+does on every preemption — and TSan stops with an internal assertion:
+
+```
+ThreadSanitizer: CHECK failed: tsan_rtl_proc.cpp:46
+    "((thr->proc1)) == ((nullptr))" (0x7f8564e00000, 0x0)
+```
+
+`ProcWire()`. The fiber's `ThreadState` is still wired to host A's `Processor`
+when host B tries to wire its own.
+
+**TSan's fiber model is N:1 — many fibers on one host thread.** It is built for
+a coroutine library, where the fibers stay put. It is not built for M:N, where
+the contexts move between OS threads, and M:N is not an incidental property of
+this port: it is the thing the port exists to be. `smp_test4` moves eight
+workers across four CPUs on purpose.
+
+So the annotation was reverted rather than shipped behind an option that could
+only crash. What survives is the probe, which answers in one second whether a
+future toolchain has changed its mind:
+
+```sh
+cc -fsanitize=thread -g -O1 -o probe tools/tsan-fiber-probe.c -lpthread
+./probe        # "done" -> try again;  CHECK failed -> still N:1
+```
+
+#### The `errno` reports, and a fix that was tried and dropped
+
+The tick handler (§8) runs `swapcontext` *inside* a signal handler and by
+design never returns to where it was raised, so `errno` really is left as the
+handler found it. On silicon there is no `errno` to spoil.
+
+Saving it into a local before the switch and restoring it after — the same
+trick that makes `asan_save` work, riding the outgoing thread's own stack — was
+implemented and measured. It removed **none** of the reports: TSan compares
+`errno` at handler *entry* against handler *exit*, and the save happens well
+after entry, with `trace::printf` and `pthread_sigmask` in between. It also
+reads and writes `errno`, which is `*__errno_location()`, across a switch
+point — and native TLS across a switch point is the one thing this port bans
+outright (§19), because the compiler may cache the address and write it to the
+host thread the µOS++ thread *left*. A change that violates the port's own
+rule and demonstrably buys nothing is not a change. It was reverted.
+
+Doing it properly means saving `errno` at signal-handler entry and restoring it
+at the point the thread resumes, in the handler's own frame. That is worth
+doing for correctness — `errno` is per-thread state and on this port the thread
+is the µOS++ one — but it is worth doing on its own evidence, not as an
+accessory to a TSan annotation that cannot work.
+
+#### What this leaves
+
+TSan is a thing to run by hand and read selectively, not a gate, and it cannot
+become one while its fiber API is N:1. That is an upstream limitation, not a
+piece of open work on this port. ASan and UBSan carry the load (§21.5).
 
 ### 21.5 What to run, and when
 
@@ -3373,9 +3446,18 @@ void my_isr_work () { uart::uart1 << "tick " << n << "\n"; }   // write(2)
 
 ## What is not done
 
-- **TSan.** ASan and UBSan are done (§21); TSan needs the port annotated for
-  `__tsan_create_fiber` / `__tsan_switch_to_fiber`, and the `errno` clobber in
-  the tick handler dealt with. The highest-value remaining work on this port.
+- **TSan is closed, not open.** ASan and UBSan are done (§21). TSan was
+  annotated for `__tsan_create_fiber` / `__tsan_switch_to_fiber` and the
+  annotation crashes, because TSan's fiber model is N:1 and this port is M:N.
+  `tools/tsan-fiber-probe.c` proves it in forty lines with no µOS++ in them,
+  and re-answers the question in one second whenever the toolchain changes.
+  §21.4 has the measurements. This is an upstream limitation, not work waiting
+  to be done here.
+- **`errno` across the tick handler.** Worth fixing on its own merits —
+  `errno` is per-thread state and here the thread is the µOS++ one — but it
+  must be saved at handler entry and restored where the thread resumes, and it
+  must not read or write TLS across the switch point (§19). The obvious
+  version was tried, bought nothing, and broke that rule; see §21.4.
 - **chan-FatFs in `rtos-apis`.** The section is `#if 0`-ed because the kernel
   in this workspace carries no chan-fatfs at all, not because the host cannot
   do it.

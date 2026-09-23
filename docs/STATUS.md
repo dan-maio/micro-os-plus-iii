@@ -390,7 +390,7 @@ each. `-DUOS_SANITIZE=<set>` on the `native` board; details in
 |---|---|---|---|
 | `address` | 11/11 pass | 0 | **yes** |
 | `undefined` | 11/11 pass | 29, all `vptr`, all in the kernel | **yes**, with `-DUOS_SANITIZE_NO_VPTR=ON` → 0 reports |
-| `thread` | runs, still reaches `RESULT: PASS` | 5,980 (3,775 races, 2,203 `errno`) | no |
+| `thread` | runs, still reaches `RESULT: PASS` | 5,980 (3,775 races, 2,203 `errno`) | **no, and it cannot** — see below |
 
 Three things a fresh session should not have to rediscover:
 
@@ -424,9 +424,38 @@ Three things a fresh session should not have to rediscover:
   `-f[no-]sanitize=` wins. That is why there is a `UOS_SANITIZE_NO_VPTR`
   option.
 
-TSan needs `__tsan_create_fiber` / `__tsan_switch_to_fiber` (the same shape of
-work already done for ASan) and an `errno` save/restore around the switch in
-the tick handler. Until then it is a by-hand tool, not a gate.
+**TSan is closed, not open, and this is the thing not to re-attempt.** The
+fiber annotation that looks like the fix — `__tsan_create_fiber` per thread,
+`__tsan_switch_to_fiber` before every `swapcontext`, the same shape of work
+that made ASan usable — was written, and it crashes: non-deterministically,
+inside `libtsan`, at `OS_NCPU=4` **and** at `OS_NCPU=1`, with and without the
+switches taken from the tick handler. Four configurations, four SEGVs.
+
+The fault is not in the port. `posix-arch/tools/tsan-fiber-probe.c` is forty
+lines with no µOS++ in them — one fiber, two host threads, parked on A and
+resumed on B — and TSan stops with an internal assertion:
+
+```
+ThreadSanitizer: CHECK failed: tsan_rtl_proc.cpp:46
+    "((thr->proc1)) == ((nullptr))"
+```
+
+`ProcWire()`: the fiber is still wired to host A's `Processor`. **TSan's fiber
+model is N:1**, many fibers on one host thread, built for coroutine libraries
+whose fibers stay put. This port is M:N by construction — migration is what
+`smp_test4` exists to demonstrate — so the two are structurally incompatible.
+The annotation was reverted rather than shipped behind an option that could
+only crash; the probe was kept, and answers in one second whether a future
+toolchain has changed its mind.
+
+The `errno` half was also tried: save it in a local before the switch, restore
+after, the trick that makes `asan_save` work. It removed **none** of the 2,203
+reports (TSan compares `errno` at handler entry, and the save happens long
+after) and it reads and writes TLS across a switch point, which this port bans
+outright. Reverted. Fixing `errno` properly is still worth doing — it is
+per-thread state and here the thread is the µOS++ one — but on its own
+evidence, at handler entry and at the resume point, not as an accessory to
+this.
 
 ## Things a fresh session should not rediscover
 

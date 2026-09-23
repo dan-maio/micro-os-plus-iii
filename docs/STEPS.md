@@ -546,6 +546,15 @@ Verified: `xpm run test-smp_test0-host --config native-cmake-gcc-debug` →
 `xpm run test-sc-test-ko-qemu --config cortexm-pico2-cmake-gcc-debug` →
 `cortexm-pico2-sc-test-ko-qemu ... Passed`.
 
+**Cortex-M33 QEMU platforms (`pico2-1cpu` & `2xcortex-m33`) & SMP `cmsis-os-validator` — 100% green.**
+* `pico2-1cpu` (QEMU `mps2-an505`, 1x Cortex-M33): 3/3 tests pass (`rtos-apis`, `mutex-stress`, `cmsis-os-validator` 60/60).
+* `2xcortex-m33` (QEMU `mps2-an521`, 2x Cortex-M33 SMP): 3/3 tests pass (`rtos-apis`, `mutex-stress`, `cmsis-os-validator` 60/60).
+* **SMP fixes for `cmsis-os-validator`:**
+  1. **Running thread re-enqueue guard**: `thread::resume()` only enqueues threads whose state is `state::suspended` or `state::initializing`. On SMP, a running thread has `ready_node_.next() == nullptr`; previously, raising signals/flags (`flags_raise()`) invoked `resume()` which linked the actively executing thread back into `ready_threads_list_`, allowing the secondary core to pick and execute the same thread concurrently on the identical stack.
+  2. **Thread attributes CPU affinity**: Added `th_cpu_affinity` to `thread::attributes` and `os_thread_attr_t` under `OS_USE_SMP_SCHEDULER`, passed into `thread::thread` constructor to ensure threads are created with affinity before `internal_construct_` / `resume()` places them on the ready list.
+  3. **CMSIS-RTOS single-core compatibility**: CMSIS-RTOS v1 is fundamentally single-core; `osThreadCreate` and `os_main_thread` pin threads to Core 0 (`1u << 0`). This ensures strict priority preemption (`TC_ThreadPriorityExec` and `TC_MutexPriorityInversion`) and guarantees that per-core private NVIC registers on Cortex-M handle test interrupts on the core that enabled them (`TC_ThreadInterrupts`).
+  4. **SMP stack pointer invariant**: In `switch_stacks(sp)` (`os-core-m33.cpp` and `os-core-rp2350.cpp`), when a core continues executing the same thread (`new_thread == old_thread`), `old_thread->context_.port_.stack_ptr = nullptr` is cleared so secondary cores do not consider the live context switchable.
+
 **Commands that work today**
 
 ```sh

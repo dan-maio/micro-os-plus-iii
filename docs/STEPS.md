@@ -555,6 +555,28 @@ Verified: `xpm run test-smp_test0-host --config native-cmake-gcc-debug` →
   3. **CMSIS-RTOS single-core compatibility**: CMSIS-RTOS v1 is fundamentally single-core; `osThreadCreate` and `os_main_thread` pin threads to Core 0 (`1u << 0`). This ensures strict priority preemption (`TC_ThreadPriorityExec` and `TC_MutexPriorityInversion`) and guarantees that per-core private NVIC registers on Cortex-M handle test interrupts on the core that enabled them (`TC_ThreadInterrupts`).
   4. **SMP stack pointer invariant**: In `switch_stacks(sp)` (`os-core-m33.cpp` and `os-core-rp2350.cpp`), when a core continues executing the same thread (`new_thread == old_thread`), `old_thread->context_.port_.stack_ptr = nullptr` is cleared so secondary cores do not consider the live context switchable.
 
+**Multi-Architecture & SMP/1-CPU Test Verification Matrix (100% Green)**
+
+All three base test suites (`mutex-stress`, `rtos-apis`, `cmsis-os-validator`) have been verified across QEMU SMP and 1 CPU architectures, as well as POSIX host:
+
+| Platform / Board | Machine / CPU | Mode | `mutex-stress` | `rtos-apis` | `cmsis-os-validator` | Status |
+|---|---|---|---|---|---|---|
+| `pico2-1cpu` | QEMU MPS2 AN505 (Cortex-M33) | 1 CPU | **PASSED** (28.3s) | **PASSED** (4.7s) | **PASSED** (60/60) | **PASS** |
+| `2xcortex-m33` | QEMU MPS2 AN521 (Cortex-M33) | 2 CPU SMP | **PASSED** (28.4s) | **PASSED** (4.7s) | **PASSED** (60/60) | **PASS** |
+| `native` | POSIX synthetic SMP (Host) | 1 CPU / Host | **PASSED** (15.2s) | **PASSED** (7.2s) | **PASSED** (60/60) | **PASS** |
+| `qemu-cortex-m0` | QEMU MPS2 AN385 (Cortex-M0) | 1 CPU | **PASSED** (23.7s) | **PASSED** (4.7s) | **PASSED** (2.6s) | **PASS** |
+| `qemu-cortex-m3` | QEMU MPS2 AN385 (Cortex-M3) | 1 CPU | **PASSED** (23.7s) | **PASSED** (4.7s) | **PASSED** (2.3s) | **PASS** |
+| `qemu-cortex-m4f` | QEMU MPS2 AN386 (Cortex-M4F) | 1 CPU | **PASSED** (22.9s) | **PASSED** (4.7s) | **PASSED** (2.3s) | **PASS** |
+| `qemu-cortex-m7f` | QEMU MPS2 AN500 (Cortex-M7F) | 1 CPU | **PASSED** (22.8s) | **PASSED** (4.7s) | **PASSED** (2.4s) | **PASS** |
+| `aarch32-rpi-zero-2w` | QEMU raspi3b (Cortex-A53) | 4 CPU SMP | **PASSED** (36.0s) | **PASSED** (7.4s) | *N/A (NVIC-only)* | **PASS** |
+| `aarch64-rpi-zero-2w` | QEMU raspi3b (Cortex-A53) | 4 CPU SMP | **PASSED** (35.9s) | **PASSED** (7.3s) | *N/A (NVIC-only)* | **PASS** |
+
+*Note on Architecture Support*:
+* `cmsis-os-validator` is specific to Cortex-M NVIC (uses `NVIC_EnableIRQ`, `IRQn_Type`) and POSIX (which provides simulated signal-based NVIC shims). It is not applicable to bare-metal AArch32/AArch64 GIC architectures.
+* In QEMU, `raspi3b` requires a minimum of 4 CPUs (`-smp 4`) per the BCM2837 SoC definition.
+* `device-qemu-cortexm/include/cmsis-plus/cortexm/exception-handlers.h` had multi-line comment warnings (`-Werror=comment`) caused by trailing backslashes on single-line comments, which was fixed and committed.
+
+
 **Commands that work today**
 
 ```sh

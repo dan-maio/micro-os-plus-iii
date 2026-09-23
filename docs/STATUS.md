@@ -29,9 +29,7 @@ time on an idle host:
 
 `usb_test` is the skip, by design: QEMU emulates no USB device mode.
 
-**Nothing in this workspace is failing a test.** The one gate that reports
-FAIL is the duplicate-source lint, which is not a test and never was; see
-*The three verification gates* below before reading anything into it.
+**Nothing in this workspace is failing a test, and all three gates pass.**
 
 **Steps 1 and 2 are complete.** Six repositories exist; both A-profile
 architecture projects build all 24 of their targets from a single copy of
@@ -199,15 +197,15 @@ neither the kernel nor the devices repo knows an architecture project exists.
 ## The three verification gates
 
 **None of these is a test.** They are lints over the source tree, and they are
-recorded separately from the suites for that reason: the duplicate gate has
-reported FAIL throughout, while every test suite on every board has been green
-at the same time. A FAIL here means "the same file exists twice", never "a test
-failed". Do not read the two tables as one.
+recorded separately from the suites for that reason. A FAIL here means "the
+same file exists twice", never "a test failed" — for most of this project's
+life the duplicate gate reported FAIL while every suite on every board was
+green. Do not read the two tables as one.
 
 | gate | command | state |
 |---|---|---|
 | kernel compiles on a port's headers | `tools/verify-kernel-compiles.sh <port>/include` | 61/61 on every port |
-| no duplicate sources, across repos | `tools/verify-no-duplicate-sources.py` | **22 unexplained pairs** — see below (493 sources compared) |
+| no duplicate sources, across repos | `tools/verify-no-duplicate-sources.py` | **PASS** — see below |
 | no machine-specific absolute paths | `tools/verify-no-absolute-paths.sh` | PASS (105 files) |
 
 The duplicate gate has **three** outcomes, not two, because this workspace
@@ -227,40 +225,56 @@ it:
   Section 9 says "target: zero findings" and was written before that decision;
   this is where the two are reconciled, in the open rather than by a silent
   exemption.
-- **unexplained** — everything else, and the only thing that fails the gate.
-  **22 pairs**, listed in the next section.
+- **sibling** — reported, counted, and **named individually in the script's
+  `SIBLINGS` list with a reason each**. Not copies: two files that resemble
+  each other because they do similar jobs, which a similarity threshold cannot
+  tell from a copy. **9 pairs.** The entry is a claim, and the claim is
+  checked — the gate fails if a named pair ever becomes *identical* (that is a
+  copy, and it says so), and fails if an entry stops matching anything at all,
+  so stale justifications cannot accumulate.
+- **unexplained** — everything else, and the only thing left that fails the
+  gate. **0 pairs.**
 
-### Why the 22 are still there
+### How the 22 became 0, without running a board
 
-A pass was attempted at removing them and was **reverted in full**, which is
-worth recording so it is not attempted again the same way.
+13 of the 22 were real duplication and were removed. The other 9 were never
+duplication at all and are now named as such.
 
-The three that are safe were easy: `hw_result.hpp` and `board-contract.cpp`
-(one copy each in the kernel's `test_smpl/`, both ARM ports linking it) and
-`syscalls.c` (one copy for the four `cortexm` boards). Those built.
+**Removed — and proved to change nothing.** This board's builds are
+deterministic (rebuilding an untouched tree gives byte-identical images, 19 of
+19 on the Lyra), so "the images did not change" is a test, not a hope. Every
+removal below was made on its own and measured on its own:
 
-The rest are not safe, for two different reasons:
+| removed | now lives in | images checked |
+|---|---|---|
+| `dma_pool.cpp`, `usb_env_stateos.cpp` — private copies in `smp_test6` and `smp_test7` | the Lyra board, as `UOS_BOARD_USB_GADGET_SOURCES` | 19/19 Lyra **byte-identical** |
+| `usb1_int3.cpp`, `kbd_forward.c` — a copy each in `smp_test_int3` and `smp_test_int4` | the Lyra board, as `UOS_BOARD_USB_INT_SOURCES` | as above |
+| `hw_result.hpp`, `board-contract.cpp` — one copy per ARM port | the kernel's `test_smpl/` | 96/96 Pi **byte-identical**, 19/19 Lyra |
+| `syscalls.c` — one copy per `cortexm` board (4) | `cortexm/test/boards/shared/` | 17/17 `cortexm` **byte-identical** |
 
-- **Eleven pairs are Luckfox Lyra code, and the Lyra is hardware-tested.**
-  Six of them are byte-identical files, so sharing one copy looked free. It is
-  not: rebuilding after the move changed **all 19** Lyra images. Link order
-  moved, which is almost certainly harmless — but "almost certainly" is not
-  something to conclude about a board that can only be checked by putting it
-  on the desk. The standing rule is that a change must not impact a board
-  already tested, and this is exactly that case.
-- **Three pairs are not duplicates at all.** The RP2350
-  `smp-test-nested-clock{,_200,_250}` trio was recorded here as "differing
-  only in a clock constant". That was wrong. They differ in N and B, in
-  whether the solver keeps one working matrix or two, and in comments
-  recording a measured PSRAM aliasing failure at N=500 on 2 MB. Merging them
-  would delete findings, and `cortexm` has never run on hardware either.
+Two details made that possible, and both are the point rather than trivia.
+`board-contract.cpp` is named by each port *in the position its own copy held
+in the source list*, not attached as an INTERFACE source, because an INTERFACE
+source is appended elsewhere and moves link order. `syscalls.c` is inserted at
+the position the sorted glob used to find it, for the same reason. An earlier
+attempt that ignored this changed all 19 Lyra images — and that observation
+was then wrongly blamed on the USB change, which is what made this look like
+it needed hardware. It never did.
 
-The remaining pairs — `os-decls.h` against `include-rp2350/os-decls.h`, and
-the TinyUSB `tusb_config.h` cdc/hid pair — are deliberate and documented as
-such; they are noise in this gate, not work.
+**Named, not removed.** The remaining 9 are in the script's `SIBLINGS` list,
+each with its reason: FatFs's `ff.c` against the Lyra's C++ `ff.cpp`; the
+RK3506 polled SD driver against the interrupt-driven variant `smp_test_int4`
+exists to exercise; the three `smp-test-nested-clock` pairs, which differ in N
+and B and in one working matrix versus two, with comments recording a measured
+PSRAM aliasing failure at N=500 on 2 MB; `cortexm`'s two port cores; the
+single-core and SMP kernel-object tests; and TinyUSB's per-class
+`tusb_config.h`. Merging any of them would delete the difference that is the
+reason the file exists.
 
-So: the gate stays FAIL, honestly, and the 22 stay listed. Clearing them needs
-hardware in the loop, not a refactor.
+**The gate was negative-tested three ways** after the change, not just run
+against a clean tree: a newly introduced duplicate fails; a `SIBLINGS` pair
+made *identical* fails, and says that it is named but is now a copy; a
+`SIBLINGS` entry pointing at nothing fails as stale.
 
 The absolute-path gate skips exactly two things: upstream's `tests/`, and
 **itself**. The second is not tidiness — its header comment spells every denied
@@ -270,10 +284,11 @@ uncaught; that is the price of the denylist being readable, and it is the only
 exemption. Both gates have been negative-tested against an injected violation,
 before and after that change.
 
-## What the duplicate gate found
+## What the duplicate gate found, before it passed
 
-Nothing in the kernel and nothing in a port's scheduler. The 22 pairs are, by
-kind:
+Nothing in the kernel and nothing in a port's scheduler. This is the original
+list of 22, kept because it is the record of what the gate was for. 13 were
+removed and 9 are now named in `SIBLINGS`; see the previous section.
 
 | what | pairs | verdict |
 |---|---|---|
@@ -288,9 +303,10 @@ kind:
 | `cortexm` `os-decls.h` vs `include-rp2350/…` (0.936) | 1 | **known and deliberate** — the two port cores, see `cortexm-port.md` |
 | TinyUSB `tusb_config.h` cdc vs hid (0.852, 26 lines) | 1 | class-specific by design |
 
-Every one of them is in the Lyra's or cortexm's test trees — that is, in the
-parts of steps 3 and 4 that have never run on hardware. None is in code any
-passing suite exercises.
+Every one of them was in the Lyra's or `cortexm`'s test trees. None was in the
+kernel, in a port's scheduler, or in anything a passing suite exercises — which
+is why removing them could be, and was, verified by showing that every image
+came out byte-identical.
 
 ## What hardware found that QEMU could not
 

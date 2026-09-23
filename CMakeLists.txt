@@ -204,4 +204,30 @@ target_include_directories (
 add_library (micro-os-plus::port-smp-decls ALIAS micro-os-plus-iii-port-smp-decls-interface)
 
 # -----------------------------------------------------------------------------
+# Optional: the test scaffolding both silicon ports need and neither owns.
+# Opt-in, exactly like port-smp-decls above, and for the same reason: these
+# were duplicate copies in two repositories, which is what
+# tools/verify-no-duplicate-sources.py exists to catch.
+#
+#   test_smpl/include/hw_result.hpp      how a test ends a run with a verdict
+#   test_smpl/src/board-contract.cpp     no code; turns "this board never said
+#                                        X" into a compile error rather than a
+#                                        silent inheritance of the previous
+#                                        board's answer
+#
+# Only the HEADER comes through this target. board-contract.cpp is named
+# directly by each port, in the position its own copy used to occupy in the
+# source list -- an INTERFACE source would be appended somewhere else and
+# would change link order, and the point of this move is that it changes
+# nothing: all 24 images per board stay byte-identical across it.
+#
+# The POSIX host port uses neither: no semihosting, and no board contract of
+# this shape.
+add_library (micro-os-plus-iii-test-support-interface INTERFACE)
+target_include_directories (
+  micro-os-plus-iii-test-support-interface INTERFACE "test_smpl/include"
+)
+add_library (micro-os-plus::test-support ALIAS micro-os-plus-iii-test-support-interface)
+
+# -----------------------------------------------------------------------------
 message (STATUS "µOS++ III SMP common: micro-os-plus::iii  standalone=${UOS_SMP_STANDALONE}")

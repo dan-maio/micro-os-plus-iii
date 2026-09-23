@@ -45,6 +45,21 @@ otherwise:
             was written before that decision and says "target: zero
             findings"; this is where the two are reconciled, in the open.
 
+  SIBLING   compared, reported, counted, does not fail -- and named
+            individually, in SIBLINGS below, with a reason each.  These are
+            not copies of one another: they are two files that resemble each
+            other because they do similar jobs, which a text-similarity
+            threshold cannot tell apart from a copy.  A C driver and its C++
+            sibling.  A polled driver and the interrupt-driven variant a test
+            exists to exercise.  Two solver tests whose constants and memory
+            strategy differ because the silicon made them differ.
+
+            A SIBLING entry is NOT a blanket pardon.  It is rejected, and the
+            gate fails, if the two files ever become IDENTICAL: at that point
+            somebody really has copied one onto the other, which is the thing
+            this gate is for.  It is also rejected if the pair stops matching
+            at all, so that stale entries are noticed rather than accumulating.
+
   FINDING   everything else.  These fail the gate.
 
 Exit status: 0 if there is no unexplained duplication, 1 otherwise, 2 on a
@@ -112,6 +127,69 @@ def board_neutral(rel):
             return None
         return ("boards", "/".join(parts[3:]))
     return ("tests", "/".join(parts[2:]))
+
+
+# Pairs that look alike because they do similar jobs. Order within a pair does
+# not matter. Each entry: (path_a, path_b, reason).
+#
+# Adding to this list is a claim, and the claim is checkable: the gate rejects
+# an entry whose two files have become identical. If you are tempted to add a
+# pair because removing the duplication is awkward, that is a FINDING, not a
+# SIBLING -- leave it failing and say why in docs/STATUS.md instead.
+SIBLINGS = [
+    ("micro-os-plus-iii-devices/fatfs/ff.c",
+     "micro-os-plus-iii-aarch32/test/boards/luckfox-lyra/fatfs-cpp/ff.cpp",
+     "the same FatFs, C and C++: one is upstream's ff.c compiled as C, the "
+     "other the C++ translation the Lyra's C++ disk glue needs"),
+
+    ("micro-os-plus-iii-devices/soc/rk3506/include/sdmmc.hpp",
+     "micro-os-plus-iii-aarch32/test/luckfox-lyra/smp_test_int4/sd/sdmmc.hpp",
+     "polled driver vs the interrupt-driven variant smp_test_int4 exists to "
+     "exercise; merging them would delete the thing under test"),
+    ("micro-os-plus-iii-devices/soc/rk3506/src/sdmmc.cpp",
+     "micro-os-plus-iii-aarch32/test/luckfox-lyra/smp_test_int4/sd/sdmmc.cpp",
+     "as above, the implementation half"),
+
+    ("micro-os-plus-iii-cortexm/test/pico2-rp2350b-psram/smp-test-nested-clock/main.cpp",
+     "micro-os-plus-iii-cortexm/test/pico2-rp2350b-psram/smp-test-nested-clock_200/main.cpp",
+     "different N and B, and one working matrix vs two: N=500 aliased onto "
+     "low memory on 2 MB of PSRAM and corrupted the heap, and the comments "
+     "record that measurement"),
+    ("micro-os-plus-iii-cortexm/test/pico2-rp2350b-psram/smp-test-nested-clock/main.cpp",
+     "micro-os-plus-iii-cortexm/test/pico2-rp2350b-psram/smp-test-nested-clock_250/main.cpp",
+     "as above"),
+    ("micro-os-plus-iii-cortexm/test/pico2-rp2350b-psram/smp-test-nested-clock_200/main.cpp",
+     "micro-os-plus-iii-cortexm/test/pico2-rp2350b-psram/smp-test-nested-clock_250/main.cpp",
+     "as above"),
+
+    ("micro-os-plus-iii-cortexm/include/cmsis-plus/rtos/port/os-decls.h",
+     "micro-os-plus-iii-cortexm/include-rp2350/cmsis-plus/rtos/port/os-decls.h",
+     "the port's two cores, upstream's and the RP2350 SMP one; deliberate and "
+     "written up in docs/cortexm-port.md"),
+
+    ("micro-os-plus-iii-cortexm/test/pico2-pizero/sc-test-ko/main.cpp",
+     "micro-os-plus-iii-cortexm/test/pico2-pizero/smp-test-ko/main.cpp",
+     "the same kernel-object suite run single-core and SMP; sc-test-ko is the "
+     "only test on this silicon exercising the kernel's non-SMP branch"),
+
+    ("micro-os-plus-iii-cortexm/test/boards/pico2/usb/hid/tusb_config.h",
+     "micro-os-plus-iii-cortexm/test/boards/pico2/usb/cdc/tusb_config.h",
+     "TinyUSB is configured per device class; 26 lines, and the class lines "
+     "are the point of the file"),
+]
+
+
+def sibling_reason(full_a, full_b, ratio):
+    """A named pair that resembles itself for a stated reason.
+
+    Refused when the two have become identical -- that is a real copy, and
+    exactly what this gate is for."""
+    for a, b, reason in SIBLINGS:
+        if {full_a, full_b} == {a, b}:
+            if ratio >= 1.0:
+                return None
+            return reason
+    return None
 
 
 def expected_reason(rel_a, rel_b):
@@ -249,6 +327,10 @@ def main():
                 "lines": len(a[3]),
                 "kind": "identical",
                 "expected": expected_reason(a[1], b[1]),
+                # An identical pair is never a sibling: sibling_reason()
+                # refuses ratio >= 1.0, so a named pair that someone has
+                # copied onto the other lands here and fails, as it should.
+                "sibling": None,
             })
         unique.append(group[0])      # one representative per exact-dup group
 
@@ -282,6 +364,8 @@ def main():
                     "lines": min(na, nb),
                     "kind": "near-identical",
                     "expected": expected_reason(a[1], b[1]),
+                    "sibling": sibling_reason(f"{a[0]}/{a[1]}",
+                                              f"{b[0]}/{b[1]}", r),
                 })
 
     if args.verbose:
@@ -295,26 +379,63 @@ def main():
             json.dump(findings, f, indent=2)
 
     expected = [f for f in findings if f["expected"]]
-    unexplained = [f for f in findings if not f["expected"]]
+    siblings = [f for f in findings if not f["expected"] and f.get("sibling")]
+    unexplained = [f for f in findings
+                   if not f["expected"] and not f.get("sibling")]
 
     print(f"expected  : {len(expected)} pair(s) -- "
           "the same test carried by two boards")
+    print(f"siblings  : {len(siblings)} pair(s) -- "
+          "named in SIBLINGS, alike because they do similar jobs")
 
-    if not unexplained:
-        print("\nPASS: no unexplained duplicate sources")
-        return 0
-
-    across = sum(1 for f in unexplained
-                 if f["a"].split("/")[0] != f["b"].split("/")[0])
-    print(f"\n{len(unexplained)} unexplained pair(s): "
-          f"{across} across repositories, {len(unexplained) - across} within one")
-    print()
-    for f in unexplained:
+    # Named, so that a claim nobody can see is not a claim.
+    for f in siblings:
         print(f"  {f['ratio']:.3f}  {f['lines']:5d}  {f['a']}")
         print(f"                 {f['b']}")
+        print(f"                 -- {f['sibling']}")
 
-    print("\nFAIL: unexplained duplicate sources")
-    return 1
+    failed = False
+
+    if unexplained:
+        across = sum(1 for f in unexplained
+                     if f["a"].split("/")[0] != f["b"].split("/")[0])
+        print(f"\n{len(unexplained)} unexplained pair(s): "
+              f"{across} across repositories, "
+              f"{len(unexplained) - across} within one")
+        print()
+        for f in unexplained:
+            note = ""
+            # A named pair that has become identical arrives here rather than
+            # in `siblings`, because sibling_reason() refuses ratio >= 1.0.
+            # Say so, or the message reads as a mystery.
+            if any(frozenset((f["a"], f["b"])) == frozenset((a, b))
+                   for a, b, _ in SIBLINGS):
+                note = ("  <-- named in SIBLINGS, but these two are now "
+                        "IDENTICAL: that is a copy, not a resemblance")
+            print(f"  {f['ratio']:.3f}  {f['lines']:5d}  {f['a']}")
+            print(f"                 {f['b']}{note}")
+        failed = True
+
+    # A SIBLINGS entry matching nothing at all is stale: the files were
+    # merged, moved or renamed, and the justification has become fiction.
+    # An entry whose pair went identical is reported above instead, so it is
+    # not counted as stale here.
+    seen = {frozenset((f["a"], f["b"])) for f in siblings}
+    seen |= {frozenset((f["a"], f["b"])) for f in unexplained}
+    stale = [(a, b) for a, b, _ in SIBLINGS if frozenset((a, b)) not in seen]
+    if stale:
+        print(f"\n{len(stale)} stale SIBLINGS entry/entries -- "
+              "these no longer match any compared pair:")
+        for a, b in stale:
+            print(f"  {a}\n  {b}")
+        failed = True
+
+    if failed:
+        print("\nFAIL: unexplained duplicate sources")
+        return 1
+
+    print("\nPASS: no unexplained duplicate sources")
+    return 0
 
 
 if __name__ == "__main__":

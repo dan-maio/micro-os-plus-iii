@@ -3,7 +3,7 @@
 #
 # One renderer (md2pdf.py) and one record of how each document is called, so
 # the title pages and running footers are not something to be recovered from
-# the PDFs later. Re-running this on an unchanged tree reproduces all thirteen
+# the PDFs later. Re-running this on an unchanged tree reproduces all fourteen
 # files byte for byte.
 #
 #     ./docs/render-pdfs.sh            # all of them
@@ -53,3 +53,11 @@ render tests/TESTS-XPACK-SYSTEM --toc --footer "$FOOT" \
     --title "µOS++ IIIe Tests / xPack System"
 render tests/WORK-SMP-AARCH32-AARCH64-HARNESS-GUIDE --toc --footer "$FOOT" \
     --title "Running the µOS++ xPack Test Harness on the AArch32 and AArch64 Ports"
+
+# The workspace log: how the whole test tree was built in $HOME/TMP, from the
+# six clones to a green run, kept beside the harness it describes.
+render STEPS --toc --footer "$FOOT" \
+    --title "µOS++ III harness and tests" \
+    --subtitle "Building the test workspace in /home/dan/TMP, step by step" \
+    --meta "Kernel:micro-os-plus-iii" \
+    --meta "Ports:aarch32, aarch64, cortexm, posix-arch"

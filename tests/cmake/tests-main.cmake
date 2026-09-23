@@ -95,6 +95,14 @@ elseif (PLATFORM_NAME MATCHES "^cortexm")
     message (FATAL_ERROR "Cannot find the Cortex-M port at ${UOS_CORTEXM_DIR}")
   endif ()
   add_subdirectory ("${UOS_CORTEXM_DIR}" "port-bin")
+elseif (PLATFORM_NAME MATCHES "^pico2" OR PLATFORM_NAME MATCHES "^2xcortex")
+  # The pico2's Cortex-M33 run emulated (pico2-1cpu, 2xcortex-m33). Same port,
+  # but the platform links its GENERIC M33 core; no board sources are used.
+  message (VERBOSE "Adding the Cortex-M port for the emulated pico2...")
+  if (NOT EXISTS "${UOS_CORTEXM_DIR}/CMakeLists.txt")
+    message (FATAL_ERROR "Cannot find the Cortex-M port at ${UOS_CORTEXM_DIR}")
+  endif ()
+  add_subdirectory ("${UOS_CORTEXM_DIR}" "port-bin")
 else ()
   # Fallback: the plain kernel, one level above (upstream behaviour).
   message (VERBOSE "Adding the top library...")

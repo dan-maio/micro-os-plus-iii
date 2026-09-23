@@ -538,6 +538,12 @@
           }
         }
       },
+      "arm-cmsis-core-dependencies": {
+        "hidden": true,
+        "devDependencies": {
+          "@xpack-3rd-party/arm-cmsis-core": "5.4.0-6"
+        }
+      },
       "arm-none-eabi-gcc-dependencies": {
         "hidden": true,
         "$devDependenciesUrl": "https://www.npmjs.com/package/@xpack-dev-tools/arm-none-eabi-gcc",
@@ -1201,6 +1207,72 @@
         "properties": {
           "buildType": "MinSizeRel",
           "shortConfigurationName": "cp2r"
+        }
+      },
+      "pico2-1cpu-cmake-gcc-debug": {
+        "inherit": [
+          "cortexm-actions",
+          "cmake-actions",
+          "cortexm-dependencies",
+          "arm-cmsis-dependencies",
+          "arm-cmsis-core-dependencies",
+          "arm-none-eabi-gcc-dependencies",
+          "qemu-arm-dependencies",
+          "short-win-paths-properties"
+        ],
+        "properties": {
+          "buildType": "Debug",
+          "platformName": "pico2-1cpu",
+          "toolchainFileName": "arm-none-eabi-gcc.cmake",
+          "shortConfigurationName": "p2c1d"
+        },
+        "actions": {
+          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V",
+          "test-rtos-apis-test": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R pico2-1cpu-rtos-apis-test",
+          "test-mutex-stress-test": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R pico2-1cpu-mutex-stress-test",
+          "test-cmsis-os-validator-test": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R pico2-1cpu-cmsis-os-validator-test"
+        }
+      },
+      "pico2-1cpu-cmake-gcc-release": {
+        "inherit": [
+          "pico2-1cpu-cmake-gcc-debug"
+        ],
+        "properties": {
+          "buildType": "MinSizeRel",
+          "shortConfigurationName": "p2c1r"
+        }
+      },
+      "2xcortex-m33-cmake-gcc-debug": {
+        "inherit": [
+          "cortexm-actions",
+          "cmake-actions",
+          "cortexm-dependencies",
+          "arm-cmsis-dependencies",
+          "arm-cmsis-core-dependencies",
+          "arm-none-eabi-gcc-dependencies",
+          "qemu-arm-dependencies",
+          "short-win-paths-properties"
+        ],
+        "properties": {
+          "buildType": "Debug",
+          "platformName": "2xcortex-m33",
+          "toolchainFileName": "arm-none-eabi-gcc.cmake",
+          "shortConfigurationName": "2cm33d"
+        },
+        "actions": {
+          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V",
+          "test-rtos-apis-test": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R 2xcortex-m33-rtos-apis-test",
+          "test-mutex-stress-test": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R 2xcortex-m33-mutex-stress-test",
+          "test-cmsis-os-validator-test": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R 2xcortex-m33-cmsis-os-validator-test"
+        }
+      },
+      "2xcortex-m33-cmake-gcc-release": {
+        "inherit": [
+          "2xcortex-m33-cmake-gcc-debug"
+        ],
+        "properties": {
+          "buildType": "MinSizeRel",
+          "shortConfigurationName": "2cm33r"
         }
       },
       "cortexm-pico2-pizero-cmake-gcc-debug": {

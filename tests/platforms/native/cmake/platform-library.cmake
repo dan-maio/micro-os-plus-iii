@@ -173,8 +173,7 @@ if ("${CMAKE_C_COMPILER_ID}" STREQUAL "Clang")
 endif ()
 
 target_link_libraries (
-  platform-native-interface INTERFACE micro-os-plus::iii-posix-arch
-                                      xpack-3rd-party::libucontext
+  platform-native-interface INTERFACE micro-os-plus::posix-arch
 )
 
 if (COMMAND xpack_display_target_lists)

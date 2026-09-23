@@ -63,6 +63,11 @@ set (UOS_AARCH32_DIR "${CMAKE_SOURCE_DIR}/../../micro-os-plus-iii-aarch32.git"
      CACHE PATH "µOS++ III AArch32 port working copy")
 set (UOS_AARCH64_DIR "${CMAKE_SOURCE_DIR}/../../micro-os-plus-iii-aarch64.git"
      CACHE PATH "µOS++ III AArch64 port working copy")
+set (UOS_POSIX_ARCH_DIR
+     "${CMAKE_SOURCE_DIR}/../../micro-os-plus-iii-posix-arch.git"
+     CACHE PATH "µOS++ III POSIX-arch port working copy")
+set (UOS_CORTEXM_DIR "${CMAKE_SOURCE_DIR}/../../micro-os-plus-iii-cortexm.git"
+     CACHE PATH "µOS++ III Cortex-M port working copy")
 
 if (PLATFORM_NAME MATCHES "^aarch32")
   message (VERBOSE "Adding the AArch32 port (brings iii + devices)...")
@@ -76,6 +81,20 @@ elseif (PLATFORM_NAME MATCHES "^aarch64")
     message (FATAL_ERROR "Cannot find the AArch64 port at ${UOS_AARCH64_DIR}")
   endif ()
   add_subdirectory ("${UOS_AARCH64_DIR}" "port-bin")
+elseif (PLATFORM_NAME MATCHES "^native")
+  # The POSIX-arch port: the same kernel and devices, on the host compiler.
+  message (VERBOSE "Adding the POSIX-arch port (brings iii + devices)...")
+  if (NOT EXISTS "${UOS_POSIX_ARCH_DIR}/CMakeLists.txt")
+    message (FATAL_ERROR "Cannot find the POSIX-arch port at ${UOS_POSIX_ARCH_DIR}")
+  endif ()
+  add_subdirectory ("${UOS_POSIX_ARCH_DIR}" "port-bin")
+elseif (PLATFORM_NAME MATCHES "^cortexm")
+  # The Cortex-M port (RP2040/RP2350, STM32F4...): brings iii + devices.
+  message (VERBOSE "Adding the Cortex-M port (brings iii + devices)...")
+  if (NOT EXISTS "${UOS_CORTEXM_DIR}/CMakeLists.txt")
+    message (FATAL_ERROR "Cannot find the Cortex-M port at ${UOS_CORTEXM_DIR}")
+  endif ()
+  add_subdirectory ("${UOS_CORTEXM_DIR}" "port-bin")
 else ()
   # Fallback: the plain kernel, one level above (upstream behaviour).
   message (VERBOSE "Adding the top library...")

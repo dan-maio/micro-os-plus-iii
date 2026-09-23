@@ -110,6 +110,20 @@ endif ()
 target_link_libraries (
   platform-qemu-cortex-m7f-interface INTERFACE micro-os-plus::iii-cortexm
                                                micro-os-plus::device
+                                               # The kernel's optional startup
+                                               # group: Reset_Handler, the core
+                                               # exception handlers, and
+                                               # startup.cpp -- the device's
+                                               # vector table refers to them.
+                                               micro-os-plus::iii-startup
+                                               # The semihosting syscalls
+                                               # (os_startup_initialize_args,
+                                               # os_terminate) and the newlib
+                                               # reentrant layer (_close, ...).
+                                               micro-os-plus::iii-semihosting
+                                               micro-os-plus::iii-newlib-reent
+                                               # rtos-apis reaches POSIX-io.
+                                               micro-os-plus::iii-posix-io
 )
 
 if (COMMAND xpack_display_target_lists)

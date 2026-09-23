@@ -22,12 +22,10 @@
 //   * a strong main() that sets the interrupts stack (the kernel's weak main
 //     does not, which leaves the port with a 0-byte IRQ stack and hangs the
 //     scheduler), creates the main thread and starts the scheduler;
-//   * a STRONG _Exit() that terminates through the port's AArch64 semihosting
-//     (HLT #0xF000, x1 -> { reason, status }), which QEMU turns into a real
-//     process exit code, so CTest sees pass/fail;
 //   * the newlib syscalls the C library needs (printf -> _write,
 //     gettimeofday -> _gettimeofday, ...), routing output through the port's
-//     UART (mirrored to semihosting under SEMIHOST).
+//     UART (mirrored to semihosting under SEMIHOST). The strong semihosting
+//     _Exit()/_exit() come from the port itself (src/handlers.cpp).
 //
 // The kernel's own semihosting groups are AArch32-only (SWI, r0/r1), so they
 // are not used here.
@@ -41,10 +39,6 @@
 
 #include <uart.hpp>
 #include <exception_handler.hpp>
-
-#if defined(SEMIHOST)
-#include <semihosting.hpp>
-#endif
 
 // ----------------------------------------------------------------------------
 
@@ -124,42 +118,12 @@ extern "C"
   }
 
   // --------------------------------------------------------------------------
-  // Strong semihosting exit. The kernel's _Exit() is weak and, on this
-  // bare-metal port, would reset or idle; this strong definition ends the run
-  // through the AArch64 semihosting SYS_EXIT, which QEMU maps to the process
-  // exit code (0 on success), so CTest reports Passed.
-
-  void
-  _Exit (int code) __attribute__ ((noreturn));
-
-  void
-  _Exit (int code)
-  {
-#if defined(SEMIHOST)
-    if (code == 0)
-      {
-        semihosting::exit_success ();
-      }
-    else
-      {
-        semihosting::exit_failure ();
-      }
-#else
-    (void)code;
-#endif
-    for (;;)
-      {
-        // Never reached under SEMIHOST.
-      }
-  }
-
-  // --------------------------------------------------------------------------
   // newlib syscalls.
   //
-  // The port already provides _write, _read, _close, _lseek, _fstat and
-  // _isatty (in test/boards/rpi-zero-2w/include/uart.hpp and src/handlers.cpp),
-  // routing them to the UART / semihosting. Only _gettimeofday, which the
-  // harness's mutex-stress uses and the port does not define, is added here.
+  // The port already provides _write, _read, _close, _lseek, _fstat, _isatty
+  // and the strong semihosting _Exit()/_exit() (src/handlers.cpp), routing them
+  // to the UART / semihosting. Only _gettimeofday, which the harness's
+  // mutex-stress uses and the port does not define, is added here.
 
   int
   _gettimeofday (struct timeval* tv, void*)

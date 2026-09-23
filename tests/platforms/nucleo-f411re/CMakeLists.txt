@@ -271,3 +271,12 @@ if (ENABLE_INSTRUMENTATION_TEST)
 endif ()
 
 # -----------------------------------------------------------------------------
+# Every test on this platform drives the real board through OpenOCD and a
+# probe, so label them all `hwd`: the generic `test` action (`ctest -LE hwd`)
+# skips them, and `test-nucleo-f411re-cmake` is what runs them on a bench.
+get_property (_nf4_tests DIRECTORY PROPERTY TESTS)
+if (_nf4_tests)
+  set_tests_properties (${_nf4_tests} PROPERTIES LABELS hwd)
+endif ()
+
+# -----------------------------------------------------------------------------

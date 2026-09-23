@@ -29,7 +29,11 @@
 
 #define OS_INTEGER_RTOS_MAIN_STACK_SIZE_BYTES (4000)
 
-#define OS_INTEGER_RTOS_DYNAMIC_MEMORY_SIZE_BYTES (14 * 1024)
+// The RTOS dynamic memory is the arena every `new`/`malloc` in this test
+// draws from (the default resource is the system heap). The FatFs integration
+// asks for up to MAX_MALLOC (0x8000) for a working buffer, so 14 KiB is not
+// enough and the system out-of-memory hook is fatal (no exceptions here).
+#define OS_INTEGER_RTOS_DYNAMIC_MEMORY_SIZE_BYTES (512 * 1024)
 
 // #define OS_EXCLUDE_DYNAMIC_MEMORY_ALLOCATIONS
 

@@ -110,6 +110,10 @@ endif ()
 target_link_libraries (
   platform-qemu-cortex-m4f-interface INTERFACE micro-os-plus::iii-cortexm
                                                micro-os-plus::device
+                                               micro-os-plus::iii-startup
+                                               micro-os-plus::iii-semihosting
+                                               micro-os-plus::iii-newlib-reent
+                                               micro-os-plus::iii-posix-io
 )
 
 if (COMMAND xpack_display_target_lists)

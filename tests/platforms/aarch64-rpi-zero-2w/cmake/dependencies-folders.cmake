@@ -20,6 +20,8 @@ set (
   "${CMAKE_SOURCE_DIR}/sources/cmsis-os-validator"
   # The CMSIS-OS validator, needed only when cmsis-os-validator is built.
   "${CMAKE_SOURCE_DIR}/xpacks/@xpacks/arm-cmsis-rtos-validator"
+  # The Chan FatFs POSIX integration rtos-apis' test-chan-fatfs.cpp needs.
+  "${CMAKE_SOURCE_DIR}/xpacks/@xpacks/chan-fatfs"
 )
 
 # -----------------------------------------------------------------------------

@@ -58,8 +58,13 @@ static const int _DAYS_BEFORE_MONTH[12]
 static void
 validate_structure (struct tm* tim_p);
 
+// Declare it only when the C library does not: newlib has no timegm(), but
+// glibc (and Apple's libc) declare it, and there this prototype is then a
+// redundant redeclaration.
+#if !defined(__GLIBC__) && !defined(__APPLE__)
 time_t
 timegm (struct tm* tim_p);
+#endif
 
 // ----------------------------------------------------------------------------
 

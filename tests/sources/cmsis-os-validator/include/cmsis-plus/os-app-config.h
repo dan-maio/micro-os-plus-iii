@@ -34,7 +34,10 @@
 
 #elif defined(__APPLE__) || defined(__linux__)
 
-#define OS_INCLUDE_LIBUCONTEXT
+// The POSIX-arch port now uses glibc's own ucontext; do NOT switch to the
+// libucontext package here (OS_INCLUDE_LIBUCONTEXT), its sources no longer
+// compile against the current glibc.
+// #define OS_INCLUDE_LIBUCONTEXT
 
 #define OS_INTEGER_RTOS_MAIN_STACK_SIZE_BYTES \
   (4 * os::rtos::port::stack::default_size_bytes)

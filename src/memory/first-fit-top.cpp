@@ -122,6 +122,7 @@ namespace os
     {
       using namespace os;
 
+
       std::size_t block_padding = calc_block_padding (alignment);
       std::size_t alloc_size = rtos::memory::align_size (bytes, chunk_align);
       alloc_size += block_padding;

@@ -20,8 +20,11 @@
 // os-app-config.h.
 
 // The kernel's semihosting syscalls (c-syscalls-semihosting.cpp) are
-// AArch32-only and are deliberately NOT used here; the platform provides its
-// own strong semihosting (HLT #0xF000) in src/platform-support.cpp.
+// AArch32-only; the platform provides its own strong semihosting
+// (HLT #0xF000) in src/platform-support.cpp. Define the switch anyway: the
+// kernel file guards itself on __arm__, and the harness tests use it to skip
+// their "raw POSIX C-API syscalls" sub-tests, which this port does not carry.
+#define OS_USE_SEMIHOSTING_SYSCALLS
 
 // ----------------------------------------------------------------------------
 

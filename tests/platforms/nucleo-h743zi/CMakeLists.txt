@@ -133,3 +133,12 @@ if (ENABLE_CMSIS_OS_VALIDATOR_TEST)
 endif ()
 
 # -----------------------------------------------------------------------------
+
+# -----------------------------------------------------------------------------
+# Every test on this platform drives the real board through OpenOCD and a
+# probe, so label them all `hwd`: the generic `test` action (`ctest -LE hwd`)
+# skips them, and `test-nucleo-h743zi-cmake` is what runs them on a bench.
+get_property (_board_tests DIRECTORY PROPERTY TESTS)
+if (_board_tests)
+  set_tests_properties (${_board_tests} PROPERTIES LABELS hwd)
+endif ()

@@ -89,8 +89,7 @@ extern "C"
   void
   dump_exception_stack (exception_stack_frame_t* frame, uint32_t cfsr,
                         uint32_t mmfar, uint32_t bfar, uint32_t lr);
-#endif // defined(__ARM_ARCH_7M__) || defined(__ARM_ARCH_7EM__) \
-    || defined(__ARM_ARCH_8M_MAIN__)
+#endif // defined(__ARM_ARCH_7M__) || defined(__ARM_ARCH_7EM__) || defined(__ARM_ARCH_8M_MAIN__)
 #if defined(__ARM_ARCH_6M__)
   void
   dump_exception_stack (exception_stack_frame_t* frame, uint32_t lr);
@@ -109,8 +108,7 @@ extern "C"
   void
   BusFault_Handler_C (exception_stack_frame_t* frame, uint32_t lr);
 
-#endif // defined(__ARM_ARCH_7M__) || defined(__ARM_ARCH_7EM__) \
-    || defined(__ARM_ARCH_8M_MAIN__)
+#endif // defined(__ARM_ARCH_7M__) || defined(__ARM_ARCH_7EM__) || defined(__ARM_ARCH_8M_MAIN__)
 
 #if defined(__cplusplus)
 }

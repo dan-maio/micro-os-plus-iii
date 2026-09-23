@@ -11,6 +11,9 @@ and the running footer, so those are arguments here instead of edits.
         --footer   "micro-os-plus-iii-smp" \\
         --meta     "Kernel:micro-os-plus-iii (SMP scheduler)"
 
+--toc prepends a contents list built from the H1 and H2 headings, which is what
+`pandoc --toc --toc-depth=2` used to give the documents under docs/tests/.
+
 Requires: python-markdown, weasyprint.
 """
 import argparse
@@ -157,6 +160,25 @@ CSS = """
         margin-bottom: 6px;
         text-align: justify;
     }
+    .toc {
+        page-break-after: always;
+        margin-bottom: 20px;
+    }
+    .toc > ul {
+        padding-left: 0;
+        list-style: none;
+    }
+    .toc ul ul {
+        padding-left: 18px;
+    }
+    .toc li {
+        margin-bottom: 3px;
+        text-align: left;
+    }
+    .toc a {
+        color: #2b6cb0;
+        text-decoration: none;
+    }
     .title-page {
         page-break-after: always;
         text-align: center;
@@ -187,12 +209,21 @@ CSS = """
     """
 
 
-def render(md_path, pdf_path, title=None, subtitle=None, footer="", meta=None):
+def render(md_path, pdf_path, title=None, subtitle=None, footer="", meta=None,
+           toc=False):
     with open(md_path, "r", encoding="utf-8") as f:
         text = f.read()
 
-    body = markdown.markdown(text, extensions=["extra", "codehilite", "toc"])
-    doc = ("<html><head><meta charset='utf-8'><style>"
+    if toc:
+        text = "[TOC]\n\n" + text
+
+    body = markdown.markdown(
+        text, extensions=["extra", "codehilite", "toc"],
+        extension_configs={"toc": {"toc_depth": "1-2"}})
+    doc = ("<html><head><meta charset='utf-8'>"
+           # WeasyPrint takes the PDF's Title metadata from this element.
+           + ("<title>" + html.escape(title) + "</title>" if title else "")
+           + "<style>"
            + CSS.replace("__FOOTER__", footer)
            + "</style></head><body>")
 
@@ -224,8 +255,10 @@ def main():
     ap.add_argument("--footer", default="")
     ap.add_argument("--meta", action="append", metavar="KEY:VALUE",
                     help="a title-page line; repeatable")
+    ap.add_argument("--toc", action="store_true",
+                    help="prepend a contents list of the H1 and H2 headings")
     a = ap.parse_args()
-    render(a.input, a.output, a.title, a.subtitle, a.footer, a.meta)
+    render(a.input, a.output, a.title, a.subtitle, a.footer, a.meta, a.toc)
     return 0
 
 

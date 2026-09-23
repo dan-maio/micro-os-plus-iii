@@ -426,9 +426,17 @@ switches matter (none of them, for these builds).
 
 ## 9. Rebuilding this document
 
+Every PDF under `docs/` is rendered by one script, which holds each document's
+title page and running footer so they do not have to be recovered from the PDFs
+later:
+
 ```sh
-python3 docs/md2pdf.py docs/building-aarch32-aarch64.md docs/building-aarch32-aarch64.pdf \
-    --title "Building the AArch32 and AArch64 ports" \
-    --subtitle "µOS++ III SMP" \
-    --footer  "µOS++ III SMP — build guide"
+./docs/render-pdfs.sh                            # all thirteen
+./docs/render-pdfs.sh building-aarch32-aarch64   # just this one
 ```
+
+It calls `docs/md2pdf.py`, which takes the Markdown and the PDF as positional
+arguments and `--title`, `--subtitle`, `--footer`, `--meta KEY:VALUE` and
+`--toc` as options. This document is one of the five rendered plainly — no
+title page, no footer, its own H1 opens page 1. Re-running the script on an
+unchanged tree reproduces all thirteen files byte for byte.

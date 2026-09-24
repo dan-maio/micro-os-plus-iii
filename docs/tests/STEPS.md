@@ -516,7 +516,8 @@ emulated/host set.
   `hw.sh` already enabled semihosting, and now stays attached and reads the
   verdict instead of leaving OpenOCD running.
 
-  The Cortex-M family is now complete: `cortexm-pico2` (2 qemu + 12 hwd),
+  The Cortex-M family is now complete: `cortexm-pico2` (2 qemu + 12 hwd; 5 + 15
+  since the three harness suites were added as board apps, see below),
   `cortexm-pico2-pizero` (10 hwd), `cortexm-pico2-rp2350b-psram` (2 qemu +
   14 hwd), `cortexm-nucleof411` (1 hwd), `cortexm-weactf411` (2 hwd),
   `cortexm-weactf412` (2 hwd).
@@ -554,6 +555,42 @@ Verified: `xpm run test-smp_test0-host --config native-cmake-gcc-debug` →
   2. **Thread attributes CPU affinity**: Added `th_cpu_affinity` to `thread::attributes` and `os_thread_attr_t` under `OS_USE_SMP_SCHEDULER`, passed into `thread::thread` constructor to ensure threads are created with affinity before `internal_construct_` / `resume()` places them on the ready list.
   3. **CMSIS-RTOS single-core compatibility**: CMSIS-RTOS v1 is fundamentally single-core; `osThreadCreate` and `os_main_thread` pin threads to Core 0 (`1u << 0`). This ensures strict priority preemption (`TC_ThreadPriorityExec` and `TC_MutexPriorityInversion`) and guarantees that per-core private NVIC registers on Cortex-M handle test interrupts on the core that enabled them (`TC_ThreadInterrupts`).
   4. **SMP stack pointer invariant**: In `switch_stacks(sp)` (`os-core-m33.cpp` and `os-core-rp2350.cpp`), when a core continues executing the same thread (`new_thread == old_thread`), `old_thread->context_.port_.stack_ptr = nullptr` is cleared so secondary cores do not consider the live context switchable.
+
+**The harness suites as `cortexm-pico2` board apps — done.** `rtos-apis`,
+`mutex-stress` and `cmsis-os-validator` also run as pico2 applications
+(`test/pico2/<suite>/`, a placeholder `harness-suite.cpp` naming each, and
+`board_test_libs()` in `test/pico2/tests.cmake` bringing `test::<suite>`). That
+had been committed half-done; four things finished it:
+
+1. **The emulated image is single-core.** The port's builder
+   (`test/CMakeLists.txt`) built a `-qemu` image at the board's NCPU (2), but
+   when `board_test_qemu_libs` replaces the board the core is the generic
+   single-core `micro-os-plus::cortexm-qemu`, and a 2-CPU build does not
+   compile against it (`os-core.cpp:497/833`, `current_thread_`). Such an image
+   is now NCPU=1. It also kept only the board replacement on its link line and
+   dropped the suite's library; it now keeps it.
+2. **One interface for what a harness platform would give.** `pico2-harness-suite`
+   in `tests.cmake`: `OS_USE_OS_APP_CONFIG_H` (so the suite's config is read),
+   the harness platform's include (its `cmsis-plus/platform.h`), the POSIX
+   pair the semihosting syscalls need, the kernel's semihosting / newlib /
+   posix-io groups (the `hwd` image links only the SoC), and
+   `-Wl,--wrap=os_main`.
+3. **The verdict.** A suite returns its code from `os_main()`; `hw.sh` reads a
+   RESULT line. Each placeholder now defines `__wrap_os_main()`: run the suite,
+   print `RESULT: PASS|FAIL` as the other pico2 tests do, return the code to the
+   kernel's `std::exit()` -- the same SYS_EXIT `hw_result` ends with.
+4. **The suite's configuration wins.** The board's `os-app-config.h` is first
+   on the `hwd` include path; under `UOS_HARNESS_SUITE` it now includes the
+   suite's first and fills only what the suite leaves unset. A board test
+   defines no `UOS_HARNESS_SUITE` and gets exactly the old values.
+
+Verified: `cortexm-pico2` builds 20/20; `xpm run test --config
+cortexm-pico2-cmake-gcc-debug` passes **5/5** (`cmsis-os-validator-qemu` 60/60,
+`mutex-stress-qemu`, `rtos-apis-qemu`, `sc-test-ko-qemu`, `smp-test1-qemu`).
+No existing image moved: the 14 earlier pico2 images and all 31 of the other
+five `cortexm-*` boards are byte-identical to the previous commit, and the
+`rp2350b-psram` emulated pair still passes. The three `-hwd` suite images build
+but have not been run on a board.
 
 **Multi-Architecture & SMP/1-CPU Test Verification Matrix (100% Green)**
 

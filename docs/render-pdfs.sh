@@ -57,7 +57,7 @@ render tests/WORK-SMP-AARCH32-AARCH64-HARNESS-GUIDE --toc --footer "$FOOT" \
 # The workspace log: how the whole test tree was built in $HOME/TMP, from the
 # six clones to a green run, kept beside the harness it describes.
 render tests/STEPS --toc --footer "$FOOT" \
-    --title "µOS++ III harness and tests" \
-    --subtitle "Building the test workspace in /home/dan/TMP, step by step" \
+    --title "The µOS++ test framework" \
+    --subtitle "Install, build, run and add tests, step by step" \
     --meta "Kernel:micro-os-plus-iii" \
     --meta "Ports:aarch32, aarch64, cortexm, posix-arch"

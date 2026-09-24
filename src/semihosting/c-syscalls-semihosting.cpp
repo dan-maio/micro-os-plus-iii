@@ -437,9 +437,32 @@ __posix_read (int fildes, void* buf, size_t nbyte)
   return nbyte - res;
 }
 
+/**
+ * Optional board console mirror.
+ *
+ * A board whose console is a physical UART (not the debugger) defines this to
+ * copy the console stream there, so the application's stdout/stderr is visible
+ * on the terminal as well as in the debugger's semihosting console. The
+ * semihosting write stays the primary path; the board only adds the UART copy.
+ * Weak: boards that do not need it link this no-op and it is never called.
+ */
+extern "C" void
+os_board_console_mirror (int fildes, const void* buf, size_t nbyte)
+    __attribute__ ((weak));
+
 ssize_t
 __posix_write (int fildes, const void* buf, size_t nbyte)
 {
+  // The board console, if any, gets stdout/stderr whatever happens to the
+  // semihosting side below: on some ports the monitor handles are not set up,
+  // and a dropped printf() would otherwise never be seen. Done before the fd
+  // lookup so it does not depend on it.
+  if ((fildes == 1 || fildes == 2)
+      && (os_board_console_mirror != nullptr))
+    {
+      os_board_console_mirror (fildes, buf, nbyte);
+    }
+
   struct fdent* pfd;
   pfd = __semihosting_findslot (fildes);
   if (pfd == NULL)

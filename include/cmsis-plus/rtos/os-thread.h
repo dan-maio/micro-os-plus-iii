@@ -745,6 +745,9 @@ namespace os
         // The SMP picker accesses state_ / context_ directly.
         friend void
         rtos::scheduler::internal_switch_threads (void);
+        // The idle reaper reads context_ to know a terminated thread's
+        // context is no longer live on another CPU (see os-idle.cpp).
+        friend void ::os_rtos_idle_actions (void);
 #endif /* defined(OS_USE_SMP_SCHEDULER) */
 
 #endif

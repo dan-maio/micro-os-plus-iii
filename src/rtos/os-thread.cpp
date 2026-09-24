@@ -827,17 +827,24 @@ namespace os
 
 #else
 
-      if (state_ == state::ready)
-        {
-          // ----- Enter critical section -------------------------------------
-          interrupts::critical_section ics;
+      {
+        // ----- Enter critical section ---------------------------------------
+        interrupts::critical_section ics;
 
-          // Remove from initial location and reinsert according
-          // to new priority.
-          ready_node_.unlink ();
-          scheduler::ready_threads_list_.link (ready_node_);
-          // ----- Exit critical section --------------------------------------
-        }
+        // Test and relink under one lock, and only a thread that is still
+        // linked in the ready list. On SMP another CPU may pick this thread
+        // between a test made outside the lock and the relink: link() would
+        // then put a thread being dispatched back in the ready list, marked
+        // ready, and a third CPU could run the same context at once.
+        if (state_ == state::ready && ready_node_.next () != nullptr)
+          {
+            // Remove from initial location and reinsert according
+            // to new priority.
+            ready_node_.unlink ();
+            scheduler::ready_threads_list_.link (ready_node_);
+          }
+        // ----- Exit critical section ----------------------------------------
+      }
 
       // Mandatory, the priority might have been raised, the
       // task must be scheduled to run.
@@ -911,17 +918,24 @@ namespace os
 
 #else
 
-      if (state_ == state::ready)
-        {
-          // ----- Enter critical section -------------------------------------
-          interrupts::critical_section ics;
+      {
+        // ----- Enter critical section ---------------------------------------
+        interrupts::critical_section ics;
 
-          // Remove from initial location and reinsert according
-          // to new priority.
-          ready_node_.unlink ();
-          scheduler::ready_threads_list_.link (ready_node_);
-          // ----- Exit critical section --------------------------------------
-        }
+        // Test and relink under one lock, and only a thread that is still
+        // linked in the ready list. On SMP another CPU may pick this thread
+        // between a test made outside the lock and the relink: link() would
+        // then put a thread being dispatched back in the ready list, marked
+        // ready, and a third CPU could run the same context at once.
+        if (state_ == state::ready && ready_node_.next () != nullptr)
+          {
+            // Remove from initial location and reinsert according
+            // to new priority.
+            ready_node_.unlink ();
+            scheduler::ready_threads_list_.link (ready_node_);
+          }
+        // ----- Exit critical section ----------------------------------------
+      }
 
       // Mandatory, the priority might have been raised, the
       // task must be scheduled to run.
@@ -1033,11 +1047,34 @@ namespace os
       // Fail if current thread
       assert (this != this_thread::_thread ());
 
-      while (state_ != state::destroyed)
+      thread* crt_thread = this_thread::_thread ();
+      for (;;)
         {
-          joiner_ = this_thread::_thread ();
-          this_thread::_thread ()->internal_suspend_ (
-              OS_INTEGER_INSTRUMENTATION_SUSPEND_CAUSE_JOIN);
+          {
+            // ----- Enter critical section -----------------------------------
+            interrupts::critical_section ics;
+
+            // Test, register and suspend under one lock, the same lock
+            // internal_destroy_() sets `destroyed` and reads `joiner_`
+            // under. Done in steps, a destroy on another CPU could fall
+            // between them and its wake-up be lost.
+            if (state_ == state::destroyed)
+              {
+                break;
+              }
+            joiner_ = crt_thread;
+
+            // Remove this thread from the ready list, if there.
+            port::this_thread::prepare_suspend ();
+
+            crt_thread->state_ = state::suspended;
+            // ----- Exit critical section ------------------------------------
+          }
+
+          instrumentation::thread::suspended (
+              crt_thread, OS_INTEGER_INSTRUMENTATION_SUSPEND_CAUSE_JOIN);
+
+          port::scheduler::reschedule ();
         }
 
 #if defined(OS_TRACE_RTOS_THREAD)
@@ -1304,12 +1341,27 @@ namespace os
         // ----- Exit critical section ----------------------------------------
       }
 
-      state_ = state::destroyed;
+      {
+        // ----- Enter critical section ---------------------------------------
+        interrupts::critical_section ics;
 
-      if (joiner_ != nullptr)
-        {
-          joiner_->resume ();
-        }
+        // From `destroyed` on, a joiner may return from join() and free
+        // this object, so `joiner_` is read under the same lock that
+        // sets it, and the joiner is made ready here, where it cannot
+        // yet have gone -- resume() would do it after the lock.
+        state_ = state::destroyed;
+
+        thread* joiner = joiner_;
+        if (joiner != nullptr && joiner->state_ == state::suspended
+            && joiner->ready_node_.next () == nullptr)
+          {
+            scheduler::ready_threads_list_.link (joiner->ready_node_);
+            // state::ready set in above link().
+          }
+        // ----- Exit critical section ----------------------------------------
+      }
+
+      port::scheduler::reschedule ();
     }
 #pragma GCC diagnostic pop
 
@@ -1343,6 +1395,44 @@ namespace os
       {
         // ----- Enter critical section ---------------------------------------
         scheduler::critical_section scs;
+
+#if defined(OS_USE_SMP_SCHEDULER)
+        // On SMP the thread may be running on another CPU -- typically
+        // still inside its own internal_exit_(), right after the event that
+        // let this caller go on -- or be terminated and already taken off
+        // the funeral list by an idle reaper, which destroys it outside the
+        // lock. Destroying it here in either case frees the stack another
+        // CPU runs on, or destroys it twice. So wait, with the lock
+        // released, until it is off every CPU and unclaimed; from then on
+        // the lock held keeps it so.
+        for (;;)
+          {
+            if (state_ == state::destroyed)
+              {
+                break;
+              }
+
+            bool busy
+                = (context_.port_.stack_ptr == nullptr)
+                  || (state_ == state::terminated && ready_node_.unlinked ());
+            for (unsigned c = 0; c < OS_NCPU && !busy; ++c)
+              {
+                busy = (scheduler::current_thread_[c] == this);
+              }
+            if (!busy)
+              {
+                break;
+              }
+
+            {
+              // ----- Enter uncritical section -------------------------------
+              scheduler::uncritical_section sucs;
+
+              this_thread::yield ();
+              // ----- Exit uncritical section --------------------------------
+            }
+          }
+#endif /* defined(OS_USE_SMP_SCHEDULER) */
 
         if (state_ == state::destroyed)
           {

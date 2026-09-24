@@ -813,18 +813,29 @@ namespace os
               if ((owner != nullptr)
                   && (boosted_prio_ > owner->priority_inherited ()))
                 {
-                  // ----- Enter uncritical section ---------------------------
-                  scheduler::uncritical_section sucs;
+                  {
+                    // ----- Enter uncritical section -------------------------
+                    scheduler::uncritical_section sucs;
 
-                  // Still the owner? If it released the mutex while this
-                  // section was open there is nothing to inherit, and
-                  // boosting it anyway would leave behind an inherited
-                  // priority that no later unlock() would ever clear.
-                  if (owner_ == owner)
+                    // Still the owner? If it released the mutex while this
+                    // section was open there is nothing to inherit, and
+                    // boosting it anyway would leave behind an inherited
+                    // priority that no later unlock() would ever clear.
+                    if (owner_ == owner)
+                      {
+                        owner->priority_inherited (boosted_prio_);
+                      }
+                    // ----- Exit uncritical section --------------------------
+                  }
+
+                  // Released while the section was open? Then that unlock()
+                  // found no waiter to hand the mutex to, and blocking now
+                  // would wait for a wake-up that already happened. Decide
+                  // again, back under the lock.
+                  if (owner_ != owner)
                     {
-                      owner->priority_inherited (boosted_prio_);
+                      return internal_try_lock_ (th);
                     }
-                  // ----- Exit uncritical section ----------------------------
                 }
 
 #if defined(OS_TRACE_RTOS_MUTEX)

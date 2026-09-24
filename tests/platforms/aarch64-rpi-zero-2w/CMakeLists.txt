@@ -62,7 +62,7 @@ foreach (_dir IN LISTS _test_dirs)
   )
   set_tests_properties (
     "${PLATFORM_NAME}-${_app}-qemu"
-    PROPERTIES ENVIRONMENT "UOS_QEMU_ONLY=${_app}" LABELS "qemu" TIMEOUT 2400
+    PROPERTIES ENVIRONMENT "UOS_QEMU_ONLY=${_app};UOS_TEST_SRC_DIR=${_port_test_dir}" LABELS "qemu" TIMEOUT 2400
   )
 
   add_test (

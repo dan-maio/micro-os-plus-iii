@@ -45,28 +45,33 @@ timeout_for () {
   esac
 }
 
-# Tests that talk to the SD card need a card to talk to. sd_test wants a
-# seeded flatfs volume (its own flatfs_tool.py builds one); the others just
-# need a large enough blank image to format. Kept out of git by .gitignore --
-# a 4 GiB sparse file per test.
+# Tests that talk to the SD card need a card to talk to: a 4 GiB raw image
+# (a sparse file, so it costs almost no disk). sd_test wants it seeded with a
+# flatfs volume (its own flatfs_tool.py builds one); the others format a blank
+# one themselves. Every run starts from a FRESH image and the image is deleted
+# as soon as the test ends, pass or fail -- no card state leaks from one run
+# into the next, and no 4 GiB files pile up in the build tree.
 # Where this board's test sources are, for the host-side helpers a test ships
 # beside itself (sd_test/flatfs_tool.py seeds the card image). Each board owns
-# its tests, so the board's runner passes the path.
+# its tests, so the board's runner -- or the harness's CTest case -- passes
+# the path.
 COMMON_DIR="${UOS_TEST_SRC_DIR:-}"
+SD_IMAGE_SIZE=4G
 
 sd_image_for () {
   local app="$1" img="${LOGS}/${app}.disk.img"
   case "$app" in
     sd_test)
-      if [[ ! -f "$img" ]]; then
-        local tool="${COMMON_DIR}/sd_test/flatfs_tool.py"
-        [[ -f "$tool" ]] || { echo "no flatfs_tool.py (set UOS_TEST_SRC_DIR)" >&2; return 1; }
-        python3 "$tool" make-seed "$img" >/dev/null \
-          || { echo "could not seed $img" >&2; return 1; }
-      fi
+      rm -f "$img"
+      local tool="${COMMON_DIR}/sd_test/flatfs_tool.py"
+      [[ -f "$tool" ]] || { echo "no flatfs_tool.py (set UOS_TEST_SRC_DIR)" >&2; return 1; }
+      python3 "$tool" make-seed "$img" >/dev/null \
+        || { echo "could not seed $img" >&2; rm -f "$img"; return 1; }
       ;;
     smp-mat-sdcard-test|smp-num-test|smp-pipeline-test)
-      [[ -f "$img" ]] || truncate -s 4G "$img"
+      rm -f "$img"
+      truncate -s "$SD_IMAGE_SIZE" "$img" \
+        || { echo "could not create $img" >&2; return 1; }
       ;;
     *)
       return 1
@@ -91,9 +96,11 @@ for img in "${BUILD_DIR}"/*-qemu.bin; do
 
   printf '%-24s ' "$app"
 
-  drive=()
+  drive=(); sd=""
   if sd="$(sd_image_for "$app")"; then
     drive=(-drive "file=${sd},if=sd,format=raw")
+  else
+    sd=""
   fi
 
   if [[ -n "$SHIM" ]]; then
@@ -115,6 +122,7 @@ for img in "${BUILD_DIR}"/*-qemu.bin; do
         > "$log" 2>&1
   fi
   rc=$?
+  [[ -n "$sd" ]] && rm -f "$sd"   # the card image lives for one run only
 
   if grep -q 'RESULT: PASS' "$log"; then
     echo "PASS"; pass=$((pass+1)); results+=("$app PASS")

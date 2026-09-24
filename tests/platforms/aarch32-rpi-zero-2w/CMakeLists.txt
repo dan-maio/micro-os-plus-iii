@@ -76,7 +76,7 @@ foreach (_dir IN LISTS _test_dirs)
     "${PLATFORM_NAME}-${_app}-qemu"
     PROPERTIES
       ENVIRONMENT
-      "UOS_QEMU_SHIM=${_shim_img};UOS_QEMU_LOAD_ADDR=0x10000;UOS_QEMU_ONLY=${_app}"
+      "UOS_QEMU_SHIM=${_shim_img};UOS_QEMU_LOAD_ADDR=0x10000;UOS_QEMU_ONLY=${_app};UOS_TEST_SRC_DIR=${_port_test_dir}"
       LABELS "qemu" TIMEOUT 2400
   )
 

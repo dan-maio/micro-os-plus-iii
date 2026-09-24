@@ -94,7 +94,7 @@ os_main (int argc __attribute__ ((unused)),
     }
 #endif
 
-#if 1
+#if !defined(OS_EXCLUDE_RTOS_APIS_FATFS)
   if (ret == 0)
     {
       ret = test_chan_fatfs (false);

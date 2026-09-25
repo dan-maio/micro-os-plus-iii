@@ -724,7 +724,19 @@
           "platformName": "native"
         },
         "actions": {
-          "prepare": "{{ properties.commandCMakePrepare }}"
+          "prepare": "{{ properties.commandCMakePrepare }}",
+          "test-cmsis-os-validator-host": "{{ properties.commandCMakePrepare }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R native-cmsis-os-validator-host",
+          "test-mutex-stress-host": "{{ properties.commandCMakePrepare }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R native-mutex-stress-host",
+          "test-rtos-apis-host": "{{ properties.commandCMakePrepare }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R native-rtos-apis-host",
+          "test-smp-mat-test-host": "{{ properties.commandCMakePrepare }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R native-smp-mat-test-host",
+          "test-smp-num-test-host": "{{ properties.commandCMakePrepare }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R native-smp-num-test-host",
+          "test-smp-pipeline-test-host": "{{ properties.commandCMakePrepare }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R native-smp-pipeline-test-host",
+          "test-smp-pro-cons-test-host": "{{ properties.commandCMakePrepare }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R native-smp-pro-cons-test-host",
+          "test-smp_test0-host": "{{ properties.commandCMakePrepare }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R native-smp_test0-host",
+          "test-smp_test1-host": "{{ properties.commandCMakePrepare }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R native-smp_test1-host",
+          "test-smp_test2-host": "{{ properties.commandCMakePrepare }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R native-smp_test2-host",
+          "test-smp_test3-host": "{{ properties.commandCMakePrepare }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R native-smp_test3-host",
+          "test-smp_test4-host": "{{ properties.commandCMakePrepare }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R native-smp_test4-host"
         }
       },
       "native-cmake-sys-release": {

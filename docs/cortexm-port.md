@@ -17,7 +17,7 @@ rather than per board.
 micro-os-plus-iii-cortexm/
 ├── CMakeLists.txt
 ├── include/cmsis-plus/rtos/port/     upstream's port contract
-├── include-rp2350/…/port/            the same, plus an SMP branch
+├── include-rp2350/…/port/            os-c-decls.h, os-inlines.h: the SMP branch
 ├── src/rtos/os-core.cpp              upstream: PendSV, SysTick, criticals
 ├── src/rtos/os-core-rp2350.cpp       the same, plus the SMP branch
 ├── src/semihosting-exit.cpp          strong _Exit() through SYS_EXIT
@@ -145,8 +145,12 @@ A board therefore names the core it was proven with:
 
 ```cmake
 set (UOS_BOARD_PORT_CORE    "src/rtos/os-core-rp2350.cpp")
-set (UOS_BOARD_PORT_INCLUDE "include-rp2350")
+set (UOS_BOARD_PORT_INCLUDE "include-rp2350;include")
 ```
+
+`include-rp2350/` holds only the two headers that differ (`os-c-decls.h`,
+`os-inlines.h`, with the SIO spinlock and `SIO_CPUID`). It is searched first,
+and `os-decls.h`, the same code for both cores, comes from `include/`.
 
 Defaults are upstream's, so a board that says nothing gets what the STM32
 boards get. Merging the two is a later, explicit step.

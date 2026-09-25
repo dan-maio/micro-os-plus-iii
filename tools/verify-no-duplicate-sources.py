@@ -162,20 +162,16 @@ SIBLINGS = [
      "micro-os-plus-iii-cortexm/test/pico2-rp2350b-psram/smp-test-nested-clock_250/main.cpp",
      "as above"),
 
-    ("micro-os-plus-iii-cortexm/include/cmsis-plus/rtos/port/os-decls.h",
-     "micro-os-plus-iii-cortexm/include-rp2350/cmsis-plus/rtos/port/os-decls.h",
-     "the port's two cores, upstream's and the RP2350 SMP one; deliberate and "
-     "written up in docs/cortexm-port.md"),
-
     ("micro-os-plus-iii-cortexm/test/pico2-pizero/sc-test-ko/main.cpp",
      "micro-os-plus-iii-cortexm/test/pico2-pizero/smp-test-ko/main.cpp",
      "the same kernel-object suite run single-core and SMP; sc-test-ko is the "
      "only test on this silicon exercising the kernel's non-SMP branch"),
 
     ("micro-os-plus-iii-cortexm/include-m33/cmsis-plus/rtos/port/os-decls.h",
-     "micro-os-plus-iii-cortexm/include-rp2350/cmsis-plus/rtos/port/os-decls.h",
-     "two SMP port cores: the generic M33's kernel lock is an LDREX/STREX word "
-     "with a saved PRIMASK per core, the RP2350's is SIO hardware spinlock 0"),
+     "micro-os-plus-iii-cortexm/include/cmsis-plus/rtos/port/os-decls.h",
+     "two lock contracts: the generic M33's kernel lock is an LDREX/STREX word "
+     "with a saved PRIMASK per core; include/'s, which the RP2350 shares, is "
+     "owner/depth only, the exclusion being PRIMASK or SIO spinlock 0"),
     ("micro-os-plus-iii-cortexm/include-m33/cmsis-plus/rtos/port/os-c-decls.h",
      "micro-os-plus-iii-cortexm/include-rp2350/cmsis-plus/rtos/port/os-c-decls.h",
      "as above, the C half"),

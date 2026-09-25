@@ -5,15 +5,24 @@
 # The kernel cannot compile alone -- os-decls.h includes
 # <cmsis-plus/rtos/port/os-decls.h>, which an architecture repo supplies. So the
 # gate compiles the kernel against a port's include directory, given as $1.
+# A port whose board overlays one directory on another (cortexm's pico2:
+# include-rp2350 before include) gives them as a ':'-separated list, searched
+# in that order, the same order the board's build uses.
 #
-# Usage:  tools/verify-kernel-compiles.sh <port-include-dir> [compiler]
+# Usage:  tools/verify-kernel-compiles.sh <port-include-dir>[:<dir>...] [compiler]
 # All paths are relative to the repository root.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
-PORT_INC="${1:?usage: $0 <port-include-dir> [compiler]}"
+PORT_INC="${1:?usage: $0 <port-include-dir>[:<dir>...] [compiler]}"
 CXX="${2:-g++}"
-[ -f "$PORT_INC/cmsis-plus/rtos/port/os-decls.h" ] || {
+IFS=: read -ra PORT_DIRS <<< "$PORT_INC"
+PORT_FLAGS=(); found=""
+for d in "${PORT_DIRS[@]}"; do
+  PORT_FLAGS+=("-I$d")
+  [ -f "$d/cmsis-plus/rtos/port/os-decls.h" ] && found=1
+done
+[ -n "$found" ] || {
   echo "error: $PORT_INC does not look like a port (no cmsis-plus/rtos/port/os-decls.h)" >&2
   exit 2
 }
@@ -42,7 +51,7 @@ while read -r f; do
   [ -z "$f" ] && continue
   if "$CXX" -std=c++17 -c -w \
        -Iinclude -Iinclude/cmsis-plus/legacy \
-       -I"$PORT_INC" -D_XOPEN_SOURCE=700L \
+       "${PORT_FLAGS[@]}" -D_XOPEN_SOURCE=700L \
        -x c++ "$f" -o "$TMP/o.o" 2>"$TMP/err"; then
     ok=$((ok+1))
   else

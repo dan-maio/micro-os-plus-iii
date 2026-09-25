@@ -257,8 +257,11 @@ read. No project-specific macro selects an ISA.
 ## 6. Verifying a port
 
 ```sh
-tools/verify-kernel-compiles.sh <port-include-dir> [compiler]
+tools/verify-kernel-compiles.sh <port-include-dir>[:<dir>...] [compiler]
 ```
+
+Several directories, `:`-separated, are searched in that order, for a port
+whose board overlays one on another (cortexm's `include-rp2350:include`).
 
 Compiles every source the kernel declares against that port's headers. It is
 the only meaningful standalone check: the kernel can never compile on its own,

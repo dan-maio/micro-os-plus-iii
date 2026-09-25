@@ -45,13 +45,18 @@ the migration log, dated where they were measured.
   duplicates were removed (one verdict wrapper per Cortex-M board instead of
   one per suite; pico2's QEMU `clocks.hpp` copy) and the genuine look-alikes
   named in `SIBLINGS` with a reason each; every image rebuilt byte-identical.
-  **One pair remains, and the gate still fails on it:** cortexm's
-  `include/` and `include-rp2350/` `os-decls.h` became code-identical when the
-  STM32 core gained its OS_NCPU=1 SMP branch (`04940fe`). They are two port
-  cores that happen to declare the same thing; removing one means the RP2350
-  boards read the header from `include/` through a two-directory include
-  path, which is a decision still open. `verify-kernel-compiles.sh` was not
-  re-run.
+  The last pair was cortexm's `include/` and `include-rp2350/` `os-decls.h`,
+  code-identical since the STM32 core gained its OS_NCPU=1 SMP branch
+  (`04940fe`). The RP2350 copy is gone: pico2's `UOS_BOARD_PORT_INCLUDE` is
+  now `include-rp2350;include`, so `include-rp2350/` holds only the two
+  headers that differ. The gate **passes**. The STM32, `2xcortex-m33` and
+  `pico2-1cpu` images rebuilt byte-identical; the pico2-family images are
+  identical apart from the build date and time their banners print
+  (`__DATE__`/`__TIME__`), which change on every relink.
+  `verify-kernel-compiles.sh` now takes a `:`-separated list of include
+  directories: `posix-arch` 61/61; `cortexm` 27/61 on `include/`,
+  `include-m33/` and `include-rp2350:include` alike (the RP2350's old
+  standalone directory also gave 27).
 
 ---
 
@@ -157,7 +162,7 @@ up in [`cortexm-port.md`](cortexm-port.md).
 ├── micro-os-plus-iii-cortexm/    Cortex-M port — M4F and M33, 1 and 2 CPUs
 │   ├── src/ include/             upstream's single-core core (STM32 boards)
 │   ├── src/rtos/os-core-rp2350.cpp
-│   │   include-rp2350/           the same core plus an SMP branch (pico2)
+│   │   include-rp2350/           its os-c-decls.h, os-inlines.h (pico2)
 │   └── test/                     same shape
 │       ├── boards/{nucleof411,weactf411,weactf412}/
 │       │                         STM32F411RE · F411CE · F412RE
@@ -252,16 +257,15 @@ green. Do not read the two tables as one.
 | no duplicate sources, across repos | `tools/verify-no-duplicate-sources.py` | **PASS** — see below |
 | no machine-specific absolute paths | `tools/verify-no-absolute-paths.sh` | PASS (105 files) |
 
-**The kernel-compiles gate runs on one port of the four, and that is a
-limitation of the gate, not a verdict on the other three.** It takes a single
-include directory, and only `posix-arch` keeps a complete port header set in
-one:
+**The kernel-compiles gate passes on one port of the four, and that is a
+limitation of the gate, not a verdict on the other three.** Only `posix-arch`
+keeps a complete port header set that needs no board:
 
 | port | what happens | why |
 |---|---|---|
 | `posix-arch` | **61/61 PASS** | `include/` holds `os-decls.h`, `os-c-decls.h` and `os-inlines.h` together |
-| `aarch32`, `aarch64` | refuses to start — "does not look like a port" | their `os-decls.h` is the shared one in the kernel's `port/smp-common/`; the port repo has only the other two, and the script takes one directory, not two |
-| `cortexm` | 27/61 | the remaining sources need a board's vendor headers (`cmsis_device.h`) |
+| `aarch32`, `aarch64` | given alone, refuses to start — "does not look like a port". With `include:port/smp-common` (2026-09-25): aarch32 26/61, aarch64 44/61 | their `os-decls.h` is the shared one in the kernel's `port/smp-common/`. With it, aarch32 stops on `OS_NCPU is a board fact`, aarch64 on board headers |
+| `cortexm` | 27/61 (`include`, `include-m33`, `include-rp2350:include`) | the remaining sources need a board's vendor headers (`cmsis_device.h`) |
 
 Supplying both directories by hand gets the ARM ports further, and then they
 stop on `OS_NCPU` and on board headers — because at that depth the kernel no
@@ -269,9 +273,10 @@ longer compiles against *a port*, it compiles against *a board*. That is the
 honest shape of it: this gate proved what it was built for in step 1, and
 `port/smp-common` moving the shared `os-decls.h` out of the ports is what took
 it out of reach of the ARM two. Those three ports are covered by the suites
-and by the build-coverage gate (spec Section 9), not by this script. Fixing
-the script to accept several include directories would restore it; that has
-not been done.
+and by the build-coverage gate (spec Section 9), not by this script. The script
+now accepts several include directories (`a:b`, searched in order), which is
+what the RP2350's overlay needs; for the ARM two it gets further and stops
+where described.
 
 The duplicate gate has **three** outcomes, not two, because this workspace
 duplicates some code on purpose and a flat pass/fail would have to lie about
@@ -365,7 +370,7 @@ removed and 9 are now named in `SIBLINGS`; see the previous section.
 | `cortexm` `syscalls.c`, four boards | 3 | **real**, small |
 | RP2350 `smp-test-nested-clock{,_200,_250}`, differing only in a clock constant | 3 | a `board_test_defines()` job |
 | `pico2-pizero` `sc-test-ko` vs `smp-test-ko` (0.912) | 1 | the single-core/SMP pair; arguably `board_test_ncpu()` |
-| `cortexm` `os-decls.h` vs `include-rp2350/…` (0.936) | 1 | **known and deliberate** — the two port cores, see `cortexm-port.md` |
+| `cortexm` `os-decls.h` vs `include-rp2350/…` (0.936) | 1 | **known and deliberate** — the two port cores, see `cortexm-port.md`. Resolved 2026-09-25: identical by then, the RP2350 copy was removed |
 | TinyUSB `tusb_config.h` cdc vs hid (0.852, 26 lines) | 1 | class-specific by design |
 
 Every one of them was in the Lyra's or `cortexm`'s test trees. None was in the

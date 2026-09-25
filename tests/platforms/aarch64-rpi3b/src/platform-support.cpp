@@ -33,12 +33,26 @@
 #include <cmsis-plus/rtos/os.h>
 
 #include <cstddef>
+#include <cstdio>
 #include <cstdlib>
 
 #include <sys/time.h>
 
 #include <uart.hpp>
 #include <exception_handler.hpp>
+
+// The port's SMP APIs. The kernel does not bring cores 1..3 up by itself on
+// this port, so (as the port's own SMP tests do) the application must install
+// one idle thread per core and then release each core. smp_install_boot_
+// threads() is NOT defined here: the harness suite is built by the port's own
+// builder, which already compiles test/<board>/src/test-smp-boot.cpp into
+// every application. Reusing it keeps one copy of the bring-up, exactly as the
+// port's tests share it.
+#include <smp.hpp>
+
+#if defined(SEMIHOST)
+#include <semihosting.hpp>
+#endif
 
 // ----------------------------------------------------------------------------
 
@@ -70,6 +84,8 @@ extern "C"
         static_cast<std::size_t> (__heap_end - __heap_start));
 
     exception::init ();
+
+    setvbuf (stdout, nullptr, _IOLBF, 0);
   }
 
   // --------------------------------------------------------------------------
@@ -79,9 +95,26 @@ extern "C"
   [[noreturn]] static void
   harness_main_trampoline (void)
   {
-    // The harness test contract is os_main(argc, argv). Without the kernel's
-    // AArch32-only semihosting args layer, run with no arguments (as the
-    // port's own tests do).
+    // Bring the other cores up, so the suite runs on all of them: install one
+    // idle thread per core, then release cores 1..N-1 (each waits on its own
+    // timer tick before the next is let go).
+    smp_install_boot_threads ();
+    smp::start_secondary_cores ();
+    extern int test_wait_secondaries (int timeout_ms);
+    test_wait_secondaries (3000);
+
+    // The harness test contract is os_main(argc, argv); run with no arguments,
+    // as the port's own tests do.
+    //
+    // The suite is linked with -Wl,--wrap=os_main (aarch64-rpi3b-harness-suite
+    // in the port's tests.cmake), so this call lands in the wrapper, which runs
+    // the suite and prints the RESULT line the other tests print on both
+    // channels. On this SMP port the wrapper then stops the run with the
+    // port's semihosting report_result(), not by returning here: std::exit()
+    // runs the atexit handlers and C++ static destructors while the suite's
+    // threads are still alive, which has been observed to block instead of
+    // ending. The std::exit() below is only the fallback for a build without
+    // SEMIHOST.
     int code = os_main (0, nullptr);
     std::exit (code);
   }

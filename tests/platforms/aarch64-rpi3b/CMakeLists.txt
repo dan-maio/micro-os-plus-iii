@@ -94,44 +94,22 @@ foreach (_dir IN LISTS _test_dirs)
 endforeach ()
 
 # -----------------------------------------------------------------------------
-# The harness suites. They supply no main()/hooks, so they link
-# micro-os-plus::platform-support; they end through the strong _Exit()
-# (SYS_EXIT), so QEMU returns an exit code and there is no RESULT line.
-function (add_harness_suite _suite _name)
-  cmake_parse_arguments (T "" "" "LIBRARIES" ${ARGN})
-  add_executable (${_name})
-  target_link_libraries (
-    ${_name}
-    PRIVATE micro-os-plus::common-options test::${_suite} micro-os-plus::iii
-            micro-os-plus::platform micro-os-plus::platform-support
-            ${T_LIBRARIES}
-  )
-  set_target_properties (${_name} PROPERTIES OUTPUT_NAME "${_name}" SUFFIX "")
-  add_custom_command (
-    TARGET ${_name}
-    POST_BUILD
-    COMMAND ${CMAKE_OBJCOPY} -O binary "$<TARGET_FILE:${_name}>"
-            "$<TARGET_FILE:${_name}>.bin"
-    VERBATIM
-  )
-  add_test (
-    NAME "${PLATFORM_NAME}-${_name}-qemu"
-    COMMAND
-      "${_qemu}" --machine raspi3b -smp 4 --nographic --serial none
-      --semihosting-config enable=on,target=native --kernel
-      "$<TARGET_FILE:${_name}>.bin"
-  )
-  set_tests_properties ("${PLATFORM_NAME}-${_name}-qemu" PROPERTIES LABELS
-                                                                  "qemu" TIMEOUT 300)
-endfunction ()
-
-# The harness suite needs the AArch64 platform-support's strong _Exit() to
-# resolve its semihosting group.
-add_harness_suite (mutex-stress mutex-stress-test)
-# rtos-apis brings its own os_main() and the newlib/posix-io + Chan FatFs
-# dependencies its POSIX and FatFs sub-tests need.
-add_harness_suite (rtos-apis rtos-apis-test
-                   LIBRARIES xpacks::chan-fatfs micro-os-plus::iii-posix-io)
+# The harness suites are NOT a special case here.
+#
+# mutex-stress and rtos-apis are built as board apps by the port's own builder
+# above: test/rpi3b/<suite>/ carries the wrapper that prints the RESULT line,
+# and test/rpi3b/tests.cmake's board_test_libs() names the harness's
+# test::<suite> plus aarch64-rpi3b-harness-suite (the suite's os-app-config.h,
+# the startup hooks and --wrap=os_main). The loop
+# further up therefore registers their qemu and hwd cases with the same code
+# path as every port test -- `<platform>-mutex-stress-qemu` and so on. The
+# older add_harness_suite() here built a second, differently-named image
+# against a separately-maintained platform-support library; it was the thing
+# that left the kernel on its DEFAULT os-app-config.h (no OS_USE_OS_APP_CONFIG_H
+# reached the suite), which is what stopped rtos-apis in malloc_memory_
+# resource(). Naming test::<suite> through the builder's own seam is what the
+# proven Cortex-M pico2 platform does, and it carries the suite's config with
+# it.
 
 # -----------------------------------------------------------------------------
 message (STATUS "AArch64 rpi3b: port tests + harness suites registered")

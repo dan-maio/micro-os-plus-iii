@@ -28,10 +28,11 @@ include ("${UOS_AARCH32_DIR}/test/boards/${BOARD}/board.cmake")
 # Build the port's tests by reusing the port's builder. It emits, per test
 # directory, <app>-qemu and <app>-hwd (this board has both linker scripts),
 # plus the AArch64->AArch32 QEMU boot shim (target `qemu-shim`).
-add_subdirectory ("${UOS_AARCH32_DIR}/test" "port-tests")
+add_subdirectory ("${UOS_AARCH32_DIR}/test" "port-tests/test")
 
-set (_port_bin "${CMAKE_CURRENT_BINARY_DIR}/port-tests")
+set (_port_bin "${CMAKE_CURRENT_BINARY_DIR}/port-tests/test")
 set (_port_test_dir "${UOS_AARCH32_DIR}/test/rpi-zero-2w")
+set (_board_hw "${UOS_AARCH32_DIR}/test/boards/${BOARD}/hw.sh")
 set (_shim_img "${_port_bin}/shim8.img")
 set (_runner "${CMAKE_SOURCE_DIR}/../test_smpl")
 
@@ -83,66 +84,18 @@ foreach (_dir IN LISTS _test_dirs)
   # --- hwd ---------------------------------------------------------------
   add_test (
     NAME "${PLATFORM_NAME}-${_app}-hwd"
-    COMMAND bash "${_runner}/run-hw.sh" "${_port_bin}" "${_app}" 600
+    COMMAND bash "${_board_hw}" "${_app}" 600
   )
   set_tests_properties (
     "${PLATFORM_NAME}-${_app}-hwd"
-    PROPERTIES ENVIRONMENT "BUILD=${_port_bin}" LABELS "hwd" TIMEOUT 1200
+    PROPERTIES ENVIRONMENT "BUILD=${CMAKE_CURRENT_BINARY_DIR}/port-tests"
+               LABELS "hwd" TIMEOUT 1200
   )
 endforeach ()
-
-# -----------------------------------------------------------------------------
-# The harness suites, on the same platform. They supply no main() and no
-# startup hooks, so they link micro-os-plus::platform-support.
-function (add_harness_suite _suite _name)
-  cmake_parse_arguments (T "" "" "LIBRARIES" ${ARGN})
-  add_executable (${_name})
-  target_link_libraries (
-    ${_name}
-    PRIVATE micro-os-plus::common-options test::${_suite} micro-os-plus::iii
-            micro-os-plus::platform micro-os-plus::platform-support
-            ${T_LIBRARIES}
-  )
-  set_target_properties (${_name} PROPERTIES OUTPUT_NAME "${_name}" SUFFIX "")
-  add_custom_command (
-    TARGET ${_name}
-    POST_BUILD
-    COMMAND ${CMAKE_OBJCOPY} -O binary "$<TARGET_FILE:${_name}>"
-            "$<TARGET_FILE:${_name}>.bin"
-    VERBATIM
-  )
-  # A harness suite ends through the platform's strong _Exit() (SYS_EXIT), so
-  # QEMU returns a real exit code -- no RESULT line to grep.
-  add_test (
-    NAME "${PLATFORM_NAME}-${_name}-qemu"
-    COMMAND
-      "${_qemu}" --machine raspi3b -smp 4 --nographic --serial none
-      --semihosting-config enable=on,target=native --kernel "${_shim_img}"
-      --device
-      "loader,file=$<TARGET_FILE:${_name}>.bin,addr=0x10000"
-  )
-  set_tests_properties ("${PLATFORM_NAME}-${_name}-qemu" PROPERTIES LABELS
-                                                                  "qemu" TIMEOUT 300)
-endfunction ()
-
-# Every harness suite this platform pulls in (see dependencies-folders.cmake).
-add_harness_suite (mutex-stress mutex-stress-test)
-add_harness_suite (rtos-apis rtos-apis-test
-                   LIBRARIES xpacks::chan-fatfs micro-os-plus::iii-posix-io)
-# rtos-apis and cmsis-os-validator are NOT built here yet:
-#   * rtos-apis builds, but aborts in first_fit_top::internal_align_ on the
-#     AArch32 harness. The cause is a heap overlap this platform cannot fix
-#     from CMake: the µOS++ app-heap (first_fit_top over [__heap_start,
-#     __heap_end]) and newlib's _sbrk region ([_Heap_Begin, _Heap_Limit]) are
-#     the SAME bytes -- the linker sets both to the .heap section -- so `new`
-#     and ::malloc hand out the same memory. mutex-stress' small footprint
-#     never collides; rtos-apis' FatFs/posix-io tests do. It needs a port
-#     linker-script change (separate _Heap_Limit) or kernel work.
-#   * cmsis-os-validator is Cortex-M only: its RV_Signal.c/RV_Thread.c call the
-#     NVIC API (NVIC_EnableIRQ, IRQn_Type), which does not exist on AArch32.
 
 # -----------------------------------------------------------------------------
 message (
   STATUS
     "AArch32 rpi-zero-2w: port tests + harness suites registered (${PLATFORM_NAME})"
 )
+

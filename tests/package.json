@@ -1614,8 +1614,10 @@
           "test-smp_test4-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch32-rpi-zero-2w-smp_test4-hwd",
           "test-usb_test-qemu": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch32-rpi-zero-2w-usb_test-qemu",
           "test-usb_test-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch32-rpi-zero-2w-usb_test-hwd",
-          "test-mutex-stress-test-qemu": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch32-rpi-zero-2w-mutex-stress-test-qemu",
-          "test-rtos-apis-test-qemu": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch32-rpi-zero-2w-rtos-apis-test-qemu"
+          "test-mutex-stress-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch32-rpi-zero-2w-mutex-stress-hwd",
+          "test-mutex-stress-qemu": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch32-rpi-zero-2w-mutex-stress-qemu",
+          "test-rtos-apis-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch32-rpi-zero-2w-rtos-apis-hwd",
+          "test-rtos-apis-qemu": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch32-rpi-zero-2w-rtos-apis-qemu"
         }
       },
       "aarch32-rpi-zero-2w-cmake-gcc-release": {
@@ -1766,8 +1768,10 @@
           "test-smp_test4-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch64-rpi-zero-2w-smp_test4-hwd",
           "test-usb_test-qemu": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch64-rpi-zero-2w-usb_test-qemu",
           "test-usb_test-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch64-rpi-zero-2w-usb_test-hwd",
-          "test-mutex-stress-test-qemu": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch64-rpi-zero-2w-mutex-stress-test-qemu",
-          "test-rtos-apis-test-qemu": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch64-rpi-zero-2w-rtos-apis-test-qemu"
+          "test-mutex-stress-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch64-rpi-zero-2w-mutex-stress-hwd",
+          "test-mutex-stress-qemu": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch64-rpi-zero-2w-mutex-stress-qemu",
+          "test-rtos-apis-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch64-rpi-zero-2w-rtos-apis-hwd",
+          "test-rtos-apis-qemu": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch64-rpi-zero-2w-rtos-apis-qemu"
         }
       },
       "aarch64-rpi-zero-2w-cmake-gcc-release": {

@@ -27,11 +27,11 @@
 //
 // The C library and the exit procedure are NOT implemented here. They come
 // from the kernel's optional groups, linked by platform-library.cmake:
-// micro-os-plus::iii-newlib-reent (the newlib reentrant syscalls),
-// micro-os-plus::iii-semihosting (the __posix_* layer and os_terminate(),
-// which issues SWI 0x123456) and micro-os-plus::iii-trace-semihosting.
-// That is the same semihosting implementation the original micro-os-plus-iii
-// harness uses, and it is what makes the CTest exit code real.
+// micro-os-plus::iii-newlib-reent (the newlib reentrant syscalls) and
+// micro-os-plus::iii-semihosting (the __posix_* layer and the strong
+// _Exit(), which issues the semihosting SYS_EXIT). That is the same
+// semihosting implementation the original micro-os-plus-iii harness uses, and
+// it is what makes the CTest exit code real.
 
 #include <cmsis-plus/rtos/os.h>
 
@@ -41,6 +41,19 @@
 
 #include <uart.hpp>
 #include <exception_handler.hpp>
+
+// The port's SMP APIs. The kernel does not bring cores 1..3 up by itself on
+// this port, so (as the port's own SMP tests do) the application must install
+// one idle thread per core and then release each core. smp_install_boot_
+// threads() is NOT defined here: the harness suite is built by the port's own
+// builder, which already compiles test/<board>/src/test-smp-boot.cpp into
+// every application. Reusing it keeps one copy of the bring-up, exactly as the
+// port's tests share it.
+#include <smp.hpp>
+
+#if defined(SEMIHOST)
+#include <semihosting.hpp>
+#endif
 
 // ----------------------------------------------------------------------------
 
@@ -62,6 +75,8 @@ extern "C"
   {
   }
 
+  extern void initialise_monitor_handles (void);
+
   void
   os_startup_initialize_hardware (void)
   {
@@ -72,6 +87,10 @@ extern "C"
         static_cast<std::size_t> (__heap_end - __heap_start));
 
     exception::init ();
+
+    initialise_monitor_handles ();
+
+    setvbuf (stdout, nullptr, _IOLBF, 0);
   }
 
   // --------------------------------------------------------------------------
@@ -81,13 +100,30 @@ extern "C"
   [[noreturn]] static void
   harness_main_trampoline (void)
   {
-    // The harness test contract is os_main(argc, argv). Fetch them from the
-    // host through the semihosting layer, exactly as the original iii main.
-    int argc = 0;
-    char** argv = nullptr;
-    os_startup_initialize_args (&argc, &argv);
+    // Bring the other cores up, so the suite runs on all of them: install one
+    // idle thread per core, then release cores 1..N-1 (each waits on its own
+    // timer tick before the next is let go). LDREX/STREX is the port's lock.
+    smp_install_boot_threads ();
+    smp::start_secondary_cores ();
+    extern int test_wait_secondaries (int timeout_ms);
+    test_wait_secondaries (3000);
 
-    int code = os_main (argc, argv);
+    // The harness test contract is os_main(argc, argv); run with no arguments,
+    // as the AArch64 platform does. The AArch32 semihosting args layer would
+    // ask the debugger for a command line (SYS_GET_CMDLINE) that a JTAG run
+    // has no answer for.
+    //
+    // The suite is linked with -Wl,--wrap=os_main (aarch32-rpi-zero-2w-harness-suite
+    // in the port's tests.cmake), so this call lands in the wrapper, which runs
+    // the suite and prints the RESULT line the other tests print on both
+    // channels. On this SMP port the wrapper then stops the run with the
+    // port's semihosting report_result(), not by returning here: std::exit()
+    // runs the atexit handlers and C++ static destructors while the suite's
+    // threads are still alive, which has been observed to block instead of
+    // ending. The std::exit() below is only the fallback for a build without
+    // SEMIHOST; it is the strong semihosting _Exit()
+    // (src/semihosting-exit.cpp) that gives QEMU the exit code CTest reads.
+    int code = os_main (0, nullptr);
     std::exit (code);
   }
 
@@ -136,14 +172,18 @@ extern "C" void os_board_console_mirror (int fildes, const void* buf,
 extern "C" void
 os_board_console_mirror (int /* fildes */, const void* buf, std::size_t nbyte)
 {
+  // putc_uart(), not putc(): putc() also issues a semihosting SYS_WRITEC per
+  // character, and the kernel has already sent this same stream to the
+  // semihosting console. A second HLT per character floods the debugger and
+  // stalls the core; the mirror only has to reach the UART.
   const char* cbuf = static_cast<const char*> (buf);
   for (std::size_t i = 0; i < nbyte; ++i)
     {
       if (cbuf[i] == '\n')
         {
-          uart::uart1.putc ('\r');
+          uart::uart1.putc_uart ('\r');
         }
-      uart::uart1.putc (cbuf[i]);
+      uart::uart1.putc_uart (cbuf[i]);
     }
 }
 
@@ -163,3 +203,4 @@ namespace
 
   StdioLineBuffered stdio_line_buffered;
 } // namespace
+

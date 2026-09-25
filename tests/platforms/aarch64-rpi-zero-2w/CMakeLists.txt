@@ -21,10 +21,11 @@ include ("${UOS_AARCH64_DIR}/test/boards/${BOARD}/board.cmake")
 
 # -----------------------------------------------------------------------------
 # Build every port test (qemu + hwd) by reusing the port's builder.
-add_subdirectory ("${UOS_AARCH64_DIR}/test" "port-tests")
+add_subdirectory ("${UOS_AARCH64_DIR}/test" "port-tests/test")
 
-set (_port_bin "${CMAKE_CURRENT_BINARY_DIR}/port-tests")
+set (_port_bin "${CMAKE_CURRENT_BINARY_DIR}/port-tests/test")
 set (_port_test_dir "${UOS_AARCH64_DIR}/test/rpi-zero-2w")
+set (_board_hw "${UOS_AARCH64_DIR}/test/boards/${BOARD}/hw.sh")
 set (_runner "${CMAKE_SOURCE_DIR}/../test_smpl")
 
 # -----------------------------------------------------------------------------
@@ -67,53 +68,15 @@ foreach (_dir IN LISTS _test_dirs)
 
   add_test (
     NAME "${PLATFORM_NAME}-${_app}-hwd"
-    COMMAND bash "${_runner}/run-hw.sh" "${_port_bin}" "${_app}" 600
+    COMMAND bash "${_board_hw}" "${_app}" 600
   )
   set_tests_properties (
     "${PLATFORM_NAME}-${_app}-hwd"
-    PROPERTIES ENVIRONMENT "BUILD=${_port_bin}" LABELS "hwd" TIMEOUT 1200
+    PROPERTIES ENVIRONMENT "BUILD=${CMAKE_CURRENT_BINARY_DIR}/port-tests"
+               LABELS "hwd" TIMEOUT 1200
   )
 endforeach ()
 
 # -----------------------------------------------------------------------------
-# The harness suites. They supply no main()/hooks, so they link
-# micro-os-plus::platform-support; they end through the strong _Exit()
-# (SYS_EXIT), so QEMU returns an exit code and there is no RESULT line.
-function (add_harness_suite _suite _name)
-  cmake_parse_arguments (T "" "" "LIBRARIES" ${ARGN})
-  add_executable (${_name})
-  target_link_libraries (
-    ${_name}
-    PRIVATE micro-os-plus::common-options test::${_suite} micro-os-plus::iii
-            micro-os-plus::platform micro-os-plus::platform-support
-            ${T_LIBRARIES}
-  )
-  set_target_properties (${_name} PROPERTIES OUTPUT_NAME "${_name}" SUFFIX "")
-  add_custom_command (
-    TARGET ${_name}
-    POST_BUILD
-    COMMAND ${CMAKE_OBJCOPY} -O binary "$<TARGET_FILE:${_name}>"
-            "$<TARGET_FILE:${_name}>.bin"
-    VERBATIM
-  )
-  add_test (
-    NAME "${PLATFORM_NAME}-${_name}-qemu"
-    COMMAND
-      "${_qemu}" --machine raspi3b -smp 4 --nographic --serial none
-      --semihosting-config enable=on,target=native --kernel
-      "$<TARGET_FILE:${_name}>.bin"
-  )
-  set_tests_properties ("${PLATFORM_NAME}-${_name}-qemu" PROPERTIES LABELS
-                                                                  "qemu" TIMEOUT 300)
-endfunction ()
-
-# The harness suite needs the AArch64 platform-support's strong _Exit() to
-# resolve its semihosting group.
-add_harness_suite (mutex-stress mutex-stress-test)
-# rtos-apis brings its own os_main() and the newlib/posix-io + Chan FatFs
-# dependencies its POSIX and FatFs sub-tests need.
-add_harness_suite (rtos-apis rtos-apis-test
-                   LIBRARIES xpacks::chan-fatfs micro-os-plus::iii-posix-io)
-
-# -----------------------------------------------------------------------------
 message (STATUS "AArch64 rpi-zero-2w: port tests + harness suites registered")
+

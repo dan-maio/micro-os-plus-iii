@@ -130,7 +130,7 @@ got confused, delete only `build/C/CMakeCache.txt` and run `prepare` again.
 | run one test; it builds whatever it needs first | `xpm run test-<test>-<variant> --config C` |
 | see which tests exist | `PATH="$PWD/build/C/xpacks/.bin:$PATH" ctest --test-dir build/C -N` |
 | run one case by hand | same `PATH`, then `ctest --test-dir build/C -V -R <platform>-<test>-<variant>` |
-| run debug and release in one go | `xpm run test-<platform>-cmake`. This exists for the upstream platforms, the two Raspberry Pi platforms and `native`. |
+| run debug and release in one go | `xpm run test-<platform>-cmake`. This exists for the upstream platforms, `aarch32-rpi-zero-2w`, `aarch64-rpi-zero-2w` and `native`; `test-cortex-cmake` runs the four `qemu-cortex-m*` ones. |
 
 Examples:
 
@@ -228,9 +228,11 @@ The suite links `micro-os-plus::platform-support`, which supplies `main()`
 and the start-up hooks. A board test must **not** link it, because it has its
 own `main()`.
 
-Suites today: `mutex-stress`, `rtos-apis`, `cmsis-os-validator` (Cortex-M
-and native only, because it needs the NVIC), plus `blinky` and
-`instrumentation` (hardware).
+Suites today: `mutex-stress`, `rtos-apis`, `cmsis-os-validator`, plus
+`blinky` and `instrumentation` (`nucleo-f411re` only). The validator raises
+NVIC IRQ 0: on Cortex-M that is the NVIC, on `native` the validator xpack's
+signal shims, and on the four Raspberry Pi platforms the BCM2837's local
+Mailbox 1 (see `TESTS-CATALOG.md` §4).
 
 ---
 
@@ -316,38 +318,44 @@ Then follow section 3 with `install → prepare → build → test`.
 
 ## 10. What exists today
 
-There are **20 platforms** and **66 configurations** (33 debug + 33 release;
+There are **22 platforms** and **70 configurations** (35 debug + 35 release;
 `native` has one configuration per compiler). The numbers below are the debug
-case counts from `ctest -N`.
+case counts from `ctest -N`. What every test does, its scheduling mode and the
+probe each board uses are in [`TESTS-CATALOG.md`](TESTS-CATALOG.md).
 
 | Platform | Tests | Emulated / host | Hardware |
 |---|---|---|---|
-| `aarch32-rpi-zero-2w` | 12 port tests + `mutex-stress`, `rtos-apis` | 14 qemu | 12 |
-| `aarch64-rpi-zero-2w` | the same | 14 qemu | 12 |
+| `aarch32-rpi-zero-2w` | 12 port tests + `mutex-stress`, `rtos-apis`, `cmsis-os-validator` | 15 qemu | 15 |
+| `aarch64-rpi-zero-2w` | the same | 15 qemu | 15 |
+| `aarch32-rpi3b` | the same | 15 qemu | 14 (no `usb_test`: the Pi 3 B's USB is behind a hub) |
+| `aarch64-rpi3b` | the same | 15 qemu | 14 (likewise) |
 | `aarch32-luckfox-lyra` | 19 port tests + `mutex-stress` | – | 20 |
-| `native` (POSIX, on the PC) | 11 port tests + `cmsis-os-validator` | 12 host | – |
-| `cortexm-pico2` | port tests + the 3 suites as board apps | 5 qemu | 15 |
-| `cortexm-pico2-rp2350b-psram` | port tests | 2 qemu | 14 |
-| `cortexm-pico2-pizero` | port tests | – | 10 |
-| `cortexm-nucleof411` | `mos-test1` | – | 1 |
-| `cortexm-weactf411` | `mos-test1`, `spi-pipeline` | – | 2 |
-| `cortexm-weactf412` | `mos-test1`, `uart-test1` | – | 2 |
+| `native` (POSIX, on the PC) | 13 port tests + `cmsis-os-validator` | 14 host | – |
+| `cortexm-pico2` | 12 port tests + the 3 suites as board apps | 5 qemu | 15 |
+| `cortexm-pico2-rp2350b-psram` | 14 port tests | 2 qemu | 14 |
+| `cortexm-pico2-pizero` | 14 port tests | – | 14 |
+| `cortexm-nucleof411` | `mos-test1` + the 3 suites | – | 4 |
+| `cortexm-weactf411` | `mos-test1`, `spi-pipeline` + the 3 suites | – | 5 |
+| `cortexm-weactf412` | `mos-test1`, `uart-test1` + the 3 suites | – | 5 |
 | `pico2-1cpu` (1 × Cortex-M33) | the 3 suites | 3 qemu | – |
 | `2xcortex-m33` (2 × Cortex-M33, SMP) | the 3 suites | 3 qemu | – |
 | `qemu-cortex-m0 / m3 / m4f / m7f` | the 3 suites | 3 qemu each | – |
 | `nucleo-f411re` | 3 suites + `blinky`, `instrumentation` | – | 4 |
 | `nucleo-f767zi`, `nucleo-h743zi`, `raspberrypi-pico` | the 3 suites | – | 3 each |
 
-**Verified passing:**
+**Verified passing** (what has been run and seen to pass, not everything
+that is registered):
 
 * the 3 suites on `qemu-cortex-m0/m3/m4f/m7f`, `pico2-1cpu` and
   `2xcortex-m33`, with `cmsis-os-validator` at 60/60;
-* `cortexm-pico2` 5/5 and `cortexm-pico2-rp2350b-psram` 2/2;
-* `native` `cmsis-os-validator` 60/60 and `smp_test0`;
-* on both Raspberry Pi platforms, `mutex-stress`, `rtos-apis` and
+* `cortexm-pico2` 5/5 and `cortexm-pico2-rp2350b-psram` 2/2 emulated;
+* `native`: all 14 host cases, in `gcc` and `sys`, debug and release;
+* `cmsis-os-validator` 60/60 on the four Raspberry Pi platforms, emulated and
+  on the boards, debug and release;
+* on the Raspberry Pi Zero 2 W platforms, `mutex-stress`, `rtos-apis` and
   `smp_test0`, plus `smp_test1` and `smp_test3` on AArch32.
 
-The other emulated cases are registered but were not run one by one. Every
+The other cases are registered but were not all run one by one. Every
 hardware case builds, and runs only when its board is connected.
 
 ---

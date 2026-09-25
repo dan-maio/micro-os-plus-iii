@@ -1,5 +1,13 @@
 # Integrating the µOS++ Test Harness for AArch32 / Raspberry Pi Zero 2 W
 
+> **Earlier layout — read as history.** This document describes the harness
+> as it was set up before it moved into `micro-os-plus-iii-smp.git/tests/`
+> (paths such as `micro-os-plus-iii.git/tests`, `aarch32-tests/`,
+> `test_smpl/common/` or `~/Work-smp` no longer exist, and some action names
+> have changed). For the current framework see [`STEPS.md`](STEPS.md); for
+> every test, board and probe see [`TESTS-CATALOG.md`](TESTS-CATALOG.md). The
+> code is the truth where they disagree.
+
 > How to take the test folder from
 > `/home/dan/Work/micro-os-plus-iii/micro-os-plus-iii.git/tests` (the
 > xpm/xPack harness) and make it test the **AArch32 port on the Raspberry Pi

@@ -14,11 +14,13 @@ reaches exactly one board.
 ```
 micro-os-plus-iii-aarch{32,64}/
 ├── src/  include/                    the ISA — no board, no test
-└── test/boards/<id>/
-    ├── board.cmake                   the board's facts, globbed
-    ├── include/  src/                the board's silicon
-    ├── hw.sh  qemu.sh                how to run this board's tests
-    └── test/                         ← this board's test applications
+└── test/
+    ├── CMakeLists.txt  hw.sh  qemu.sh   the builder and the two dispatchers
+    ├── boards/<id>/
+    │   ├── board.cmake               the board's facts, globbed
+    │   ├── include/  src/            the board's silicon
+    │   └── hw.sh  qemu.sh            how to run this board's tests
+    └── <id>/                         ← this board's test applications
         ├── <app>/main.cpp            one directory per application
         ├── include/  src/            support shared by THIS board's tests
         └── tests.cmake               the knobs a directory listing cannot say
@@ -31,13 +33,15 @@ names no test and no board.
 
 | port | board | applications |
 |---|---|---|
-| aarch32 | `rpi-zero-2w` | 12 |
-| aarch32 | `rpi3b` | 12 |
-| aarch32 | `luckfox-lyra` | 13 — 11 shared-in-origin, plus `smp_test_int` and `smp_test_int2`, which are this board's own |
-| aarch64 | `rpi-zero-2w` | 12 |
-| aarch64 | `rpi3b` | 12 |
+| aarch32 | `rpi-zero-2w` | 15 — 12 port tests + the harness suites `mutex-stress`, `rtos-apis`, `cmsis-os-validator` |
+| aarch32 | `rpi3b` | 15 — the same |
+| aarch32 | `luckfox-lyra` | 19 — 11 shared-in-origin, plus this board's own `smp_test5`…`smp_test7` and `smp_test_int`…`smp_test_int5` |
+| aarch64 | `rpi-zero-2w` | 15 — as the AArch32 Zero 2 W |
+| aarch64 | `rpi3b` | 15 — the same |
 
-Each builds in two variants, so 24 targets per Pi board and 26 for the Lyra.
+The Pi boards build every application in two variants, so 30 targets each;
+the Lyra is hardware-only (§3), so 19. What each test does is in
+[`tests/TESTS-CATALOG.md`](tests/TESTS-CATALOG.md).
 
 ### Why `rpi3b` has its own `test/` but not its own `src/`
 
@@ -67,11 +71,12 @@ beside `test/boards/rpi3b/board.cmake`.
 
 ### The cost, stated plainly
 
-The twelve applications exist in five copies across the two ports. A fix to a
+The twelve port applications exist in up to five copies across the two ports
+(four Pi boards and, for eleven of them, the Lyra). A fix to a
 shared test — the `[OS_NCPU] = { 0, 0, 0, 0 }` kind — has to be applied in each
 copy. That is the trade: duplication bought in exchange for a board that cannot
-be broken from outside itself. The support code (`test/include/`, `test/src/`)
-is one copy *per board*, not per test, so the duplication is bounded by the
+be broken from outside itself. The support code (`test/<board>/include/`,
+`test/<board>/src/`) is one copy *per board*, not per test, so the duplication is bounded by the
 number of boards.
 
 ---
@@ -87,8 +92,12 @@ file.
 set (BOARD_TEST_NEED_DEVICES
      sd_test smp-mat-sdcard-test smp-num-test smp-pipeline-test usb_test)
 
-# Tests that bring their own start-up code and must NOT also get test/src/.
-set (BOARD_TEST_SELF_CONTAINED smp_test_int smp_test_int2)
+# Tests that bring their own start-up code and must NOT also get the board's
+# test/<board>/src/ (this is the Lyra's list).
+set (BOARD_TEST_SELF_CONTAINED
+     smp_test_int smp_test_int2
+     smp_test5 smp_test6 smp_test7
+     smp_test_int3 smp_test_int4 smp_test_int5)
 
 # Per-test -D flags, carried over from the predecessor's per-test Makefiles.
 function (board_test_defines _app _out)
@@ -160,8 +169,9 @@ Every application is built once per variant, from the same sources:
 > `board_test_options()`, `BOARD_TEST_SELF_CONTAINED` — so everything here
 > about layout and per-test composition applies to it too. The last three
 > hooks arrived *from* that port, where one board's tests disagree with their
-> board about CPU count, memory map and compile options. What it does not have
-> is a QEMU suite: all six of its boards are hardware-only. See
+> board about CPU count, memory map and compile options. Two of its six boards,
+> `pico2` and `pico2-rp2350b-psram`, also build `-qemu` images for the few
+> tests QEMU's generic Cortex-M can run; the other four are hardware-only. See
 > [`cortexm-port.md`](cortexm-port.md).
 >
 > **The POSIX port carries the same loop and the same six hooks** with one
@@ -226,7 +236,7 @@ itself to one shared runner in the kernel repository:
 | `test_smpl/run-host.sh` | the same, for the POSIX port: runs every `*-host` executable, same timeout table, same verdicts, same summary line — `run-qemu.sh` with the emulator taken out |
 | `test_smpl/run-hw.sh` | halts the cores, enables semihosting, `load_image`, resumes |
 
-Those two files are the same for every board of every port. Nothing
+Those three files are the same for every board of every port. Nothing
 board-specific is in them and nothing generic is in the board scripts.
 
 ### What a board script declares
@@ -298,14 +308,12 @@ A board sharing another's silicon points `UOS_BOARD_SRC_DIR` at it and
 ## 7. Known gaps
 
 - `smp-pro-cons-test` carries its **own** linker script in the predecessor
-  (`smp-pro-cons-test/linker{,-rpi3b}.ld`). The build has no per-test linker
-  override yet; it uses the board's.
-- `test/luckfox-lyra/.pending/` holds six of the predecessor's Lyra
-  tests that cannot link yet — three need FatFs compiled as C++ inside
-  `namespace fatfs`, two need the RK3506 DWC2 device stack, one needs the
-  Cortex-M0 firmware blob. A dot-directory is not globbed, so they are present
-  without breaking the board. Its `README.md` names what each one needs. They
-  are not to be rewritten.
+  (`smp-pro-cons-test/linker{,-rpi3b}.ld`). The per-test override now exists
+  (`board_test_linker()`, §2), but no board uses it for this test: it links
+  the board's script.
+- The six predecessor Lyra tests once parked in `test/luckfox-lyra/.pending/`
+  now build and are ordinary test directories (`smp_test5`…`smp_test7`,
+  `smp_test_int3`…`smp_test_int5`); the `.pending/` directory is gone.
 - `smp_test4` has not been made to pass on the Lyra. The shared `smp_test4` is
   the Pi's no-affinity load-balancing test; the predecessor's Lyra `smp_test4`
   is a different program entirely, an 865-line CNTPCT benchmark.

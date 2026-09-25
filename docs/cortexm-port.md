@@ -30,15 +30,20 @@ micro-os-plus-iii-cortexm/
 
 | board | part | CPUs | tests |
 |---|---|---|---|
-| `nucleof411` | STM32F411RE, Cortex-M4F | 1 | 1 |
-| `weactf411` | STM32F411CE, Cortex-M4F | 1 | 2 |
-| `weactf412` | STM32F412RE, Cortex-M4F | 1 | 2 |
-| `pico2` | RP2350, 2× Cortex-M33, 4 MB flash | **2** | 12 |
+| `nucleof411` | STM32F411RE, Cortex-M4F | 1 | 4 — `mos-test1` + the 3 harness suites |
+| `weactf411` | STM32F411CE, Cortex-M4F | 1 | 5 — `mos-test1`, `spi-pipeline` + the 3 suites |
+| `weactf412` | STM32F412RE, Cortex-M4F | 1 | 5 — `mos-test1`, `uart-test1` + the 3 suites |
+| `pico2` | RP2350, 2× Cortex-M33, 4 MB flash | **2** | 15 — 12 port tests + the 3 suites |
 | `pico2-rp2350b-psram` | RP2350B, 16 MB flash + 8 MB PSRAM | **2** | 14 |
-| `pico2-pizero` | RP2350B, 16 MB flash, Pi-Zero form factor | **2** | 10 |
+| `pico2-pizero` | RP2350B, 16 MB flash, Pi-Zero form factor | **2** | 14 |
 
-All six are **hardware-only**: none sets `UOS_BOARD_LINKER_QEMU`, so each
+Four are **hardware-only**: they set no `UOS_BOARD_LINKER_QEMU`, so each
 builds one image per test and `test/qemu.sh` answers by naming `hw.sh`.
+`pico2` and `pico2-rp2350b-psram` set it, and build a `-qemu` image for the
+tests QEMU's generic Cortex-M can run (`pico2`: `smp-test1`, `sc-test-ko` and
+the three suites; `pico2-rp2350b-psram`: `smp-test1`, `sc-test-ko`); every
+other test is listed `BOARD_TEST_HWD_ONLY`. What each test does is in
+[`tests/TESTS-CATALOG.md`](tests/TESTS-CATALOG.md).
 
 ### The three RP2350 boards
 
@@ -56,7 +61,7 @@ is copied and nothing is repeated.
 | LED | GPIO25 | GPIO25 | GPIO5 |
 | arch define | `__ARM_ARCH_7EM__` | `__ARM_ARCH_7EM__` | **`__ARM_ARCH_8M_MAIN__`** |
 | PSRAM | — | window 1 @ `0x11000000`, CS GPIO0 | — |
-| probe | `0xc251:0xf001` @1000 | same | `0x0416:0x5951` @2000 |
+| probe | any CMSIS-DAP (no vid_pid pinned) @1000 | `0xc251:0xf001` @1000 | `0x0416:0x5951` @2000 |
 
 The arch define is the one that is not wiring. The M33 **is** ARMv8-M
 Mainline, and the predecessor's Pi-Zero Makefiles said so, while every other
@@ -325,10 +330,12 @@ Verified in the linked image:
 
 ## 8. What is not done
 
-- **Nothing on this port has been run on hardware.** The five STM32
-  applications and the thirty-six RP2350 images link, and the ELFs show the right
-  CPU count, the right memory and the right class driver in each. That is all
-  that is claimed.
+- **Hardware results are not recorded here.** When this section was first
+  written nothing had run on a board. Since then every board has a `-hwd`
+  runner (`test/boards/<id>/hw.sh`, with the `hw_result` verdict), and the
+  git history of `micro-os-plus-iii-cortexm` shows tests adjusted on
+  hardware (e.g. the HID test's Escape-to-PASS). This document does not keep
+  a per-test hardware record.
 - **`sc-test-ko` is the pair's missing half, and it *is* carried.** Together
   with `smp-test-ko` it is the same ten kernel objects run single-core and
   cross-core, which makes it the closest thing this port has to a regression

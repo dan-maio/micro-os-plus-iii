@@ -160,7 +160,7 @@ cmake -S . -B build-lyra -DBOARD=luckfox-lyra \
 | `UOS_BOARD_NCPU` | 4 | 3 |
 | `hwd` linker script | `linker.ld` | `linker.ld` |
 | `qemu` linker script | `linker.ld` | — none; hardware-only board (§6) |
-| test applications | all twelve | eleven of the twelve, plus eight of its own |
+| test applications | all twelve, plus the three harness suites | eleven of the twelve, plus eight of its own (and the harness's `mutex-stress-test`, built by the harness platform) |
 
 Two of those rows are new shapes, not just new values:
 

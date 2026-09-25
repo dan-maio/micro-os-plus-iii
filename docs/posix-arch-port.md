@@ -73,20 +73,27 @@ micro-os-plus-iii-posix-arch/
     │   ├── include/{uart,led,timer_arm,smp}.hpp
     │   ├── src/{heap,smp}.cpp
     │   └── run.sh
-    └── native/                             this board's 10 applications
+    └── native/                             this board's 13 applications
         ├── include/{test-console,test-smp-boot}.hpp
         ├── src/test-smp-boot.cpp           shared support, one copy
         ├── tests.cmake                     the knobs a listing cannot express
         ├── smp_test0 … smp_test4
         ├── smp-mat-test  smp-num-test  smp-pipeline-test  smp-pro-cons-test
-        └── mutex-stress                    the OS_NCPU=1 leg
+        ├── mutex-stress  rtos-apis         the OS_NCPU=1 legs
+        └── smp-mutex-stress  smp-rtos-apis the same two upstream tests at OS_NCPU
 ```
 
-Roughly 2,300 lines of port and board code. One board. Ten test applications.
+Roughly 2,300 lines of port and board code. One board. Thirteen test
+applications, plus the harness's `cmsis-os-validator`, which the xPack
+harness's `native` platform builds on its own.
 
 | board | "silicon" | CPUs | tests | verdict |
 |---|---|---|---|---|
-| `native` | the host kernel | 4, `-DNCPU=` | 11 | 11 passed / 0 skipped / 0 failed |
+| `native` | the host kernel | 4, `-DNCPU=` | 13 (+ `cmsis-os-validator` in the harness) | 14 passed / 0 skipped / 0 failed in the harness (`native-cmake-{gcc,sys}-{debug,release}`) |
+
+The measurements further down ("11 passed", the sanitizer runs) were taken
+with the first eleven applications, before `smp-mutex-stress` and
+`smp-rtos-apis` were added; they are kept as they were measured.
 
 The port depends on the kernel (`micro-os-plus-iii-smp`) and the device layer
 (`micro-os-plus-iii-devices`), holds no copy of either, and neither of them

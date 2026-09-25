@@ -104,7 +104,7 @@ cmake -S . -B build-lyra   -DBOARD=luckfox-lyra ...
 ISA outside the coherency domain and is not a CPU the scheduler can use, so
 the board is multi-core while the SMP cluster is three.
 
-It has the most applications of any board here — 19, against the Pi's 12 —
+It has the most applications of any board here — 19, against the Pi's 15 —
 because it carries the predecessor's RK3506 tests as well as the shared ones:
 the GIC-400 SGI pair, the USB gadget pair, the SD pair and the Cortex-M0. It
 reaches its own SD card through `micro-os-plus::devices-rk3506`, which is the
@@ -122,7 +122,9 @@ places where one board had been mistaken for the architecture. See
 
 ### What you get
 
-24 targets — twelve applications × `{qemu, hwd}` — each producing an ELF, a
+30 targets — fifteen applications (the twelve port tests and the three
+harness suites `mutex-stress`, `rtos-apis`, `cmsis-os-validator`) ×
+`{qemu, hwd}` — each producing an ELF, a
 `.bin` (the `kernel8.img` / `kernel7.img` equivalent) and a `.map`, all in
 `build/test/`.
 
@@ -133,6 +135,8 @@ smp-mat-test-qemu     smp-mat-test-hwd
 smp-mat-sdcard-test-… smp-num-test-…
 smp-pipeline-test-…   smp-pro-cons-test-…
 usb_test-qemu         usb_test-hwd
+mutex-stress-…        rtos-apis-…
+cmsis-os-validator-qemu cmsis-os-validator-hwd
 ```
 
 `qemu` is the emulator build. `hwd` adds `HW_BUILD` (SD tests use the existing
@@ -141,7 +145,8 @@ FAT32 boot partition rather than formatting a blank card) and `DEBUG_BOOT`
 
 > How the tests are laid out, what each board has, what `tests.cmake` says and
 > how to add one is
-> [`tests-in-aarch32-aarch64.md`](tests-in-aarch32-aarch64.md). The two shared
+> [`tests-in-aarch32-aarch64.md`](tests-in-aarch32-aarch64.md); what each test
+> does is [`tests/TESTS-CATALOG.md`](tests/TESTS-CATALOG.md). The shared
 > runners those scripts delegate to are [`test-smpl.md`](test-smpl.md).
 
 ## 4. Running the QEMU suites
@@ -187,7 +192,8 @@ volume for `sd_test`, a blank 4 GiB image for the others — under
 qemu suite: 11 passed, 1 skipped, 0 failed
 ```
 
-on both architectures. `usb_test` skips by design — QEMU emulates no USB device
+on both architectures — measured with the twelve port tests, before the three
+harness suites joined the board. `usb_test` skips by design — QEMU emulates no USB device
 mode — exactly as the predecessor suite recorded it.
 
 ## 5. Running on hardware
@@ -196,8 +202,8 @@ Measured on a Raspberry Pi Zero 2 W over a SEGGER J-Link.
 
 | Port | Hardware |
 |---|---|
-| **AArch64** | all twelve tests pass |
-| **AArch32** | all twelve tests pass |
+| **AArch64** | all twelve port tests pass; `cmsis-os-validator` 60/60, debug and release |
+| **AArch32** | all twelve port tests pass; `cmsis-os-validator` 60/60, debug and release |
 
 Each figure is from runs on that port. They are not inferred from one another:
 the two ports share every test source, but they are separate binaries, and a
@@ -217,7 +223,9 @@ test/hw.sh list                     # the tests this build has, and their budget
 test/hw.sh smp_test2                # run one
 ```
 
-`test/hw.sh` holds only what is specific to the port and the board — the
+The board's `test/boards/<id>/hw.sh` (reached through the dispatcher
+`test/hw.sh`, which names no board) holds only what is specific to the port
+and the board — the
 binutils, the entry fallback, the OpenOCD target names, which cores are
 debug targets at load time, the width of `__smp_spin`, how a core is resumed,
 and whether anything has to happen between the halt and the load. The session
@@ -266,11 +274,11 @@ BOARD=luckfox-lyra test/hw.sh smp_test0    # run one
 ```
 
 Same runner, same rules, three differences — all of them in
-`test/boards/luckfox-lyra/openocd.cfg` and the `luckfox-lyra` branch of
-`test/hw.sh`, none of them in the shared runner:
+`test/boards/luckfox-lyra/openocd.cfg` and the board's own
+`test/boards/luckfox-lyra/hw.sh`, none of them in the shared runner:
 
 **The probe is a WCH-Link over SWD**, not a J-Link over JTAG — `cmsis-dap`,
-USB `1a86:8011`, `reset_config none separate`, 1000 kHz. There is no `PROBE`
+USB `1a86:8011`, `reset_config none separate`, 4000 kHz (`UOS_HW_ADAPTER_KHZ`). There is no `PROBE`
 choice on this board.
 
 **Only core 0 is a debug target when the image is loaded.** Cores 1 and 2 sit

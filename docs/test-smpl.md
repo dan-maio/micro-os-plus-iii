@@ -1,4 +1,4 @@
-# `test_smpl/` — the two shared test runners
+# `test_smpl/` — the three shared test runners
 
 > **The test applications are no longer here.** Every board owns its own, in
 > `test/<board>/` of the architecture project that has that board. How they
@@ -6,17 +6,21 @@
 > [`tests-in-aarch32-aarch64.md`](tests-in-aarch32-aarch64.md).
 >
 > This directory kept only what is genuinely shared and genuinely not a test:
-> the two scripts that drive a build.
+> the three scripts that drive a build.
 
 ```
 test_smpl/
 ├── run-qemu.sh      run a build's *-qemu images under an emulator
+├── run-host.sh      run a build's *-host executables (the POSIX port)
 └── run-hw.sh        run one *-hwd image on silicon, through OpenOCD
 ```
 
-Neither script knows a board or a port. A board's `test/boards/<id>/{qemu,hw}.sh`
-supplies the facts and execs one of these; that is the only way they are
-called.
+No script knows a board or a port. They are called two ways: a board's
+`test/boards/<id>/{qemu,hw,run}.sh` supplies the facts and execs one of them,
+and the xPack harness's port platforms
+(`tests/platforms/{aarch32,aarch64}-*/CMakeLists.txt`, `native`) call
+`run-qemu.sh` and `run-host.sh` directly from their CTest cases, passing the
+same facts as arguments and environment.
 
 ---
 
@@ -36,6 +40,19 @@ others a 4 GiB sparse blank. Both are kept out of git.
 
 A suite is read from its summary, so each run is captured to
 `.qemu-logs/<app>.log`. `UOS_QEMU_ONLY` streams as well as captures.
+
+---
+
+## `run-host.sh <build-test-dir>`
+
+The sibling of `run-qemu.sh` with the emulator taken out: it runs every
+`*-host` executable in the directory, with the same timeout table, the same
+`PASS` / `SKIP` / `FAIL` / `TIMEOUT` / `NO-RESULT` verdicts, the same summary
+line and the same exit status. Logs go to `.host-logs/<app>.log`.
+
+| variable | meaning |
+|---|---|
+| `UOS_RUN_ONLY` | run just this test, echoed live as well as logged |
 
 ---
 
@@ -69,6 +86,7 @@ argument and prints what a build has, with each budget.
 
 ---
 
-These two files replace what the predecessor repository kept as `hw.sh` +
-`hw-olimex.sh` in every test directory of every port — about 200
-near-identical lines, 48 files.
+`run-qemu.sh` and `run-hw.sh` replace what the predecessor repository kept as
+`hw.sh` + `hw-olimex.sh` in every test directory of every port — about 200
+near-identical lines, 48 files. The probe choice that `hw-olimex.sh` made is
+now `PROBE=jlink|olimex` on the Pi boards' `hw.sh`.

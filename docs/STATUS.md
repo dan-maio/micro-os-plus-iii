@@ -1,15 +1,54 @@
 # Migration status
 
-**Updated:** 2026-09-22 · **Phase:** step 5 — **complete**. Five
-architecture projects exist; twelve board configurations build.
+**Updated:** 2026-09-25 · **Phase:** step 5 — **complete**; the xPack test
+harness now covers every port. Six repositories: the kernel, the devices
+library and four architecture ports.
 
 This file is the cold-start entry point. Read it, then
 `docs/specs/2026-09-20-micro-os-plus-iii-smp-unification-design.md` for the
-full design and the measurements behind it.
+full design and the measurements behind it. The sections after *Today* are
+the migration log, dated where they were measured.
 
 ---
 
-## Where everything stands, measured
+## Today (2026-09-25)
+
+- **Workspace.** The working copies are `~/Work/micro-os-plus-iii-*.git`,
+  clones of the bare repositories in `~/Downloads/GIT/`. The migration source,
+  `TMP7/micro-os-plus-iii-smp-old`, is still the read-only reference.
+- **One test framework.** Everything is registered and run through the xPack
+  harness in `micro-os-plus-iii-smp.git/tests/`: 22 platforms, 70
+  configurations (35 debug + 35 release). How to use it is
+  [`tests/STEPS.md`](tests/STEPS.md); every test, what it does, its scheduling
+  mode and each board's probe is [`tests/TESTS-CATALOG.md`](tests/TESTS-CATALOG.md).
+- **Boards and applications.** aarch32: `rpi-zero-2w` 15, `rpi3b` 15,
+  `luckfox-lyra` 19. aarch64: `rpi-zero-2w` 15, `rpi3b` 15. cortexm:
+  `nucleof411` 4, `weactf411` 5, `weactf412` 5, `pico2` 15,
+  `pico2-rp2350b-psram` 14, `pico2-pizero` 14. posix-arch: `native` 13, plus
+  the harness's `cmsis-os-validator`.
+- **The harness suites on the boards.** `mutex-stress`, `rtos-apis` and
+  `cmsis-os-validator` are board applications on the four Raspberry Pi
+  platforms, on `pico2` and on the three STM32 boards; the Lyra runs
+  `mutex-stress`.
+- **The CMSIS-RTOS validator on the Cortex-A53.** It passes 60/60 on the four
+  Raspberry Pi platforms (Zero 2 W and Pi 3 B, AArch32 and AArch64), under QEMU
+  and on the boards, debug and release. Its NVIC IRQ 0 is the BCM2837's local
+  Mailbox 1 and its DWT probe hits a "no cycle counter" page, both only in the
+  validator's image (`UOS_CMSIS_OS_VALIDATOR`); every other image is
+  byte-identical to before.
+- **native.** All 14 host cases pass in `native-cmake-{gcc,sys}-{debug,release}`.
+- **The gates, re-run today.** `verify-no-absolute-paths.sh` passes.
+  `verify-no-duplicate-sources.py` **fails**: 54 unexplained pairs (5 across
+  repositories, 49 within one) — among them the byte-identical
+  `harness-suite.cpp` wrappers of the three suites on the STM32 boards, the two
+  identical `os-decls.h` in cortexm, and pico2's `clocks.hpp` and QEMU copy.
+  They are not yet explained in `SIBLINGS` or removed. The *"all three
+  gates pass"* below is the 2026-09-22 state. `verify-kernel-compiles.sh`
+  was not re-run.
+
+---
+
+## Where everything stood on 2026-09-22, measured
 
 Re-run from a clean tree at the head of every repository, one QEMU suite at a
 time on an idle host:
@@ -70,11 +109,11 @@ on hardware yet. The port, its six boards and where its SMP lives are written
 up in [`cortexm-port.md`](cortexm-port.md).
 
 ```
-TMP7/
+~/Work/                           the workspace (application counts as of 2026-09-25)
 ├── micro-os-plus-iii-smp/        kernel + shared build rules + test runners
 │   ├── src/ include/             the kernel, upstream path-for-path
 │   ├── port/smp-common/          os-decls.h, shared by both ARM ports
-│   ├── test_smpl/                the two runners -- see test-smpl.md
+│   ├── test_smpl/                the three runners -- see test-smpl.md
 │   │   ├── run-qemu.sh           the shared QEMU suite runner
 │   │   ├── run-host.sh           the same, for the POSIX host
 │   │   └── run-hw.sh             the shared hardware session runner
@@ -100,14 +139,14 @@ TMP7/
 │   ├── src/ include/             ARMv7-A, every board — incl. the scheduler
 │   └── test/                     same shape
 │       ├── boards/{rpi-zero-2w,rpi3b,luckfox-lyra}/  BCM2837 · BCM2837 · RK3506
-│       └── rpi-zero-2w/ rpi3b/ luckfox-lyra/         12 · 12 · 19 applications
+│       └── rpi-zero-2w/ rpi3b/ luckfox-lyra/         15 · 15 · 19 applications
 ├── micro-os-plus-iii-posix-arch/ POSIX host port — host threads as CPUs
 │   ├── src/ include/             the CPU model, the scheduler half, the
 │   │                             fault reporter, the free store
 │   └── test/
 │       ├── run.sh                dispatcher; BOARD picks the directory
 │       ├── boards/native/        board.cmake, include/, src/, run.sh
-│       └── native/               11 applications (9 at NCPU=4, 2 at NCPU=1)
+│       └── native/               13 applications (11 at NCPU=4, 2 at NCPU=1)
 ├── micro-os-plus-iii-cortexm/    Cortex-M port — M4F and M33, 1 and 2 CPUs
 │   ├── src/ include/             upstream's single-core core (STM32 boards)
 │   ├── src/rtos/os-core-rp2350.cpp
@@ -118,8 +157,8 @@ TMP7/
 │       ├── boards/{pico2,pico2-rp2350b-psram,pico2-pizero}/
 │       │                         RP2350 4 MB · RP2350B +PSRAM · RP2350B
 │       │                         the last two include pico2's board.cmake
-│       └── <board>/              1 · 2 · 2 · 12 · 14 · 10 applications
-└── micro-os-plus-iii-smp-old/    READ ONLY — the migration source
+│       └── <board>/              4 · 5 · 5 · 15 · 14 · 14 applications
+└── micro-os-plus-iii-smp-old/    READ ONLY — the migration source (in TMP7/, not here)
 
 Outside `src/` and `include/` — which are the ISA and nothing else — an
 architecture project is all `test/`: the boards, their tests and their build
@@ -414,9 +453,11 @@ Emulating the Lyra is **not** open. It was considered and closed: see above.
 Step 4 (`cortexm`) is **under way**. *Gate:* no app source exists more than
 once; STM32 boards pass at `OS_NCPU=1`; pico2 passes at `OS_NCPU=2`. The
 repository exists and all six boards build — three STM32F4 (5 applications)
-and three RP2350 (36 images). **Nothing on this port has been run on
-hardware**, so the two `pass` clauses of the gate are not met and are not
-claimed. What the ELFs do show: the single-core tests carry no `launch_core1`
+and three RP2350 (36 images). **Nothing on this port had been run on
+hardware** when this was written (2026-09-22), so the two `pass` clauses of
+the gate were not met and were not claimed. Since then every board has a
+`-hwd` runner and hardware runs have been made (see the port's git log); no
+per-test hardware verdict is recorded in this file. What the ELFs do show: the single-core tests carry no `launch_core1`
 and no per-core idle table while the SMP ones carry both, the PSRAM tests put
 `.bss` and the heap at `0x11000000` while their board-mates keep them in
 internal SRAM, each USB image carries only its own class driver, and the two kernel-less
@@ -664,8 +705,10 @@ wrong, not the idea.
   the scheduler under a working board.
 - **pico2's `smp-test0` compiles no kernel.** Nine files, none of them
   µOS++ — it is the bare-metal dual-core bring-up test that runs before any
-  scheduler exists. `uos_add_app()` always links `micro-os-plus::iii`, so it
-  is parked in `test/pico2/.pending/` rather than rewritten.
+  scheduler exists. It was first parked in `test/pico2/.pending/`, because
+  `uos_add_app()` always linked `micro-os-plus::iii`; it now builds as a
+  `BOARD_TEST_NO_KERNEL` application against the port's bare target, and
+  `.pending/` is gone.
 - **Flashing the Pico 2: resume cm1 BEFORE cm0.** With `USE_SMP 0` the rp2350
   target exposes two targets and `reset init` halts both, while one `resume`
   resumes only the current one. A debug-halted core 1 will not boot from the

@@ -1,5 +1,13 @@
 # The µOS++ IIIe Tests / xPack System
 
+> **Earlier layout — read as history.** This document describes the harness
+> as it was set up before it moved into `micro-os-plus-iii-smp.git/tests/`
+> (paths such as `micro-os-plus-iii.git/tests`, `aarch32-tests/`,
+> `test_smpl/common/` or `~/Work-smp` no longer exist, and some action names
+> have changed). For the current framework see [`STEPS.md`](STEPS.md); for
+> every test, board and probe see [`TESTS-CATALOG.md`](TESTS-CATALOG.md). The
+> code is the truth where they disagree.
+
 > A structured, reproducible and extensible test harness for
 > `@micro-os-plus/micro-os-plus-iii`, built on top of **xpm**, **xPacks**,
 > **CMake** and **CTest**, that compiles and runs the *same* test sources on

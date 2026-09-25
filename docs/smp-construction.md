@@ -136,9 +136,10 @@ void     smp_install_boot_threads (void);  /* supplied by the application  */
 `smp_install_boot_threads()` is the one the *application* owes the port: it
 creates an idle thread per secondary CPU and registers each in
 `os::rtos::scheduler::os_idle_thread_core[]` before the cores are released.
-Most of a board's tests get it from that board's `test/src/test-smp-boot.cpp`;
-a test carried over whole from the predecessor brings its own, and says so
-through `BOARD_TEST_SELF_CONTAINED` in the board's `test/tests.cmake`.
+Most of a board's tests get it from that board's
+`test/<board>/src/test-smp-boot.cpp`; a test carried over whole from the
+predecessor brings its own, and says so through `BOARD_TEST_SELF_CONTAINED`
+in the board's `test/<board>/tests.cmake`.
 
 ### 3.5 Bring-up order
 
@@ -208,9 +209,13 @@ The architecture project's `test/CMakeLists.txt`:
 | `DEBUG_BOOT` | `-DUOS_DEBUG_BOOT=ON` | early-boot asm markers from `startup.S`, for bring-up under OpenOCD. **Off by default**, as the sources assume: each marker is a semihosting trap, and under a JTAG probe a trap costs real time |
 | `LED_PIN` | `BOARD=rpi-zero-2w` | the GPIO driven as the user LED, 29 by default — the Zero 2 W's onboard green ACT LED. `led.hpp`'s own fallback is GPIO 16, header pin 36, which blinks nothing on a bare board. Which pin it is depends on the **board**, so it is set here for every test rather than per application; `BOARD=rpi3b` does not use it at all, because there the ACT LED is VideoCore expander GPIO 130 behind the mailbox |
 
-### 5.3 Per-application, from the board's `test/tests.cmake`
+### 5.3 Per-application, from the board's `test/<board>/tests.cmake`
 
-Only `usb_test` has knobs:
+On the Pi boards two applications have knobs. `cmsis-os-validator` gets
+`UOS_CMSIS_OS_VALIDATOR`, which makes the board's sources map a "no cycle
+counter" page where the validator probes the Cortex-M DWT and route the local
+Mailbox 1 interrupt to the validator's handler (its stand-in for NVIC IRQ 0);
+no other image changes. `usb_test` has these:
 
 | Macro | Default | Meaning |
 |---|---|---|

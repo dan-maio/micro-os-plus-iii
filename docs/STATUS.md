@@ -38,13 +38,20 @@ the migration log, dated where they were measured.
   byte-identical to before.
 - **native.** All 14 host cases pass in `native-cmake-{gcc,sys}-{debug,release}`.
 - **The gates, re-run today.** `verify-no-absolute-paths.sh` passes.
-  `verify-no-duplicate-sources.py` **fails**: 54 unexplained pairs (5 across
-  repositories, 49 within one) — among them the byte-identical
-  `harness-suite.cpp` wrappers of the three suites on the STM32 boards, the two
-  identical `os-decls.h` in cortexm, and pico2's `clocks.hpp` and QEMU copy.
-  They are not yet explained in `SIBLINGS` or removed. The *"all three
-  gates pass"* below is the 2026-09-22 state. `verify-kernel-compiles.sh`
-  was not re-run.
+  `verify-no-duplicate-sources.py` had been reporting 54 unexplained pairs,
+  most of them because it matched repositories by name and the workspace's
+  directories carry `.git`: its exemptions (the vendored CMSIS headers) and
+  every `SIBLINGS` entry silently stopped applying. With that fixed, the real
+  duplicates were removed (one verdict wrapper per Cortex-M board instead of
+  one per suite; pico2's QEMU `clocks.hpp` copy) and the genuine look-alikes
+  named in `SIBLINGS` with a reason each; every image rebuilt byte-identical.
+  **One pair remains, and the gate still fails on it:** cortexm's
+  `include/` and `include-rp2350/` `os-decls.h` became code-identical when the
+  STM32 core gained its OS_NCPU=1 SMP branch (`04940fe`). They are two port
+  cores that happen to declare the same thing; removing one means the RP2350
+  boards read the header from `include/` through a two-directory include
+  path, which is a decision still open. `verify-kernel-compiles.sh` was not
+  re-run.
 
 ---
 

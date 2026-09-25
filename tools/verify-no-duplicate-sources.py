@@ -172,6 +172,39 @@ SIBLINGS = [
      "the same kernel-object suite run single-core and SMP; sc-test-ko is the "
      "only test on this silicon exercising the kernel's non-SMP branch"),
 
+    ("micro-os-plus-iii-cortexm/include-m33/cmsis-plus/rtos/port/os-decls.h",
+     "micro-os-plus-iii-cortexm/include-rp2350/cmsis-plus/rtos/port/os-decls.h",
+     "two SMP port cores: the generic M33's kernel lock is an LDREX/STREX word "
+     "with a saved PRIMASK per core, the RP2350's is SIO hardware spinlock 0"),
+    ("micro-os-plus-iii-cortexm/include-m33/cmsis-plus/rtos/port/os-c-decls.h",
+     "micro-os-plus-iii-cortexm/include-rp2350/cmsis-plus/rtos/port/os-c-decls.h",
+     "as above, the C half"),
+
+    ("micro-os-plus-iii-cortexm/test/boards/pico2/include/bsp/uart.hpp",
+     "micro-os-plus-iii-cortexm/test/boards/pico2/qemu/include/bsp/uart.hpp",
+     "one console API, two back-ends: the PL011 on silicon, semihosting on "
+     "QEMU's generic machine, so the tests compile unchanged for both"),
+
+    ("micro-os-plus-iii-cortexm/test/pico2-pizero/psram-mat-test-250/main.cpp",
+     "micro-os-plus-iii-cortexm/test/pico2-pizero/smp-mat-test/main.cpp",
+     "the solver with its matrices in PSRAM: N=300/B=50 against 120/30, the "
+     "arrays in .psram, and the app bringing the PSRAM up itself at 250 MHz"),
+    ("micro-os-plus-iii-cortexm/test/pico2-pizero/psram-mat-test-250/main.cpp",
+     "micro-os-plus-iii-cortexm/test/pico2/smp-mat-test/main.cpp",
+     "as above, against the Pico 2's all-SRAM solver"),
+    ("micro-os-plus-iii-cortexm/test/pico2-pizero/psram-mat-test-250/main.cpp",
+     "micro-os-plus-iii-cortexm/test/pico2-rp2350b-psram/smp-mat-test/main.cpp",
+     "the same N=300 PSRAM solver on another board: PSRAM chip-select GPIO47 "
+     "against GPIO0, and here the app brings the PSRAM up itself "
+     "(PICO2_PSRAM_COPY) at 250 MHz"),
+    ("micro-os-plus-iii-cortexm/test/pico2-pizero/psram-mat-test-250/main.cpp",
+     "micro-os-plus-iii-aarch32/test/luckfox-lyra/smp-mat-test/main.cpp",
+     "the same solver on another silicon: three A7 cores and DRAM against two "
+     "M33 cores and PSRAM"),
+    ("micro-os-plus-iii-cortexm/test/pico2-pizero/psram-mat-test-250/main.cpp",
+     "micro-os-plus-iii-posix-arch/test/native/smp-mat-test/main.cpp",
+     "the same solver on the host port, host threads for cores"),
+
     ("micro-os-plus-iii-cortexm/test/boards/pico2/usb/hid/tusb_config.h",
      "micro-os-plus-iii-cortexm/test/boards/pico2/usb/cdc/tusb_config.h",
      "TinyUSB is configured per device class; 26 lines, and the class lines "
@@ -276,7 +309,7 @@ def main():
     repos = sorted(
         d for d in os.listdir(workspace)
         if d.startswith(REPO_PREFIX)
-        and d not in SKIP_REPOS
+        and (d[:-len(".git")] if d.endswith(".git") else d) not in SKIP_REPOS
         and os.path.isdir(os.path.join(workspace, d, ".git"))
     )
     if not repos:
@@ -284,10 +317,14 @@ def main():
         return 2
 
     # --- collect -----------------------------------------------------------
+    # A repository is named without the `.git` a working copy's directory may
+    # carry (the harness requires micro-os-plus-iii-<port>.git), so that
+    # EXEMPT, SIBLINGS and the report name it the same way in any workspace.
     entries = []          # (repo, rel, abs, lines, sha)
     exempted = 0
-    for repo in repos:
-        root = os.path.join(workspace, repo)
+    for d in repos:
+        root = os.path.join(workspace, d)
+        repo = d[:-len(".git")] if d.endswith(".git") else d
         for rel in tracked_sources(root):
             if exempt_reason(repo, rel) is not None:
                 exempted += 1

@@ -110,54 +110,22 @@ foreach (_dir IN LISTS _test_dirs)
 endforeach ()
 
 # -----------------------------------------------------------------------------
-# The harness suites, on the same platform. They supply no main() and no
-# startup hooks, so they link micro-os-plus::platform-support.
-function (add_harness_suite _suite _name)
-  cmake_parse_arguments (T "" "" "LIBRARIES" ${ARGN})
-  add_executable (${_name})
-  target_link_libraries (
-    ${_name}
-    PRIVATE micro-os-plus::common-options test::${_suite} micro-os-plus::iii
-            micro-os-plus::platform micro-os-plus::platform-support
-            ${T_LIBRARIES}
-  )
-  set_target_properties (${_name} PROPERTIES OUTPUT_NAME "${_name}" SUFFIX "")
-  add_custom_command (
-    TARGET ${_name}
-    POST_BUILD
-    COMMAND ${CMAKE_OBJCOPY} -O binary "$<TARGET_FILE:${_name}>"
-            "$<TARGET_FILE:${_name}>.bin"
-    VERBATIM
-  )
-  # A harness suite ends through the platform's strong _Exit() (SYS_EXIT), so
-  # QEMU returns a real exit code -- no RESULT line to grep.
-  add_test (
-    NAME "${PLATFORM_NAME}-${_name}-qemu"
-    COMMAND
-      "${_qemu}" --machine raspi3b -smp 4 --nographic --serial none
-      --semihosting-config enable=on,target=native --kernel "${_shim_img}"
-      --device
-      "loader,file=$<TARGET_FILE:${_name}>.bin,addr=0x10000"
-  )
-  set_tests_properties ("${PLATFORM_NAME}-${_name}-qemu" PROPERTIES LABELS
-                                                                  "qemu" TIMEOUT 300)
-endfunction ()
-
-# Every harness suite this platform pulls in (see dependencies-folders.cmake).
-add_harness_suite (mutex-stress mutex-stress-test)
-add_harness_suite (rtos-apis rtos-apis-test
-                   LIBRARIES xpacks::chan-fatfs micro-os-plus::iii-posix-io)
-# rtos-apis and cmsis-os-validator are NOT built here yet:
-#   * rtos-apis builds, but aborts in first_fit_top::internal_align_ on the
-#     AArch32 harness. The cause is a heap overlap this platform cannot fix
-#     from CMake: the µOS++ app-heap (first_fit_top over [__heap_start,
-#     __heap_end]) and newlib's _sbrk region ([_Heap_Begin, _Heap_Limit]) are
-#     the SAME bytes -- the linker sets both to the .heap section -- so `new`
-#     and ::malloc hand out the same memory. mutex-stress' small footprint
-#     never collides; rtos-apis' FatFs/posix-io tests do. It needs a port
-#     linker-script change (separate _Heap_Limit) or kernel work.
-#   * cmsis-os-validator is Cortex-M only: its RV_Signal.c/RV_Thread.c call the
-#     NVIC API (NVIC_EnableIRQ, IRQn_Type), which does not exist on AArch32.
+# The harness suites are NOT a special case here.
+#
+# mutex-stress and rtos-apis are built as board apps by the port's own builder
+# above: test/rpi3b/<suite>/ carries the wrapper that prints the RESULT line,
+# and test/rpi3b/tests.cmake's board_test_libs() names the harness's
+# test::<suite> plus aarch32-rpi3b-harness-suite (the suite's os-app-config.h,
+# the semihosting groups, the startup hooks and --wrap=os_main). The loop
+# further up therefore registers their qemu and hwd cases with the same code
+# path as every port test -- `<platform>-mutex-stress-qemu` and so on. The
+# older add_harness_suite() here built a second, differently-named image
+# against a separately-maintained platform-support library; it was the thing
+# that left the kernel on its DEFAULT os-app-config.h (no OS_USE_OS_APP_CONFIG_H
+# reached the suite), which is what stopped rtos-apis in malloc_memory_
+# resource(). Naming test::<suite> through the builder's own seam is what the
+# proven Cortex-M pico2 platform does, and it carries the suite's config with
+# it.
 
 # -----------------------------------------------------------------------------
 message (

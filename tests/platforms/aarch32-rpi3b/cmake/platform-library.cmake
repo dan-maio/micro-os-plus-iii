@@ -99,6 +99,13 @@ message (
 # newlib reentrant syscalls (_write_r, _gettimeofday_r, ...) -> the semihosting
 # __posix_* layer, and the exit procedure os_terminate() -> report_exception()
 # -> SWI 0x123456.
+#
+# The hardware variant is NOT a sibling library. The harness suite is built by
+# the port's own test builder, which compiles platform-support.cpp into each
+# image with that image's variant defines (QEMU_BUILD or HW_BUILD) and its own
+# linker script -- see test/rpi3b/tests.cmake's aarch32-rpi3b-harness-suite.
+# One support file therefore serves both images, and no per-variant copy of the
+# platform interface is needed.
 add_library (platform-aarch32-rpi3b-support-interface INTERFACE
              EXCLUDE_FROM_ALL)
 

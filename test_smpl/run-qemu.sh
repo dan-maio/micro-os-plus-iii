@@ -115,11 +115,11 @@ for img in "${BUILD_DIR}"/*-qemu.bin; do
     echo
     timeout "$tmo" "$QEMU" "${MACHINE[@]}" -nographic -serial none \
         -semihosting-config enable=on,target=native "${drive[@]}" "${boot[@]}" \
-        > >(tee "$log") 2>&1
+        < /dev/null > >(tee "$log") 2>&1
   else
     timeout "$tmo" "$QEMU" "${MACHINE[@]}" -nographic -serial none \
         -semihosting-config enable=on,target=native "${drive[@]}" "${boot[@]}" \
-        > "$log" 2>&1
+        < /dev/null > "$log" 2>&1
   fi
   rc=$?
   [[ -n "$sd" ]] && rm -f "$sd"   # the card image lives for one run only

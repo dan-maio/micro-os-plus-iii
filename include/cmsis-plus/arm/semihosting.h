@@ -104,6 +104,9 @@ extern "C"
         " mov r1, %[arg]  \n"
 #if defined(OS_DEBUG_SEMIHOSTING_FAULTS)
         " " AngelSWITestFault " \n"
+#elif defined(SEMIHOST_TRAP_HLT)
+        " .arm \n"
+        " .inst 0xE10F0070 \n"
 #else
       " " AngelSWIInsn " %[swi] \n"
 #endif

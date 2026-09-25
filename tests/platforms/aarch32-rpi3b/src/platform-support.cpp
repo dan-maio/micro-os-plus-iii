@@ -36,6 +36,7 @@
 #include <cmsis-plus/rtos/os.h>
 
 #include <cstddef>
+#include <cstdio>
 #include <cstdlib>
 
 #include <uart.hpp>
@@ -121,3 +122,44 @@ extern "C"
     return 0;
   }
 }
+
+// ----------------------------------------------------------------------------
+// Console mirror.
+//
+// newlib printf() goes to the kernel's semihosting __posix_write(), so without
+// this the suites' output would reach only the debugger's semihosting console.
+// The kernel calls the weak os_board_console_mirror() hook for stdout/stderr;
+// write the same bytes to the board UART, so the output is also visible on the
+// serial terminal. Always in addition to semihosting, never instead of it.
+extern "C" void os_board_console_mirror (int fildes, const void* buf,
+                                         std::size_t nbyte);
+extern "C" void
+os_board_console_mirror (int /* fildes */, const void* buf, std::size_t nbyte)
+{
+  const char* cbuf = static_cast<const char*> (buf);
+  for (std::size_t i = 0; i < nbyte; ++i)
+    {
+      if (cbuf[i] == '\n')
+        {
+          uart::uart1.putc ('\r');
+        }
+      uart::uart1.putc (cbuf[i]);
+    }
+}
+
+// stdout would otherwise be fully buffered, surfacing only when the buffer
+// fills or at exit -- too late for a suite the runner stops at the RESULT line.
+// Line buffer it, so every printf() reaches the console as it is emitted.
+namespace
+{
+  struct StdioLineBuffered
+  {
+    StdioLineBuffered ()
+    {
+      std::setvbuf (stdout, nullptr, _IOLBF, 0);
+      std::setvbuf (stderr, nullptr, _IOLBF, 0);
+    }
+  };
+
+  StdioLineBuffered stdio_line_buffered;
+} // namespace

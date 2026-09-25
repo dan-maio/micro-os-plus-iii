@@ -1387,7 +1387,10 @@
         },
         "actions": {
           "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE hwd",
-          "test-mos-test1-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R cortexm-nucleof411-mos-test1-hwd"
+          "test-cmsis-os-validator-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R cortexm-nucleof411-cmsis-os-validator-hwd",
+          "test-mos-test1-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R cortexm-nucleof411-mos-test1-hwd",
+          "test-mutex-stress-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R cortexm-nucleof411-mutex-stress-hwd",
+          "test-rtos-apis-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R cortexm-nucleof411-rtos-apis-hwd"
         }
       },
       "cortexm-nucleof411-cmake-gcc-release": {

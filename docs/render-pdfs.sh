@@ -54,6 +54,12 @@ render tests/TESTS-XPACK-SYSTEM --toc --footer "$FOOT" \
 render tests/WORK-SMP-AARCH32-AARCH64-HARNESS-GUIDE --toc --footer "$FOOT" \
     --title "Running the µOS++ xPack Test Harness on the AArch32 and AArch64 Ports"
 
+# The catalogue: every registered test, per platform and board, with its
+# scheduling mode and probe.
+render tests/TESTS-CATALOG --toc --footer "$FOOT" \
+    --title "The µOS++ test catalogue" \
+    --subtitle "Every test, per architecture, platform and board"
+
 # The workspace log: how the whole test tree was built in $HOME/TMP, from the
 # six clones to a green run, kept beside the harness it describes.
 render tests/STEPS --toc --footer "$FOOT" \

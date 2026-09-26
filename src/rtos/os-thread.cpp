@@ -1875,7 +1875,18 @@ namespace os
 #else
 
 #if defined(OS_USE_SMP_SCHEDULER)
-        th = scheduler::current_thread_[port_cpu_id()];
+        {
+          // Read the core id and that core's current thread with this core's
+          // interrupts masked. With them enabled, a preemption between the
+          // two reads can move the caller to another core, and it would get
+          // back the thread now running on the core it left -- as a mutex
+          // owner, a waiter, or the errno it writes. The IRQ critical section
+          // is the per-core mask every port provides; it also takes the
+          // kernel lock, recursively, so a caller already inside one pays
+          // nothing more.
+          interrupts::critical_section ics;
+          th = scheduler::current_thread_[port_cpu_id ()];
+        }
 #else
         th = scheduler::current_thread_;
 #endif /* defined(OS_USE_SMP_SCHEDULER) */

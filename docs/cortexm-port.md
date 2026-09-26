@@ -33,7 +33,7 @@ micro-os-plus-iii-cortexm/
 | `nucleof411` | STM32F411RE, Cortex-M4F | 1 | 4 — `mos-test1` + the 3 harness suites |
 | `weactf411` | STM32F411CE, Cortex-M4F | 1 | 5 — `mos-test1`, `spi-pipeline` + the 3 suites |
 | `weactf412` | STM32F412RE, Cortex-M4F | 1 | 5 — `mos-test1`, `uart-test1` + the 3 suites |
-| `pico2` | RP2350, 2× Cortex-M33, 4 MB flash | **2** | 15 — 12 port tests + the 3 suites |
+| `pico2` | RP2350, 2× Cortex-M33, 4 MB flash | **2** | 16 — 12 port tests + the 4 suites (the 3 plus `fp-switch`) |
 | `pico2-rp2350b-psram` | RP2350B, 16 MB flash + 8 MB PSRAM | **2** | 14 |
 | `pico2-pizero` | RP2350B, 16 MB flash, Pi-Zero form factor | **2** | 14 |
 
@@ -41,7 +41,7 @@ Four are **hardware-only**: they set no `UOS_BOARD_LINKER_QEMU`, so each
 builds one image per test and `test/qemu.sh` answers by naming `hw.sh`.
 `pico2` and `pico2-rp2350b-psram` set it, and build a `-qemu` image for the
 tests QEMU's generic Cortex-M can run (`pico2`: `smp-test1`, `sc-test-ko` and
-the three suites; `pico2-rp2350b-psram`: `smp-test1`, `sc-test-ko`); every
+the four suites; `pico2-rp2350b-psram`: `smp-test1`, `sc-test-ko`); every
 other test is listed `BOARD_TEST_HWD_ONLY`. What each test does is in
 [`tests/TESTS-CATALOG.md`](tests/TESTS-CATALOG.md).
 
@@ -98,6 +98,11 @@ STM32 boards. Reading pico2's core changed that, and the new shape is better:
 | IPI | the SIO **inter-core FIFO** on `SIO_IRQ_FIFO` (external IRQ 25). The handler drains the FIFO and pends its own core's PendSV. |
 | CPU index | `SIO_CPUID`. |
 
+The SIO spinlocks keep their state across a debugger reset and a re-flash, so
+a run that ended holding spinlock 0 would leave the next image spinning at its
+first critical section. The board's `boot.S` releases all 32 on core 0 before
+anything can take one.
+
 None of that is Cortex-M — it is one SoC's. In this layout that makes it board
 code, exactly as the Lyra's GIC-400 SGI and the Pi's are board code. So
 `cortexm` did not gain SMP by changing its ISA file; it gained SMP because a
@@ -105,6 +110,16 @@ board arrived that supplies a lock and an IPI.
 
 Core 1 is launched through the bootrom FIFO handshake with its own MSP. Only
 core 0 advances the RTOS clock; core 1's SysTick reschedules core 1 alone.
+
+**FPU context.** Both SMP port cores (`os-core-rp2350.cpp`, `os-core-m33.cpp`)
+keep FPCCR.ASPEN and LSPEN **on**, on both cores (RP2350: core 0 in the
+board's `boot.S`, core 1 in `port_smp_secondary_start()`; M33:
+`m33_fpu_enable_stacking()` on each core). A thread that has used the FPU gets the
+extended exception frame (s0–s15, FPSCR), and PendSV saves and restores
+s16–s31 beside r4–r11 when EXC_RETURN says the frame is extended. Until
+2026-09-26 both were off and PendSV saved no FP state, so two float threads
+on one core, or one thread moved to the other core, saw each other's
+registers. `tests/sources/fp-switch` is the test for it.
 
 ### Proof it is really in the image
 

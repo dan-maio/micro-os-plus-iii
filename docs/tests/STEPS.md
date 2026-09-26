@@ -334,15 +334,15 @@ probe each board uses are in [`TESTS-CATALOG.md`](TESTS-CATALOG.md).
 | `aarch32-rpi3b` | the same | 15 qemu | 14 (no `usb_test`: the Pi 3 B's USB is behind a hub) |
 | `aarch64-rpi3b` | the same | 15 qemu | 14 (likewise) |
 | `aarch32-luckfox-lyra` | 19 port tests + `mutex-stress` | – | 20 |
-| `native` (POSIX, on the PC) | 13 port tests + `cmsis-os-validator` | 14 host | – |
-| `cortexm-pico2` | 12 port tests + the 3 suites as board apps | 5 qemu | 15 |
+| `native` (POSIX, on the PC) | 15 port tests + `cmsis-os-validator` | 16 host | – |
+| `cortexm-pico2` | 12 port tests + the 3 suites and `fp-switch` as board apps | 6 qemu | 16 |
 | `cortexm-pico2-rp2350b-psram` | 14 port tests | 2 qemu | 14 |
 | `cortexm-pico2-pizero` | 14 port tests | – | 14 |
 | `cortexm-nucleof411` | `mos-test1` + the 3 suites | – | 4 |
 | `cortexm-weactf411` | `mos-test1`, `spi-pipeline` + the 3 suites | – | 5 |
 | `cortexm-weactf412` | `mos-test1`, `uart-test1` + the 3 suites | – | 5 |
-| `pico2-1cpu` (1 × Cortex-M33) | the 3 suites | 3 qemu | – |
-| `2xcortex-m33` (2 × Cortex-M33, SMP) | the 3 suites | 3 qemu | – |
+| `pico2-1cpu` (1 × Cortex-M33) | the 3 suites + `fp-switch` | 4 qemu | – |
+| `2xcortex-m33` (2 × Cortex-M33, SMP) | the 3 suites + `fp-switch` | 4 qemu | – |
 | `qemu-cortex-m0 / m3 / m4f / m7f` | the 3 suites | 3 qemu each | – |
 | `nucleo-f411re` | 3 suites + `blinky`, `instrumentation` | – | 4 |
 | `nucleo-f767zi`, `nucleo-h743zi`, `raspberrypi-pico` | the 3 suites | – | 3 each |
@@ -352,8 +352,11 @@ that is registered):
 
 * the 3 suites on `qemu-cortex-m0/m3/m4f/m7f`, `pico2-1cpu` and
   `2xcortex-m33`, with `cmsis-os-validator` at 60/60;
-* `cortexm-pico2` 5/5 and `cortexm-pico2-rp2350b-psram` 2/2 emulated;
-* `native`: all 14 host cases, in `gcc` and `sys`, debug and release;
+* `cortexm-pico2` 6/6 and `cortexm-pico2-rp2350b-psram` 2/2 emulated;
+* `native`: all 16 host cases, in `gcc` and `sys`, debug and release;
+* on 2026-09-26, every local configuration's emulated/host set, run one
+  configuration at a time; on the boards, `cortexm-pico2` 16/16 and
+  `cortexm-pico2-rp2350b-psram` 14/14;
 * `cmsis-os-validator` 60/60 on the four Raspberry Pi platforms, emulated and
   on the boards, debug and release;
 * on the Raspberry Pi Zero 2 W platforms, `mutex-stress`, `rtos-apis` and

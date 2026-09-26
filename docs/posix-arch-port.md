@@ -73,23 +73,24 @@ micro-os-plus-iii-posix-arch/
     │   ├── include/{uart,led,timer_arm,smp}.hpp
     │   ├── src/{heap,smp}.cpp
     │   └── run.sh
-    └── native/                             this board's 13 applications
+    └── native/                             this board's 15 applications
         ├── include/{test-console,test-smp-boot}.hpp
         ├── src/test-smp-boot.cpp           shared support, one copy
         ├── tests.cmake                     the knobs a listing cannot express
         ├── smp_test0 … smp_test4
         ├── smp-mat-test  smp-num-test  smp-pipeline-test  smp-pro-cons-test
+        ├── flatfs-test  mutex-ceiling-test regression tests for two fixes
         ├── mutex-stress  rtos-apis         the OS_NCPU=1 legs
         └── smp-mutex-stress  smp-rtos-apis the same two upstream tests at OS_NCPU
 ```
 
-Roughly 2,300 lines of port and board code. One board. Thirteen test
+Roughly 2,300 lines of port and board code. One board. Fifteen test
 applications, plus the harness's `cmsis-os-validator`, which the xPack
 harness's `native` platform builds on its own.
 
 | board | "silicon" | CPUs | tests | verdict |
 |---|---|---|---|---|
-| `native` | the host kernel | 4, `-DNCPU=` | 13 (+ `cmsis-os-validator` in the harness) | 14 passed / 0 skipped / 0 failed in the harness (`native-cmake-{gcc,sys}-{debug,release}`) |
+| `native` | the host kernel | 4, `-DNCPU=` | 15 (+ `cmsis-os-validator` in the harness) | 16 passed / 0 skipped / 0 failed in the harness (`native-cmake-{gcc,sys}-{debug,release}`) |
 
 The measurements further down ("11 passed", the sanitizer runs) were taken
 with the first eleven applications, before `smp-mutex-stress` and
@@ -1710,7 +1711,7 @@ changing meaning:
 `test/native/tests.cmake` uses three of them:
 
 ```cmake
-set (BOARD_TEST_NEED_DEVICES smp-num-test smp-pipeline-test)
+set (BOARD_TEST_NEED_DEVICES smp-num-test smp-pipeline-test flatfs-test)
 
 function (board_test_ncpu _app _out)
   if (_app STREQUAL "mutex-stress")
@@ -1766,6 +1767,8 @@ upstream's own, and both run at `OS_NCPU=1` (§17).
 | `smp-pro-cons-test` | 4 | **every kernel object**: 12 threads, pool, queue, semaphores, mutex, condvar, event flags, timer, sysclock, yield/suspend/resume | ~5 s |
 | `smp-num-test` | 4 | UART + LED + **SD** + FPU; writes `num.txt` to a flatfs volume | ~60 s |
 | `smp-pipeline-test` | 4 | 13 threads, shared queues, **SD persistence**, `yield()` stress | ~90 s |
+| `flatfs-test` | 4 | flatfs `append_file()` to a file created empty (the extent underflow, fixed 2026-09-26) | <1 s |
+| `mutex-ceiling-test` | 4 | a protect-ceiling `EINVAL` leaves the mutex unowned (fixed 2026-09-26) | <1 s |
 | `mutex-stress` | **1** | 10 threads on one mutex; fairness/uniformity statistics | ~15 s |
 | `rtos-apis` | **1** | upstream's API sweep: the C++ API, the C API, ISO threads, CMSIS-RTOS v1, the memory resources and posix-io | ~1 s |
 

@@ -1,6 +1,6 @@
 # Migration status
 
-**Updated:** 2026-09-25 · **Phase:** step 5 — **complete**; the xPack test
+**Updated:** 2026-09-26 · **Phase:** step 5 — **complete**; the xPack test
 harness now covers every port. Six repositories: the kernel, the devices
 library and four architecture ports.
 
@@ -11,7 +11,51 @@ the migration log, dated where they were measured.
 
 ---
 
-## Today (2026-09-25)
+## Today (2026-09-26)
+
+A review of the SMP code found ten defects; seven are fixed, each with a test
+that failed first where one could be written.
+
+- **Kernel lock bookkeeping (all SMP ports).** `scheduler::locked()` read the
+  core id before masking interrupts, so a migration between the read and the
+  mask left the lock owned from one core and marked on the other; the unlock
+  then released nothing. Fixed on RP2350 and M33 (cortexm `f000383`) and
+  POSIX (posix-arch `040bb09`). The RP2350 unlock also publishes "unlocked"
+  before releasing the spinlock, as the M33 port does.
+- **`this_thread::thread()` (kernel `60b55a3`)** read `current_thread_[core]`
+  with interrupts enabled; a migration between the two reads returned another
+  core's thread.
+- **FPU context on the Cortex-M SMP ports (cortexm `92caefe`).** ASPEN/LSPEN
+  were off and PendSV saved no FP state; now s0–s15/FPSCR are stacked lazily
+  and PendSV saves s16–s31. New suite `fp-switch` (kernel `c41c06d`), on
+  `cortexm-pico2`, `2xcortex-m33` and `pico2-1cpu`.
+- **Mutex protect ceiling (kernel `a734798`).** A lock refused with `EINVAL`
+  left the mutex on the thread's owned list; destroying the thread then marked
+  it owner-dead. Inherited from upstream. Test: native `mutex-ceiling-test`.
+- **flatfs (devices `ee58885`).** `append_file()` on a file created empty
+  wrapped its extent and wrote from sector 0. Test: native `flatfs-test`.
+- **RP2350 SIO spinlocks (cortexm `2e679ad`)** are released at reset; a run
+  that ended holding the kernel lock hung the next image (`smp-mat-test` on
+  the psram board).
+- **Tests.** pico2's HID test pins its USB thread at construction
+  (`1e97fbf`). The psram nested tests end after 20 beats with a verdict
+  (`71a717b`). The Lyra USB tests enumerate and end with a verdict, their
+  console UART-only, their host tools as source in each test's `host/`
+  (aarch32 `b9dada8`); the Lyra's `smp-pro-cons-test` pins to cores it has
+  (`d173d0e`).
+- **Applications.** `pico2` 16 (`fp-switch`), `native` 15 (`flatfs-test`,
+  `mutex-ceiling-test`); the rest as below.
+- **Verified.** On the boards: `pico2` 16/16, `pico2-rp2350b-psram` 14/14, the
+  Lyra's four USB tests and `smp-pro-cons-test`. Under QEMU and native: every
+  one of the 38 local configurations builds and its set passes, run one
+  configuration at a time.
+- **Still open from the review:** SMP `thread::kill()` can wait forever on a
+  target its core keeps re-picking; the duplicate gate's EXPECTED rule ignores
+  which repository a file is in; `clock_highres::now()` mixes core 0's tick
+  count with the calling core's SysTick phase. `pico2-pizero` has not run any
+  of today's changes on the board.
+
+## 2026-09-25
 
 - **Workspace.** The working copies are `~/Work/micro-os-plus-iii-*.git`,
   clones of the bare repositories in `~/Downloads/GIT/`. The migration source,
@@ -327,7 +371,7 @@ removal below was made on its own and measured on its own:
 | removed | now lives in | images checked |
 |---|---|---|
 | `dma_pool.cpp`, `usb_env_stateos.cpp` — private copies in `smp_test6` and `smp_test7` | the Lyra board, as `UOS_BOARD_USB_GADGET_SOURCES` | 19/19 Lyra **byte-identical** |
-| `usb1_int3.cpp`, `kbd_forward.c` — a copy each in `smp_test_int3` and `smp_test_int4` | the Lyra board, as `UOS_BOARD_USB_INT_SOURCES` | as above |
+| `usb1_int3.cpp`, `kbd_forward.c` — a copy each in `smp_test_int3` and `smp_test_int4` | the Lyra board, as `UOS_BOARD_USB_INT_SOURCES` (`usb1_int3.cpp` only since 2026-09-26: `kbd_forward.c` is a host tool again, one copy in each test's `host/`, which the duplicate gate allows) | as above |
 | `hw_result.hpp`, `board-contract.cpp` — one copy per ARM port | the kernel's `test_smpl/` | 96/96 Pi **byte-identical**, 19/19 Lyra |
 | `syscalls.c` — one copy per `cortexm` board (4) | `cortexm/test/boards/shared/` | 17/17 `cortexm` **byte-identical** |
 
@@ -627,6 +671,22 @@ handler **exit** and `switch_stacks()` runs long after entry. The place was
 wrong, not the idea.
 
 ## Things a fresh session should not rediscover
+
+- **The RP2350 SIO spinlocks survive a re-flash.** Neither `reset init` nor a
+  new image clears them; only a power cycle or the release loop in the
+  board's `boot.S` does. Core 0 spinning in `_smp_klock_raw_acquire()` with
+  the klock owner still `0xffffffff` is this.
+- **A USB gadget thread on the RP2350 must be pinned at construction**
+  (`th_cpu_affinity`), not by `cpu_affinity()` afterwards; see
+  `cortexm/test/boards/pico2/usb/README-tinyusb.md`. Late pinning is a race:
+  it passes, then a later run fails to enumerate.
+- **On the Lyra, semihosting during USB traffic loses the debug link.** Each
+  trap halts the core; the USB tests are built `UOS_CONSOLE_UART_ONLY` and
+  report only their verdict through semihosting.
+- **A dead UART on the psram board is the probe first.** On 2026-09-26 its
+  CMSIS-DAP's UART bridge corrupted every received byte (break and framing
+  errors in UART0 RSR) while the firmware was sound.
+- **`smp-test-nested-clock*` are interactive:** they wait for `y` on the UART.
 
 - **Two RP2350 tests compile no kernel**, and that is the point of them:
   `smp-test0` (dual-core bring-up) and `exc-test` (first-exception probe) run

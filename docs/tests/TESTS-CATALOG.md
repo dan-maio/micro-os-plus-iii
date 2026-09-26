@@ -114,6 +114,7 @@ suites' `harness-suite.cpp`, on cortexm.
 |---|---|
 | `rtos-apis` | Exercises the µOS++ C++ API, C API, ISO (`std::`) API, CMSIS-RTOS v1 wrapper and the POSIX I/O layer, plus a Chan FatFs test. |
 | `mutex-stress` | Several threads take one mutex at random intervals; the test checks that every thread got it and the distribution is sane. |
+| `fp-switch` | Six unpinned threads at three priorities each load their own pattern into s0-s31 and the FPSCR flags, spin long enough to be preempted (and, on SMP, moved to the other core), and check the registers read back unchanged. Needs an FPU; without one it passes with nothing to test. |
 | `cmsis-os-validator` | The Arm CMSIS-RTOS v1 validator (60 test cases: threads, timers, signals, semaphores, mutexes, memory pools, message and mail queues, with interrupt-context cases). On a Cortex-M the interrupt is NVIC IRQ 0; see below for the other cores. |
 | `blinky` | Blinks the LED. Enabled only on `nucleo-f411re` (`platforms/nucleo-f411re/cmake/definitions.cmake`), where it is the case `blinky-test`. |
 | `instrumentation` | SEGGER SystemView use cases. Enabled only on `nucleo-f411re`, which builds `instrumentation-test` and `rtos-apis-instrumentation-test` but registers no CTest case for them: they are run from SEGGER Ozone with a J-Link (see `tests/sources/instrumentation/README.md`). |
@@ -130,6 +131,9 @@ Where each suite runs:
 | `2xcortex-m33` | QEMU | QEMU | QEMU | SMP 2 |
 | `pico2-1cpu` | QEMU | QEMU | QEMU | single |
 | `qemu-cortex-m*`, `nucleo-*`, `raspberrypi-pico` | yes | yes | yes | single (upstream); `nucleo-f411re` adds `blinky-test` |
+
+`fp-switch` runs where an M33 FPU does: `cortexm-pico2` (qemu, hwd),
+`2xcortex-m33` (QEMU, SMP 2) and `pico2-1cpu` (QEMU, single).
 
 On `cortexm-pico2` the `-qemu` image of a suite does not run the board at
 all: QEMU has no RP2350, so the image links the generic single-core
@@ -194,6 +198,15 @@ harness suite, all `-hwd`, all SMP 3.
 | `smp_test_int5` | AMP doorbell: the RK3506's Cortex-M0 fires Mailbox interrupts every ~40 ms to A7 cores 1 and 2, which report to core 0 over a shared ring. |
 | `mutex-stress-test` | The harness suite, built by the platform itself (not a port test directory). |
 
+Every Lyra test ends with a `RESULT:` line and a semihosting exit. The four
+USB tests (`smp_test6`, `smp_test7`, `smp_test_int3`, `smp_test_int4`) wait
+up to 120 s for the host to configure the gadget, then fail; they are built
+`UOS_CONSOLE_UART_ONLY`, so their console does not mirror every line through
+semihosting (each such trap halts the core, and during USB traffic that lost
+the WCH-Link's debug link). Their host tools are C/C++ sources in the test's
+own `host/` directory: `usb_test_host` for `smp_test6`/`smp_test7`,
+`kbd_forward` for `smp_test_int3`/`smp_test_int4`.
+
 ## 7. Cortex-M
 
 ### 7.1 RP2350 boards
@@ -218,13 +231,13 @@ Three boards on the same silicon (2× Cortex-M33): `pico2`, `pico2-pizero` and
 | `smp-test-usb-hid` | USB HID keyboard forwarding; keystrokes printed on the UART. | SMP 2 | hwd | hwd | — |
 | `psram-exec` | Bare SRAM supervisor that copies two apps into PSRAM and switches between them on a key press. | bare | — | hwd | — |
 | `psram-mat-test-250` | `smp-mat-test` with PSRAM brought up by the app itself, at 250 MHz, from an SRAM-boot linker script. | SMP 2 | — | hwd | — |
-| `smp-test-nested` | Nested interrupts on both cores (SysTick, UART0, TIMER0 IRQ 2/3 at different priorities) with thread migration and a lock-free trace. | SMP 2 | — | — | hwd |
-| `smp-test-nested-clock` | `smp-test-nested` plus a clock tree driven from a potentiometer (ADC) and the on-die temperature sensor; data in PSRAM, 250 MHz enabled. | SMP 2 | — | — | hwd |
+| `smp-test-nested` | Nested interrupts on both cores (SysTick, UART0, TIMER0 IRQ 2/3 at different priorities) with thread migration and a lock-free trace. Passes once both workers have run 20 beats and all three nesting interrupts have fired. | SMP 2 | — | — | hwd |
+| `smp-test-nested-clock` | `smp-test-nested` plus a clock tree driven from a potentiometer (ADC) and the on-die temperature sensor; data in PSRAM, 250 MHz enabled. **Interactive**: waits for `y` on the UART (a pot position other than the current clock reboots into it first), then the same 20-beat verdict. | SMP 2 | — | — | hwd |
 | `smp-test-nested-clock_200` | The same, without `PICO2_ENABLE_250MHZ` (the clock tree at its default). | SMP 2 | — | — | hwd |
 | `smp-test-nested-clock_250` | The same, with 250 MHz enabled. | SMP 2 | — | — | hwd |
-| `rtos-apis`, `mutex-stress`, `cmsis-os-validator` | The harness suites (§4). | SMP 2 (hwd); single (qemu) | qemu, hwd | — | — |
+| `rtos-apis`, `mutex-stress`, `cmsis-os-validator`, `fp-switch` | The harness suites (§4). | SMP 2 (hwd); single (qemu) | qemu, hwd | — | — |
 
-Case counts: `pico2` 20, `pico2-pizero` 14, `pico2-rp2350b-psram` 16.
+Case counts: `pico2` 22, `pico2-pizero` 14, `pico2-rp2350b-psram` 16.
 
 ### 7.2 STM32F4 boards (one CPU)
 
@@ -253,9 +266,11 @@ cases are `-host`.
 | `rtos-apis` | The upstream suite, with the POSIX I/O layer. | single |
 | `smp-mutex-stress` | The SMP leg of `mutex-stress`, with `smp_test2`'s start-up. | SMP 4 |
 | `smp-rtos-apis` | The whole `rtos-apis` sequence once per core, from a driver pinned to that core, with the API threads unpinned; fails unless every core did the work. | SMP 4 |
+| `flatfs-test` | flatfs on a host-file card: append 64 KiB to a file created empty, then check it, a file beside it and a fresh mount. | SMP 4 |
+| `mutex-ceiling-test` | A thread above a robust protect mutex's ceiling gets `EINVAL`; after it is destroyed, lock/unlock at the ceiling must still work (no `EOWNERDEAD`). | SMP 4 |
 | `cmsis-os-validator` | The validator (§4), registered by the harness platform itself. | SMP 4, validator on core 0 |
 
-14 cases.
+16 cases.
 
 ## 9. How to run
 

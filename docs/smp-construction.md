@@ -257,15 +257,23 @@ read. No project-specific macro selects an ISA.
 ## 6. Verifying a port
 
 ```sh
-tools/verify-kernel-compiles.sh <port-include-dir>[:<dir>...] [compiler]
+tools/verify-kernel-compiles.sh [--without <group>]... \
+    <port-include-dir>[:<dir>...] [compiler [flags...]]
 ```
 
-Several directories, `:`-separated, are searched in that order, for a port
-whose board overlays one on another (cortexm's `include-rp2350:include`).
+Several directories, `:`-separated, are searched in that order: a port whose
+board overlays one on another (cortexm's `include-rp2350:include`), or the
+AArch ports with the kernel's `port/smp-common`. A bare-metal port passes its
+cross compiler, followed by the facts a board would supply (aarch32:
+`-mcpu`, `OS_NCPU`, `OS_SMP_IPI_SGI`, `PORT_GREETING`). `--without startup`
+skips the optional `startup` group, which the AArch ports do not link; the
+skipped sources are reported, never counted. `.c` sources compile as C.
 
 Compiles every source the kernel declares against that port's headers. It is
 the only meaningful standalone check: the kernel can never compile on its own,
 because `include/cmsis-plus/rtos/os-decls.h` includes
 `<cmsis-plus/rtos/port/os-decls.h>`, which only a port supplies.
 
-Current result: **61 declared, 61 compiled.**
+Current result on `posix-arch` and `aarch64`: **61 declared, 61 compiled**;
+on `aarch32`, 57 compiled and the 4 `startup` sources skipped. The exact
+commands are in `STATUS.md`.

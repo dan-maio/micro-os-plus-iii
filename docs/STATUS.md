@@ -57,6 +57,11 @@ the migration log, dated where they were measured.
   directories: `posix-arch` 61/61; `cortexm` 27/61 on `include/`,
   `include-m33/` and `include-rp2350:include` alike (the RP2350's old
   standalone directory also gave 27).
+- **The kernel-compiles gate reaches the AArch ports.** It compiles `.c` as C,
+  takes the port's cross compiler plus extra flags (the board facts), and
+  `--without <group>` skips an optional group the port does not link. With
+  those, `aarch64` and `aarch32` both **PASS**; see the gate table below for
+  the exact commands.
 
 ---
 
@@ -253,30 +258,34 @@ green. Do not read the two tables as one.
 
 | gate | command | state |
 |---|---|---|
-| kernel compiles on a port's headers | `tools/verify-kernel-compiles.sh ../micro-os-plus-iii-posix-arch/include` | 61/61 — **on `posix-arch` only**, see below |
+| kernel compiles on a port's headers | `tools/verify-kernel-compiles.sh ../micro-os-plus-iii-posix-arch/include` | PASS on `posix-arch`, `aarch64`, `aarch32`; `cortexm` 27/61 — see below |
 | no duplicate sources, across repos | `tools/verify-no-duplicate-sources.py` | **PASS** — see below |
 | no machine-specific absolute paths | `tools/verify-no-absolute-paths.sh` | PASS (105 files) |
 
-**The kernel-compiles gate passes on one port of the four, and that is a
-limitation of the gate, not a verdict on the other three.** Only `posix-arch`
-keeps a complete port header set that needs no board:
+**The kernel-compiles gate passes on three ports of the four** (measured
+2026-09-26; `$X` is `~/.local/xPacks/@xpack-dev-tools`). A bare-metal port
+needs its own cross compiler, because the host's cannot assemble its inline
+asm, and the facts a board would supply follow it as flags:
 
-| port | what happens | why |
+| port | command | result |
 |---|---|---|
-| `posix-arch` | **61/61 PASS** | `include/` holds `os-decls.h`, `os-c-decls.h` and `os-inlines.h` together |
-| `aarch32`, `aarch64` | given alone, refuses to start — "does not look like a port". With `include:port/smp-common` (2026-09-25): aarch32 26/61, aarch64 44/61 | their `os-decls.h` is the shared one in the kernel's `port/smp-common/`. With it, aarch32 stops on `OS_NCPU is a board fact`, aarch64 on board headers |
-| `cortexm` | 27/61 (`include`, `include-m33`, `include-rp2350:include`) | the remaining sources need a board's vendor headers (`cmsis_device.h`) |
+| `posix-arch` | `tools/verify-kernel-compiles.sh ../micro-os-plus-iii-posix-arch.git/include` | **PASS** 61/61 |
+| `aarch64` | `tools/verify-kernel-compiles.sh ../micro-os-plus-iii-aarch64.git/include:port/smp-common $X/aarch64-none-elf-gcc/15.2.1-1.1.1/.content/bin/aarch64-none-elf-g++` | **PASS** 61/61 |
+| `aarch32` | `tools/verify-kernel-compiles.sh --without startup ../micro-os-plus-iii-aarch32.git/include:port/smp-common $X/arm-none-eabi-gcc/15.2.1-1.1.1/.content/bin/arm-none-eabi-g++ -mcpu=cortex-a7 -marm -DOS_NCPU=3 -DOS_SMP_IPI_SGI=0 '-DPORT_GREETING="lyra"'` | **PASS** 57/61, 4 skipped |
+| `cortexm` | `tools/verify-kernel-compiles.sh ../micro-os-plus-iii-cortexm.git/include` (also `include-m33`, `include-rp2350:include`) | 27/61 |
 
-Supplying both directories by hand gets the ARM ports further, and then they
-stop on `OS_NCPU` and on board headers — because at that depth the kernel no
-longer compiles against *a port*, it compiles against *a board*. That is the
-honest shape of it: this gate proved what it was built for in step 1, and
-`port/smp-common` moving the shared `os-decls.h` out of the ports is what took
-it out of reach of the ARM two. Those three ports are covered by the suites
-and by the build-coverage gate (spec Section 9), not by this script. The script
-now accepts several include directories (`a:b`, searched in order), which is
-what the RP2350's overlay needs; for the ARM two it gets further and stops
-where described.
+- `aarch64` and `aarch32` take their shared `os-decls.h` from the kernel's
+  `port/smp-common/`, hence the two-directory path.
+- `aarch32` refuses to guess `OS_NCPU`, `OS_SMP_IPI_SGI` and `PORT_GREETING`
+  (`aarch64` has defaults for them), and its `cpsid`/`cpsie` need a Cortex-A
+  `-mcpu`. With the rpi3b's facts (`-mcpu=cortex-a53 -DOS_NCPU=4`) and no
+  `--without`, it compiles 59/61. The two left are `startup/exception-handlers.c`
+  and `startup/initialize-hardware.c`, which call the Cortex-M CMSIS
+  `__disable_irq()` and `SystemInit()`. They belong to the optional `startup`
+  group, which the AArch ports do not link (they have their own `startup.S`),
+  so `--without startup` is the honest run.
+- `cortexm`'s remaining sources need a board's vendor header
+  (`cmsis_device.h`), so on this port the gate stops at the board.
 
 The duplicate gate has **three** outcomes, not two, because this workspace
 duplicates some code on purpose and a flat pass/fail would have to lie about

@@ -1030,6 +1030,12 @@ namespace os
         static void
         start (void);
 
+        static constexpr bool
+        has_hardware_counter (void) noexcept;
+
+        static uint64_t
+        hardware_counter (void) noexcept;
+
         static uint32_t
         cycles_per_tick (void);
 

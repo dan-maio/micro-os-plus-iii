@@ -793,11 +793,19 @@ namespace os
     clock::timestamp_t
     clock_highres::now (void)
     {
-      // ----- Enter critical section -----------------------------------------
-      interrupts::critical_section ics;
+      if constexpr (port::clock_highres::has_hardware_counter ())
+        {
+          return port::clock_highres::hardware_counter ();
+        }
+      else
+        {
+          // Prevent inconsistent values.
+          // ----- Enter critical section -----------------------------------------
+          interrupts::critical_section ics;
 
-      return steady_count_ + port::clock_highres::cycles_since_tick ();
-      // ----- Exit critical section ------------------------------------------
+          return steady_count_ + port::clock_highres::cycles_since_tick ();
+          // ----- Exit critical section ------------------------------------------
+        }
     }
 
     // ------------------------------------------------------------------------

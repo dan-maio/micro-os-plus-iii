@@ -79,6 +79,7 @@ os_rtos_idle_actions (void)
         interrupts::critical_section ics;
         node = const_cast<internal::waiting_thread_node*> (
             scheduler::terminated_threads_list_.head ());
+        thread* th = node->thread_;
 #if defined(OS_USE_SMP_SCHEDULER)
         // A thread links itself here in internal_exit_() and only then
         // switches away, so on SMP it may still be running on another CPU.
@@ -87,7 +88,6 @@ os_rtos_idle_actions (void)
         // CPU has it current and its context has been saved -- the same
         // rule internal_switch_threads() applies to the ready list -- and
         // otherwise leave it linked for the next idle pass.
-        thread* th = node->thread_;
         bool live = (th->context_.port_.stack_ptr == nullptr);
         for (unsigned c = 0; c < OS_NCPU && !live; ++c)
           {
@@ -98,6 +98,13 @@ os_rtos_idle_actions (void)
             break;
           }
 #endif /* defined(OS_USE_SMP_SCHEDULER) */
+        if (th->state_ == thread::state::destroying
+            || th->state_ == thread::state::destroyed)
+          {
+            node->unlink ();
+            continue;
+          }
+        th->state_ = thread::state::destroying;
         node->unlink ();
         // ----- Exit critical section ----------------------------------------
       }

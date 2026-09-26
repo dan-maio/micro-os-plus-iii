@@ -208,13 +208,34 @@ SIBLINGS = [
 ]
 
 
+def normalize_repo_name(name: str) -> str:
+    """Normalize a repository folder name to its canonical identifier.
+    Strips trailing '.git', resolves symlinks, and extracts the folder name.
+    """
+    if not name:
+        return ""
+    base = os.path.basename(os.path.realpath(name) if os.path.islink(name) else name)
+    if base.endswith(".git"):
+        base = base[:-4]
+    return base
+
+
+def normalize_sibling_path(p: str) -> str:
+    """Normalize a path so the repo component matches canonical repo names."""
+    parts = p.split("/", 1)
+    if len(parts) == 2:
+        return f"{normalize_repo_name(parts[0])}/{parts[1]}"
+    return p
+
+
 def sibling_reason(full_a, full_b, ratio):
     """A named pair that resembles itself for a stated reason.
 
     Refused when the two have become identical -- that is a real copy, and
     exactly what this gate is for."""
+    norm_pair = {normalize_sibling_path(full_a), normalize_sibling_path(full_b)}
     for a, b, reason in SIBLINGS:
-        if {full_a, full_b} == {a, b}:
+        if norm_pair == {normalize_sibling_path(a), normalize_sibling_path(b)}:
             if ratio >= 1.0:
                 return None
             return reason
@@ -252,8 +273,9 @@ def tracked_sources(repo_path):
 
 
 def exempt_reason(repo, rel):
+    repo_norm = normalize_repo_name(repo) if repo else None
     for want_repo, prefix, reason in EXEMPT:
-        if want_repo is not None and want_repo != repo:
+        if want_repo is not None and normalize_repo_name(want_repo) != repo_norm:
             continue
         if rel.startswith(prefix):
             return reason
@@ -312,7 +334,7 @@ def main():
     repos = sorted(
         d for d in os.listdir(workspace)
         if d.startswith(REPO_PREFIX)
-        and (d[:-len(".git")] if d.endswith(".git") else d) not in SKIP_REPOS
+        and normalize_repo_name(d) not in SKIP_REPOS
         and os.path.isdir(os.path.join(workspace, d, ".git"))
     )
     if not repos:
@@ -327,7 +349,7 @@ def main():
     exempted = 0
     for d in repos:
         root = os.path.join(workspace, d)
-        repo = d[:-len(".git")] if d.endswith(".git") else d
+        repo = normalize_repo_name(d)
         for rel in tracked_sources(root):
             if exempt_reason(repo, rel) is not None:
                 exempted += 1

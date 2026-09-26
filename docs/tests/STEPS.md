@@ -238,14 +238,18 @@ Mailbox 1 (see `TESTS-CATALOG.md` §4).
 
 ## 7. Run a harness suite as a cortexm board app
 
-**What:** run a suite on a cortexm board, both in QEMU and on the real board.
-`cortexm-pico2` already does this for `rtos-apis`, `mutex-stress` and
-`cmsis-os-validator`. To do it on another board, copy these five pieces.
-**All five are needed.**
+**What:** run a suite on a cortexm board, on the real board and, where the
+board has a QEMU image, in QEMU too. `cortexm-pico2`, `cortexm-nucleof411`,
+`cortexm-weactf411` and `cortexm-weactf412` already do this for `rtos-apis`,
+`mutex-stress` and `cmsis-os-validator`. To do it on another board, copy
+these five pieces. **All five are needed.**
 
-1. **A folder per suite,** `test/<board>/<suite>/harness-suite.cpp`. The
-   folder name becomes the app name. The file wraps `os_main()`: it runs the
-   suite, prints `RESULT: PASS` or `RESULT: FAIL`, and returns the code.
+1. **The verdict wrapper, once per board,** `test/<board>/harness-suite.hpp`,
+   and **a folder per suite,** `test/<board>/<suite>/harness-suite.cpp`, which
+   only includes `../harness-suite.hpp`. The folder name becomes the app name.
+   The header defines `__wrap_os_main()`: it runs the suite, prints
+   `RESULT: PASS` or `RESULT: FAIL`, and returns the code. (The Pi ports keep
+   the wrapper in each suite's `harness-suite.cpp` instead.)
 2. **`board_test_libs()`** in `tests.cmake` returns the suite library, its
    extras, and an interface target (on pico2, `pico2-harness-suite`). That
    target carries:

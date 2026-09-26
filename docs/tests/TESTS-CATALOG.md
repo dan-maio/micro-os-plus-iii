@@ -105,8 +105,10 @@ the same `PROBE` switch. The paths above are relative to the port repository
 
 Their sources live in `tests/sources/<suite>/`. They have no `main()`: the
 entry is `os_main()`, and its return code is the verdict. On the port boards a
-per-board `harness-suite.cpp` wraps `os_main` (`-Wl,--wrap=os_main`), prints the
-`RESULT:` line and stops the run.
+per-board wrapper wraps `os_main` (`-Wl,--wrap=os_main`), prints the
+`RESULT:` line and stops the run. It is each suite's `harness-suite.cpp` on the
+Pi ports, and one `test/<board>/harness-suite.hpp` per board, included by the
+suites' `harness-suite.cpp`, on cortexm.
 
 | Suite | What it does |
 |---|---|
@@ -136,8 +138,10 @@ it (`<cortexm>/test/CMakeLists.txt`).
 
 The validator is CMSIS-RTOS v1, which assumes one CPU. On the SMP platforms the
 kernel's wrapper pins every thread `osThreadCreate()` makes to core 0
-(`src/rtos/os-c-wrapper.cpp`), and the board's `harness-suite.cpp` pins the
-main thread too. On the BCM2837 (both Pi ports) its NVIC IRQ 0 is emulated with
+(`src/rtos/os-c-wrapper.cpp`). On the Pi ports the board's
+`harness-suite.cpp` pins the main thread too; the pico2 wrapper
+(`test/pico2/harness-suite.hpp`) does not, so there the validator's main
+thread keeps the default affinity while every thread it creates is on core 0. On the BCM2837 (both Pi ports) its NVIC IRQ 0 is emulated with
 the local Mailbox 1 interrupt, and the Cortex-M DWT cycle counter it probes is
 answered by a RAM page that says "no cycle counter". Both exist only in the
 validator's image (`UOS_CMSIS_OS_VALIDATOR`). On `native`, the validator

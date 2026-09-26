@@ -238,10 +238,10 @@ target_link_libraries(your-target PRIVATE
 
 ### Tests
 
-- `tests/rtos-apis` - simple test to exercise the µOS++ RTOS C++ API,
+- `tests/sources/rtos-apis` - simple test to exercise the µOS++ RTOS C++ API,
 the C API and the ISO C++ API
-- `tests/mutex-stress` - a stress test with 10 threads fighting for a mutex
-- `tests/cmsis-os-validator` - the Arm CMSIS OS validator
+- `tests/sources/mutex-stress` - a stress test with 10 threads fighting for a mutex
+- `tests/sources/cmsis-os-validator` - the Arm CMSIS OS validator
 
 The Arm CMSIS RTOS validator is available from the separate project
 [xpacks/arm-cmsis-rtos-validator](https://github.com/xpacks/arm-cmsis-rtos-validator).

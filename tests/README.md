@@ -31,9 +31,9 @@ The supported platforms for running the µOS++ IIIe tests are:
   used to run the M0 code)
 - `platforms/raspberrypi-pico` - run the tests on a physical Raspberry Pi
   Pico (Cortex-M0+) via OpenOCD semihosting
-- `platforms/nucleo-f767zi` - run the tests on a physical NUCLEO-Z767ZI
+- `platforms/nucleo-f767zi` - run the tests on a physical NUCLEO-F767ZI
   board (Cortex-M7) via OpenOCD semihosting
-- `platforms/nucleo-f743zi` - run the tests on a physical NUCLEO-Z743ZI
+- `platforms/nucleo-h743zi` - run the tests on a physical NUCLEO-H743ZI
   board (Cortex-M7) via OpenOCD semihosting
 
 The tests are performed on GNU/Linux, macOS and Windows.

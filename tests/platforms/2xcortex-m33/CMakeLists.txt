@@ -50,6 +50,7 @@ endfunction ()
 # -----------------------------------------------------------------------------
 add_suite_executable (rtos-apis-test rtos-apis xpacks::chan-fatfs)
 add_suite_executable (mutex-stress-test mutex-stress)
+add_suite_executable (fp-switch-test fp-switch)
 add_suite_executable (cmsis-os-validator-test cmsis-os-validator
                       xpacks::arm-cmsis-os-validator)
 

@@ -18,6 +18,7 @@ set (
   "${CMAKE_SOURCE_DIR}/sources/rtos-apis"
   "${CMAKE_SOURCE_DIR}/sources/mutex-stress"
   "${CMAKE_SOURCE_DIR}/sources/cmsis-os-validator"
+  "${CMAKE_SOURCE_DIR}/sources/fp-switch"
   # The generic QEMU Cortex-M device the `qemu` images link instead of the
   # board.
   "${CMAKE_SOURCE_DIR}/device-qemu-cortexm"

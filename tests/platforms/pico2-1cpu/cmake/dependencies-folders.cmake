@@ -10,6 +10,7 @@ set (
   "${CMAKE_SOURCE_DIR}/sources/rtos-apis"
   "${CMAKE_SOURCE_DIR}/sources/mutex-stress"
   "${CMAKE_SOURCE_DIR}/sources/cmsis-os-validator"
+  "${CMAKE_SOURCE_DIR}/sources/fp-switch"
   # The generic QEMU Cortex-M device (vectors, CMSIS).
   "${CMAKE_SOURCE_DIR}/device-qemu-cortexm"
   # The SOURCE_DIR is the `tests` folder.

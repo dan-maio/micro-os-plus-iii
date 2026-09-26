@@ -1204,7 +1204,9 @@
           "test-cmsis-os-validator-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R cortexm-pico2-cmsis-os-validator-hwd",
           "test-exc-test-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R cortexm-pico2-exc-test-hwd",
           "test-mutex-stress-qemu": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R cortexm-pico2-mutex-stress-qemu",
+          "test-fp-switch-qemu": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R cortexm-pico2-fp-switch-qemu",
           "test-mutex-stress-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R cortexm-pico2-mutex-stress-hwd",
+          "test-fp-switch-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R cortexm-pico2-fp-switch-hwd",
           "test-rtos-apis-qemu": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R cortexm-pico2-rtos-apis-qemu",
           "test-rtos-apis-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R cortexm-pico2-rtos-apis-hwd",
           "test-sc-test-ko-qemu": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R cortexm-pico2-sc-test-ko-qemu",
@@ -1252,6 +1254,7 @@
           "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V",
           "test-rtos-apis-test": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R pico2-1cpu-rtos-apis-test",
           "test-mutex-stress-test": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R pico2-1cpu-mutex-stress-test",
+          "test-fp-switch-test": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R pico2-1cpu-fp-switch-test",
           "test-cmsis-os-validator-test": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R pico2-1cpu-cmsis-os-validator-test"
         }
       },
@@ -1285,6 +1288,7 @@
           "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V",
           "test-rtos-apis-test": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R 2xcortex-m33-rtos-apis-test",
           "test-mutex-stress-test": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R 2xcortex-m33-mutex-stress-test",
+          "test-fp-switch-test": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R 2xcortex-m33-fp-switch-test",
           "test-cmsis-os-validator-test": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R 2xcortex-m33-cmsis-os-validator-test"
         }
       },

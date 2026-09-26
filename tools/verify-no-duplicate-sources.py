@@ -226,6 +226,13 @@ def expected_reason(rel_a, rel_b):
     na, nb = board_neutral(rel_a), board_neutral(rel_b)
     if na is not None and na == nb:
         return "the same test file carried by two boards; every board owns its tests"
+    # test/<board>/<test>/host/<file>: a PC program shipped with its test, so
+    # each test's host/ folder builds on its own (smp_test_int3 and
+    # smp_test_int4 both forward the keyboard).
+    pa, pb = rel_a.split("/"), rel_b.split("/")
+    if (len(pa) == 5 and len(pb) == 5 and pa[0] == pb[0] == "test"
+            and pa[3] == pb[3] == "host" and pa[4] == pb[4]):
+        return "a host tool shipped with each test that uses it"
     return None
 
 

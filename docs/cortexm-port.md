@@ -111,6 +111,14 @@ board arrived that supplies a lock and an IPI.
 Core 1 is launched through the bootrom FIFO handshake with its own MSP. Only
 core 0 advances the RTOS clock; core 1's SysTick reschedules core 1 alone.
 
+**High-resolution clock (`clock_highres`).** On RP2350 (`include-rp2350/`),
+`clock_highres::has_hardware_counter()` returns `true` under SMP, reading the
+latched 64-bit hardware timer (`TIMER0` `TIMEHR`/`TIMELR`) clocked at 1 MHz
+(`input_clock_frequency_hz() == 1000000`). `clock_highres::start()` ensures
+the timer peripheral is unreset and configured. On generic Cortex-M and M33
+(`include/`, `include-m33/`), `has_hardware_counter()` returns `false`, safely
+retaining the SysTick phase calculation.
+
 **FPU context.** Both SMP port cores (`os-core-rp2350.cpp`, `os-core-m33.cpp`)
 keep FPCCR.ASPEN and LSPEN **on**, on both cores (RP2350: core 0 in the
 board's `boot.S`, core 1 in `port_smp_secondary_start()`; M33:

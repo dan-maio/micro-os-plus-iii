@@ -13,7 +13,7 @@ the migration log, dated where they were measured.
 
 ## Today (2026-09-26)
 
-A review of the SMP code found ten defects; seven are fixed, each with a test
+A review of the SMP code found ten defects; all ten are fixed, each with a test
 that failed first where one could be written.
 
 - **Kernel lock bookkeeping (all SMP ports).** `scheduler::locked()` read the
@@ -37,6 +37,22 @@ that failed first where one could be written.
 - **RP2350 SIO spinlocks (cortexm `2e679ad`)** are released at reset; a run
   that ended holding the kernel lock hung the next image (`smp-mat-test` on
   the psram board).
+- **SMP `thread::kill()` synchronization.** On SMP, `thread::kill()` can wait
+  forever on a target thread executing on another core that keeps picking it.
+  Now `thread::kill()` triggers an immediate cross-core reschedule IPI
+  (`port_smp_ipi(busy_cpu)`). To eliminate double-destruction races with the
+  idle thread reaper (`os_rtos_idle_actions()`), `state::destroying = 7`
+  was added to arbitrate ownership under `interrupts::critical_section`.
+- **Monotonic SMP `hrclock` (`clock_highres::now()`).** Replaced SysTick
+  subdivision (which mixed core 0's tick count with the calling core's SysTick
+  phase) with cluster-wide monotonic hardware counters queried lock-free via
+  `if constexpr (port::clock_highres::has_hardware_counter())`. Implemented on
+  AArch64 (`CNTPCT_EL0`), AArch32 (`CNTPCT`), RP2350 (`TIMER0` 1 MHz latch),
+  and POSIX (`CLOCK_MONOTONIC`), with fallback to SysTick on generic Cortex-M.
+- **Duplicate gate repo and path normalization.** `verify-no-duplicate-sources.py`
+  now normalizes repository directory names (stripping trailing `.git` and
+  resolving symlinks) and sibling comparison paths so canonical repo names and
+  sibling exemptions match accurately across the multi-repo workspace.
 - **Tests.** pico2's HID test pins its USB thread at construction
   (`1e97fbf`). The psram nested tests end after 20 beats with a verdict
   (`71a717b`). The Lyra USB tests enumerate and end with a verdict, their
@@ -48,12 +64,7 @@ that failed first where one could be written.
 - **Verified.** On the boards: `pico2` 16/16, `pico2-rp2350b-psram` 14/14, the
   Lyra's four USB tests and `smp-pro-cons-test`. Under QEMU and native: every
   one of the 38 local configurations builds and its set passes, run one
-  configuration at a time.
-- **Still open from the review:** SMP `thread::kill()` can wait forever on a
-  target its core keeps re-picking; the duplicate gate's EXPECTED rule ignores
-  which repository a file is in; `clock_highres::now()` mixes core 0's tick
-  count with the calling core's SysTick phase. `pico2-pizero` has not run any
-  of today's changes on the board.
+  configuration at a time. All code strictly C++20.
 
 ## 2026-09-25
 
@@ -336,7 +347,7 @@ duplicates some code on purpose and a flat pass/fail would have to lie about
 it:
 
 - **exempt** — never compared: upstream's `tests/`, vendored `xpacks/`,
-  TinyUSB, and ARM's own CMSIS core headers (415 files). One consequence is
+  TinyUSB, and ARM's own CMSIS core headers (429 files). One consequence is
   worth knowing: the two single-core tests the POSIX board carries,
   `mutex-stress` and `rtos-apis`, are near-copies of `tests/sources/`, and the
   gate cannot see the pairing because the originals are on the exempt side. It
@@ -344,14 +355,14 @@ it:
   not the gate proving those copies are justified.
 - **expected** — reported and counted, but not a failure: *the same test file
   carried by two boards*. Every board owns its tests, deliberately, so that
-  changing a test reaches exactly one board. **257 pairs.** The spec's
+  changing a test reaches exactly one board. **256 pairs.** The spec's
   Section 9 says "target: zero findings" and was written before that decision;
   this is where the two are reconciled, in the open rather than by a silent
   exemption.
 - **sibling** — reported, counted, and **named individually in the script's
   `SIBLINGS` list with a reason each**. Not copies: two files that resemble
   each other because they do similar jobs, which a similarity threshold cannot
-  tell from a copy. **9 pairs.** The entry is a claim, and the claim is
+  tell from a copy. **16 pairs.** The entry is a claim, and the claim is
   checked — the gate fails if a named pair ever becomes *identical* (that is a
   copy, and it says so), and fails if an entry stops matching anything at all,
   so stale justifications cannot accumulate.

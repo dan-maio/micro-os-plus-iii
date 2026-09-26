@@ -111,6 +111,11 @@ It is on no default include path. A port with different needs writes its own
 `os-decls.h` in its own `include/` and simply does not link that target, so the
 two can never be confused.
 
+The kernel's `include/cmsis-plus/rtos/os-decls.h` also declares the port's
+`port::clock_highres` contract (`has_hardware_counter()` and `hardware_counter()`),
+while `include/cmsis-plus/rtos/os-thread.h` defines `thread::state::destroying = 7`
+to arbitrate SMP thread teardown between `thread::kill()` and `os_rtos_idle_actions()`.
+
 ### 3.3 Inline operations — `cmsis-plus/rtos/port/os-inlines.h`
 
 Per ISA. The kernel calls, and the port supplies:
@@ -122,6 +127,8 @@ Per ISA. The kernel calls, and the port supplies:
 | `interrupts::uncritical_section::enter/exit` | as above, inverted | as above, inverted |
 | `scheduler::lock/unlock/locked` | recursive kernel lock | recursive kernel lock |
 | `_smp_klock_raw_acquire/release` | `ldrex`/`strex` | `ldaxr`/`stlxr` |
+| `clock_highres::has_hardware_counter()` | `true` | `true` |
+| `clock_highres::hardware_counter()` | `timer_arm::get_count()` (`CNTPCT`) | `timer_arm::get_count()` (`CNTPCT_EL0`) |
 
 ### 3.4 Functions with C linkage
 
@@ -129,6 +136,7 @@ Per ISA. The kernel calls, and the port supplies:
 unsigned port_cpu_id (void);          /* current core index, 0..OS_NCPU-1   */
 void     port_sys_init (void);        /* per-core tick + IRQ controller     */
 void     port_ctx_switch (void);      /* context-switch entry              */
+void     port_smp_ipi (unsigned cpu); /* send reschedule IPI to target CPU  */
 void     port_smp_secondary_start (void);  /* secondary core entry point   */
 void     smp_install_boot_threads (void);  /* supplied by the application  */
 ```

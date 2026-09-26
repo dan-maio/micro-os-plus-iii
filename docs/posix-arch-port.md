@@ -1358,9 +1358,11 @@ void clock_systick::start (void)
 uint32_t clock_highres::input_clock_frequency_hz (void) { return 1000000; }
 ```
 
-`CLOCK_MONOTONIC` read at microsecond resolution. Claiming nanoseconds would be
-claiming a precision the read does not have once the syscall (or vDSO call) and
-the division are counted. `cycles_per_tick()` and `cycles_since_tick()` are
+`CLOCK_MONOTONIC` read at microsecond resolution. `port::clock_highres::has_hardware_counter()`
+returns `true`, and `port::clock_highres::hardware_counter()` reads `::clock_gettime(CLOCK_MONOTONIC)`
+directly, allowing `os::rtos::clock_highres::now()` to query time lock-free across host threads.
+Claiming nanoseconds would be claiming a precision the read does not have once the syscall
+(or vDSO call) and the division are counted. `cycles_per_tick()` and `cycles_since_tick()` remain
 deltas against a timestamp taken at the last tick.
 
 The **board's** free-running counter, `timer_arm::get_count()`, is a separate

@@ -42,7 +42,7 @@ timeout_for () {
 sd_image_for () {
   local app="$1"
   case "$app" in
-    smp-num-test|smp-pipeline-test|smp-mat-sdcard-test|sd_test)
+    smp-num-test|smp-pipeline-test|smp-mat-sdcard-test|sd_test|flatfs-test)
       echo "${LOGS}/${app}.disk.img" ;;
     *)
       return 1 ;;

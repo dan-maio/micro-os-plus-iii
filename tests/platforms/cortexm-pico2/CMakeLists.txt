@@ -79,13 +79,15 @@ foreach (_dir IN LISTS _test_dirs)
     )
   endif ()
 
+  # A board run gets 4 minutes (hw.sh's own limit); CTest's allows one more
+  # for flashing and tear-down, so hw.sh reports the TIMEOUT, not CTest.
   add_test (
     NAME "${PLATFORM_NAME}-${_app}-hwd"
-    COMMAND bash "${_board_hw}" "${_app}" 600
+    COMMAND bash "${_board_hw}" "${_app}" 240
   )
   set_tests_properties (
     "${PLATFORM_NAME}-${_app}-hwd"
-    PROPERTIES ENVIRONMENT "BUILD=${_port_bin}" LABELS "hwd" TIMEOUT 1200
+    PROPERTIES ENVIRONMENT "BUILD=${_port_bin}" LABELS "hwd" TIMEOUT 300
   )
 endforeach ()
 

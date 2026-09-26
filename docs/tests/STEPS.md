@@ -4,6 +4,10 @@ This guide explains how to install the test framework, build it, run the
 tests, and add new ones. Each step says **what** you do and **how** you do
 it. Every command here was checked against the code.
 
+For the common jobs as short recipes (install, build debug and release, run,
+add a test, a suite, a board, a configuration or a whole project), go
+straight to [§12 HOWTO](#12-howto).
+
 ---
 
 ## 1. What the framework is
@@ -381,3 +385,227 @@ hardware case builds, and runs only when its board is connected.
   short name can run more than you meant.
 * The whole history of how this framework was built is in `git log` of this
   file.
+
+---
+
+## 12. HOWTO
+
+Short recipes for the common jobs. Each one gives the commands in order and
+points to the section above that explains them. All commands run from
+`micro-os-plus-iii-smp.git/tests/`, and `C` is a configuration name
+(`<platform>-cmake-<toolchain>-<debug|release>`).
+
+### 12.1 Install the dependencies
+
+**Once per workspace:** clone the six repositories side by side (§2.1), then
+the framework's own tools:
+
+```sh
+cd ~/Work/micro-os-plus-iii-smp.git/tests
+npm install
+xpm install
+```
+
+**Once per configuration folder:** its pinned compiler. Debug and release are
+two folders, so both need it:
+
+```sh
+xpm run install --config native-cmake-gcc-debug
+xpm run install --config native-cmake-gcc-release
+```
+
+For the hardware (`-hwd`) configurations, `install` also brings OpenOCD; the
+board's probe must be plugged in only when a test runs.
+
+### 12.2 Build a configuration, debug and release
+
+```sh
+for C in cortexm-pico2-cmake-gcc-debug cortexm-pico2-cmake-gcc-release; do
+  xpm run install --config $C     # first time only
+  xpm run prepare --config $C     # after adding or removing a test folder
+  xpm run build   --config $C
+done
+```
+
+The images land in `build/C/platform-bin/…`. To see every compile error at
+once instead of the first one:
+
+```sh
+PATH="$PWD/build/C/xpacks/.bin:$PATH" cmake --build build/C -- -k 0
+```
+
+### 12.3 Build and run one test, debug and release
+
+The per-test action prepares, builds the configuration and runs just that
+case. A release configuration inherits every action of its debug twin:
+
+```sh
+xpm run test-flatfs-test-host --config native-cmake-gcc-debug
+xpm run test-flatfs-test-host --config native-cmake-gcc-release
+```
+
+The action name is `test-<test>-<variant>`: `-qemu`, `-host` or `-hwd`. The
+list of actions of a configuration:
+
+```sh
+xpm run --config native-cmake-gcc-release
+```
+
+Without xpm, on a configuration that was built:
+
+```sh
+PATH="$PWD/build/C/xpacks/.bin:$PATH" ctest --test-dir build/C -V \
+    -R '^<platform>-<test>-<variant>$'
+```
+
+Anchor the name with `^…$`: `-R` matches substrings.
+
+### 12.4 Run tests
+
+| Goal | Command |
+|---|---|
+| every emulated or host test of a configuration | `xpm run build --config C`, then `xpm run test --config C` |
+| the same, debug and release, for a whole platform | `xpm run test-<platform>-cmake` (where it exists, §4) |
+| one test | `xpm run test-<test>-<variant> --config C` |
+| list the cases | `PATH="$PWD/build/C/xpacks/.bin:$PATH" ctest --test-dir build/C -N` |
+| one test on the board | power-cycle the board, then `xpm run test-<test>-hwd --config C` |
+
+Rules that save time:
+
+- **One emulated set at a time**, on an idle machine. A four-core QEMU set
+  starved of CPU stalls with no fault and times out; run a failure again,
+  alone, before debugging it.
+- **One hardware test per power cycle.** The previous run's state (on the
+  RP2350, its SIO spinlocks) survives a re-flash otherwise.
+- **The verdict** is the `RESULT: PASS|FAIL|SKIP` line; a hardware test must
+  also stop after it (semihosting exit), or the runner waits for its timeout.
+- **Interactive tests** wait for you: `smp-test-nested-clock*` for `y` on the
+  UART, the USB tests for the host tool or a key press (see
+  `TESTS-CATALOG.md`). Keep your terminal on the board's UART.
+- **Logs** are next to the images: `.qemu-logs/`, `.host-logs/`,
+  `.hw-logs/<test>.log`.
+
+### 12.5 Add a test to an existing board
+
+1. Create `<port>/test/<board>/<name>/main.cpp` from a sibling test. It prints
+   `RESULT: PASS` or `RESULT: FAIL` and, on hardware, stops (§5 step 1).
+2. Only if it needs more than the default, name it in
+   `<port>/test/<board>/tests.cmake` (`BOARD_TEST_NEED_DEVICES` for the SD
+   card, and so on; §5 step 2). A test that talks to the SD card on `native`
+   also needs its own image: add it to `sd_image_for` in
+   `test_smpl/run-host.sh`.
+3. Commit it in the port, and `git pull` the workspace copy if you wrote it
+   elsewhere.
+4. `xpm run prepare --config C`: the folder scan runs only here.
+5. Add the actions to `package.json`, for **every debug configuration** that
+   builds the test (release inherits them):
+
+   ```sh
+   python3 ~/.claude/skills/micro-os-xpack-tests/check-actions.py . C --emit
+   ```
+
+   Paste the printed lines, then check:
+
+   ```sh
+   python3 ~/.claude/skills/micro-os-xpack-tests/check-actions.py .
+   ```
+
+6. Run it, debug and release (§12.3), and run the other boards' emulated sets
+   of that port again: nothing else may change.
+
+A worked example is the native `flatfs-test`: posix-arch `77d012d` (the test
+and `tests.cmake`) and kernel `c581944` (the SD image and the two actions).
+
+### 12.6 Add a harness suite
+
+A portable test with `os_main()` and no `main()`; §6 has the details.
+
+1. Copy `tests/sources/mutex-stress/` to `tests/sources/<name>/` and rename
+   its library to `test::<name>`.
+2. For each platform that runs it: add the folder to
+   `platforms/<platform>/cmake/dependencies-folders.cmake` and register it in
+   `platforms/<platform>/CMakeLists.txt` with that platform's own helper
+   (`add_harness_suite()` on the Pi and Lyra platforms,
+   `add_suite_executable()` on `pico2-1cpu` and `2xcortex-m33`).
+3. On a cortexm board, also give it a board app (§7).
+4. `prepare`, add the actions, run (§12.5 steps 4–6).
+
+A worked example is `fp-switch`: kernel `c41c06d` (the suite, the two
+platforms and the actions) and cortexm `92caefe` (the pico2 board app).
+
+### 12.7 Add a board to an existing project
+
+A board belongs to one port (project) and is described there.
+
+1. `<port>/test/boards/<id>/board.cmake`: the board facts. The port requires
+   `UOS_BOARD_SRC_DIR`, `UOS_BOARD_NCPU`, `UOS_BOARD_CAPS` and
+   `UOS_BOARD_DEFINES`; a board with the `sdcard` or `usb-device` capability
+   must also set `UOS_BOARD_DEVICES`. Copy the closest sibling; on cortexm a
+   variant of an existing board may `include` its `board.cmake` and restate
+   only what differs (the RP2350 boards do).
+2. `<port>/test/boards/<id>/`: its start-up sources and its runner, `hw.sh`
+   for a board, `qemu.sh` or `run.sh` for an emulator or the host.
+3. `<port>/test/<id>/`: one folder per test, and `tests.cmake` for the knobs.
+4. A platform for it in the framework, `tests/platforms/<port-prefix>-<id>/`
+   (§8), with `set (BOARD "<id>" …)` in `cmake/definitions.cmake`.
+5. Its configurations (§12.8), then §12.2 and §12.4.
+
+### 12.8 Add a configuration
+
+In `tests/package.json`, under `xpack.buildConfigurations`:
+
+1. Copy the nearest **debug** entry, e.g. `cortexm-weactf412-cmake-gcc-debug`.
+   Set `platformName`, `toolchainFileName` and a unique
+   `shortConfigurationName`, and pick the inherited dependencies
+   (`qemu-arm-dependencies` for an emulator, `openocd-dependencies` for a
+   board).
+2. Set its `test` action to `ctest -V -LE hwd`, and add one `test-*` action
+   per case (`check-actions.py … --emit`).
+3. Add the **release** entry: it only inherits the debug one and changes
+   `buildType` and `shortConfigurationName`.
+4. `python3 -c "import json; json.load(open('package.json'))"` to catch a
+   JSON slip, then §12.1–§12.4 for both.
+
+### 12.9 Add a project (a new port)
+
+A project is one port repository, `micro-os-plus-iii-<port>.git`, cloned
+beside the others. Copy the closest existing port — `posix-arch` is the
+smallest — and keep its contract:
+
+1. **The root `CMakeLists.txt`** finds the kernel and devices as siblings
+   (`UOS_SMP_DIR`, `UOS_DEVICES_DIR`, accepting the `.git` suffix), adds both,
+   selects `BOARD` among the `test/boards/*/board.cmake` it finds, loads that
+   file and checks the required board facts (§12.7). It exports the port as
+   an interface target with an alias `micro-os-plus::<port>`, and sets
+   `UOS_PORT_LIB` to it (and `UOS_PORT_BARE_LIB` if some test must link no
+   kernel).
+2. **`test/CMakeLists.txt`** is the test builder: it includes
+   `test/${BOARD}/tests.cmake`, loops over `test/${BOARD}/*/` and calls
+   `uos_add_app()` (kernel `cmake/uos-app.cmake`) once per test and variant.
+   No test name and no board name appears in it.
+3. **The kernel's side:** the port's own `src/rtos/os-core.cpp` (bring-up, the
+   kernel lock, the context switch) and its `include/cmsis-plus/rtos/port/`
+   headers; for SMP, the contract in `docs/smp-construction.md`.
+4. **The framework:** in `tests/cmake/tests-main.cmake`, a cache variable
+   `UOS_<PORT>_DIR` pointing at `../../micro-os-plus-iii-<port>.git` and an
+   `elseif (PLATFORM_NAME MATCHES "^<prefix>")` branch that adds it; then a
+   platform per board (§12.7 step 4) and its configurations (§12.8).
+5. **The gates**, before the first commit:
+
+   ```sh
+   cd ~/Work/micro-os-plus-iii-smp.git
+   python3 tools/verify-no-duplicate-sources.py
+   bash tools/verify-no-absolute-paths.sh
+   ```
+
+   and `tools/verify-kernel-compiles.sh` with the port's include directories
+   (see `docs/STATUS.md`, *The three verification gates*).
+
+### 12.10 Before you commit
+
+- `check-actions.py .` reports every configuration in sync.
+- The duplicate-sources gate passes.
+- The emulated or host set of **every** configuration your change can reach
+  passes, run one at a time; the boards you touched pass on hardware.
+- New folders are added with `git add -A` (§11). Then push, and pull the
+  other working copies.

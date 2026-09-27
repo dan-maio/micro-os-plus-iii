@@ -53,7 +53,7 @@ semihosting and mirrored on the UART.
 | `aarch32-luckfox-lyra` | aarch32 | Luckfox Lyra B (RK3506) | 3× Cortex-A7 (+ a Cortex-M0 not scheduled) | 3 | hwd only | WCH-Link, CMSIS-DAP |
 | `aarch64-rpi-zero-2w` | aarch64 | Raspberry Pi Zero 2 W (BCM2837) | 4× Cortex-A53, ARMv8-A | 4 | qemu, hwd | J-Link (default) or Olimex |
 | `aarch64-rpi3b` | aarch64 | Raspberry Pi 3 B (BCM2837) | 4× Cortex-A53, ARMv8-A | 4 | qemu, hwd | J-Link (default) or Olimex |
-| `cortexm-pico2` | cortexm | Raspberry Pi Pico 2 (RP2350) | 2× Cortex-M33 | 2 | qemu (5 tests), hwd | any CMSIS-DAP |
+| `cortexm-pico2` | cortexm | Raspberry Pi Pico 2 (RP2350) | 2× Cortex-M33 | 2 | qemu (6 tests), hwd | any CMSIS-DAP |
 | `cortexm-pico2-pizero` | cortexm | Pi-Zero RP2350B, 16 MB flash | 2× Cortex-M33 | 2 | hwd only | XV-Link CMSIS-DAP |
 | `cortexm-pico2-rp2350b-psram` | cortexm | WeAct RP2350B, 16 MB flash + 8 MB PSRAM | 2× Cortex-M33 | 2 | qemu (2 tests), hwd | CMSIS-DAP `c251:f001` |
 | `cortexm-nucleof411` | cortexm | ST Nucleo-F411RE | 1× Cortex-M4F | 1 | hwd only | on-board ST-Link v2.1 |

@@ -43,6 +43,7 @@
 
 #include <uart.hpp>
 #include <exception_handler.hpp>
+#include <smp.hpp>
 
 // ----------------------------------------------------------------------------
 
@@ -94,6 +95,10 @@ extern "C"
   [[noreturn]] static void
   harness_main_trampoline (void)
   {
+    // Bring up secondary cores so the suite runs across all cores on SMP.
+    smp_install_boot_threads ();
+    smp::start_secondary_cores ();
+
     // os_startup_initialize_args() ends with initialise_monitor_handles(),
     // which opens the semihosting standard file descriptors (":tt"). WITHOUT
     // it the semihosting fd table is empty, so the C library's _write() finds

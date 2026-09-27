@@ -106,7 +106,9 @@ namespace os
     bool
     file_descriptors_manager::valid (int fildes)
     {
-      if ((fildes < 0) || (static_cast<std::size_t> (fildes) >= size__))
+      if ((fildes < 0) || (static_cast<std::size_t> (fildes) >= size__)
+          || (descriptors_array__ == nullptr)
+          || (descriptors_array__[fildes] == nullptr))
         {
           return false;
         }
@@ -184,7 +186,9 @@ namespace os
       trace::printf ("file_descriptors_manager::%s(%d)\n", __func__, fildes);
 #endif
 
-      if ((fildes < 0) || (static_cast<std::size_t> (fildes) >= size__))
+      if ((fildes < 0) || (static_cast<std::size_t> (fildes) >= size__)
+          || (descriptors_array__ == nullptr)
+          || (descriptors_array__[fildes] == nullptr))
         {
           errno = EBADF;
           return -1;
@@ -208,9 +212,12 @@ namespace os
 #if defined(__clang__)
 #pragma clang diagnostic ignored "-Wunsafe-buffer-usage"
 #endif
-      auto* const io = descriptors_array__[fildes];
+      auto* const io = (descriptors_array__ != nullptr)
+                           ? descriptors_array__[fildes]
+                           : nullptr;
 #pragma GCC diagnostic pop
-      if (io->get_type () != static_cast<posix::io::type_t> (io::type::socket))
+      if (io == nullptr
+          || io->get_type () != static_cast<posix::io::type_t> (io::type::socket))
         {
           return nullptr;
         }

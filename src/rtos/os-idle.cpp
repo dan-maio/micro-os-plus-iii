@@ -88,10 +88,14 @@ os_rtos_idle_actions (void)
         // CPU has it current and its context has been saved -- the same
         // rule internal_switch_threads() applies to the ready list -- and
         // otherwise leave it linked for the next idle pass.
-        bool live = (th->context_.port_.stack_ptr == nullptr);
+        bool live = (__atomic_load_n (&th->context_.port_.stack_ptr,
+                                       __ATOMIC_ACQUIRE)
+                     == nullptr);
         for (unsigned c = 0; c < OS_NCPU && !live; ++c)
           {
-            live = (scheduler::current_thread_[c] == th);
+            live = (__atomic_load_n (&scheduler::current_thread_[c],
+                                     __ATOMIC_ACQUIRE)
+                    == th);
           }
         if (live)
           {

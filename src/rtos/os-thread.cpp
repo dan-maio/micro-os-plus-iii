@@ -1001,15 +1001,18 @@ namespace os
       {
         interrupts::critical_section ics;
 
-        if (state_ == state::destroyed || parent_ == nullptr)
+        if (state_ == state::destroyed)
           {
             instrumentation::thread::detach_retval (this, EINVAL);
             return EINVAL;
           }
 
-        child_links_.unlink ();
-        scheduler::top_threads_list_.link (*this);
-        parent_ = nullptr;
+        if (parent_ != nullptr)
+          {
+            child_links_.unlink ();
+            scheduler::top_threads_list_.link (*this);
+            parent_ = nullptr;
+          }
       }
 
 #endif
@@ -1106,7 +1109,8 @@ namespace os
           bool still_running = false;
           for (unsigned c = 0; c < OS_NCPU; ++c)
             {
-              if (scheduler::current_thread_[c] == this)
+              if (__atomic_load_n (&scheduler::current_thread_[c],
+                                   __ATOMIC_ACQUIRE) == this)
                 {
                   still_running = true;
                   break;
@@ -1450,16 +1454,20 @@ namespace os
         // the lock held keeps it so.
         for (;;)
           {
-            if (state_ == state::destroyed)
+            if (__atomic_load_n (&state_, __ATOMIC_ACQUIRE) == state::destroyed)
               {
                 break;
               }
 
-            bool busy = (context_.port_.stack_ptr == nullptr);
+            bool busy = (__atomic_load_n (&context_.port_.stack_ptr,
+                                          __ATOMIC_ACQUIRE)
+                         == nullptr);
             unsigned busy_cpu = OS_NCPU;
             for (unsigned c = 0; c < OS_NCPU; ++c)
               {
-                if (scheduler::current_thread_[c] == this)
+                if (__atomic_load_n (&scheduler::current_thread_[c],
+                                     __ATOMIC_ACQUIRE)
+                    == this)
                   {
                     busy = true;
                     busy_cpu = c;
@@ -1467,11 +1475,12 @@ namespace os
                   }
               }
 
-            if (state_ == state::destroying)
+            thread::state_t st = __atomic_load_n (&state_, __ATOMIC_ACQUIRE);
+            if (st == state::destroying)
               {
                 busy = true;
               }
-            else if (state_ == state::terminated && ready_node_.unlinked ())
+            else if (st == state::terminated && ready_node_.unlinked ())
               {
                 // Idle reaper claimed it and will destroy it.
                 busy = true;

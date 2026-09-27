@@ -5,8 +5,8 @@ tests, and add new ones. Each step says **what** you do and **how** you do
 it. Every command here was checked against the code.
 
 For the common jobs as short recipes (install, build debug and release, run,
-add a test, a suite, a board, a configuration or a whole project), go
-straight to [§12 HOWTO](#12-howto).
+add a test, a suite, a board, a configuration or a whole project), and for how
+the `.json` files drive it all, go straight to [§12 HOWTO](#12-howto).
 
 ---
 
@@ -444,11 +444,12 @@ xpm run test-flatfs-test-host --config native-cmake-gcc-debug
 xpm run test-flatfs-test-host --config native-cmake-gcc-release
 ```
 
-The action name is `test-<test>-<variant>`: `-qemu`, `-host` or `-hwd`. The
-list of actions of a configuration:
+The action name is `test-<test>-<variant>`: `-qemu`, `-host` or `-hwd`.
+`xpm run` with no action lists the actions of **every** configuration, each
+expanded to its real command; to see one configuration's:
 
 ```sh
-xpm run --config native-cmake-gcc-release
+xpm run 2>&1 | grep -A1 '^- native-cmake-gcc-release/'
 ```
 
 Without xpm, on a configuration that was built:
@@ -609,3 +610,115 @@ smallest — and keep its contract:
   passes, run one at a time; the boards you touched pass on hardware.
 - New folders are added with `git add -A` (§11). Then push, and pull the
   other working copies.
+
+### 12.11 The `.json` files: why, and how they work
+
+**Why JSON at all.** The framework is driven by **xpm**, the xPack project
+manager, and xpm reads an npm-style `package.json` with an extra `xpack`
+section. That one file gives three things plain CMake does not:
+
+- **pinned tools per build folder** — every configuration names the exact
+  compiler, CMake, Ninja, QEMU and OpenOCD versions it uses, and `xpm install`
+  puts them in that configuration's own folder. Nothing depends on what the
+  PC happens to have in `/usr/bin`, and debug and release can never drift
+  apart;
+- **named commands** — the *actions* — so a long `cmake … && ctest …` chain
+  is `xpm run test-flatfs-test-host --config C`, the same on every machine;
+- **VS Code buttons** — the xPack extension reads the same file and shows
+  every configuration and its actions in its side bar.
+
+**The files.**
+
+| File | Role | Edit it? |
+|---|---|---|
+| `tests/package.json` | the configurations, their tools and their actions — the file this section is about | yes, by hand |
+| `tests/package-lock.json` | npm's lock file for the Node helpers (`del-cli`), written by `npm install` | no |
+| `package.json` (repository root) | identifies the kernel itself as the xPack `@micro-os-plus/micro-os-plus-iii-smp`: metadata only, no configurations | rarely |
+| `docs/upstream-package.json` | upstream µOS++'s own `package.json`, kept for comparison | no |
+| `build/C/compile_commands.json` | written by CMake (`CMAKE_EXPORT_COMPILE_COMMANDS`) for editors and clangd | no, generated |
+
+**Inside `tests/package.json`.** Beside the usual npm fields, the `xpack`
+object has four parts:
+
+| Key | What it holds |
+|---|---|
+| `devDependencies` | the tools shared by every configuration — CMake, Ninja, `@micro-os-plus/build-helper` (the CMake toolchain files), the CMSIS-RTOS validator and Chan FatFs. `xpm install` puts them in `tests/xpacks/`. |
+| `properties` | reusable text, mostly command fragments: `commandCMakeReconfigure`, `commandCMakePrepareWithToolchain`, `commandCMakeBuild`, `buildFolderRelativePath`, … |
+| `actions` | the workspace-wide commands, not tied to one configuration: `test-native-cmake`, `test-cortex-cmake`, `test-aarch32-rpi-zero-2w-cmake`, `deep-clean`, … |
+| `buildConfigurations` | 99 entries: the 70 real configurations, plus 29 marked `"hidden": true` that exist only to be inherited |
+
+**How one configuration is assembled.** A configuration lists what it
+`inherit`s, then adds its own `properties` and `actions`:
+
+```json
+"native-cmake-gcc-debug": {
+  "inherit": [ "native-actions", "cmake-actions",
+               "native-dependencies", "gcc-latest-dependencies" ],
+  "properties": { "buildType": "Debug", "platformName": "native",
+                  "toolchainFileName": "gcc.cmake" },
+  "actions": { "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE hwd",
+               "test-flatfs-test-host": "{{ properties.commandCMakePrepareWithToolchain }} && … -R native-flatfs-test-host" }
+}
+```
+
+The hidden entries are the building blocks:
+
+| Kind | Examples | Brings |
+|---|---|---|
+| `*-actions` | `cmake-actions`, `native-actions`, `cortexm-actions`, `aarch32-actions` | `install`, `prepare`, `build`, `test`, `clean` |
+| `*-dependencies` | `gcc-latest-dependencies`, `arm-none-eabi-gcc-dependencies`, `aarch32-dependencies`, `qemu-arm-dependencies`, `openocd-dependencies` | the pinned compiler, QEMU or OpenOCD for that folder |
+| `*-properties` | `short-win-paths-properties` | short build-folder names on Windows |
+
+A **release** entry inherits its debug twin whole, actions included, and
+overrides only `buildType` and `shortConfigurationName` — which is why the
+release entries list no actions of their own, and why
+`xpm run test-<test>-<variant> --config <…>-release` works.
+
+**How an action becomes a command.** Strings are
+[Liquid](https://shopify.github.io/liquid/) templates: `{{ … }}` substitutes
+a value (`configuration.name`, `properties.*`, `os.platform`), `{% if … %}`
+chooses by platform. `xpm run` expands them, then runs the result. An action
+that is a string is one shell command; an action that is an array runs its
+commands in order and stops at the first that fails. For example,
+`test-flatfs-test-host` on `native-cmake-sys-release` becomes:
+
+```sh
+cmake -S . -B build/native-cmake-sys-release -G Ninja \
+      -D CMAKE_BUILD_TYPE=Release -D PLATFORM_NAME=native --log-level=VERBOSE \
+  && cmake --build build/native-cmake-sys-release \
+  && cd build/native-cmake-sys-release && ctest -V -R native-flatfs-test-host
+```
+
+`xpm run` with no action prints every action of every configuration,
+expanded like this (filter it with `grep -A1 '^- C/'`) — the quickest way to
+see what a button will really do.
+
+**Where the tools go, and how the commands find them.**
+`xpm run install --config C` installs that configuration's
+`devDependencies` into `build/C/xpacks/` (usually as links into the shared
+store `~/.local/xPacks/`) and their programs as links in
+`build/C/xpacks/.bin/`. When an action runs, xpm puts `build/C/xpacks/.bin`
+and `tests/xpacks/.bin` first on `PATH`, so `cmake`, `ninja`, `ctest` and the
+compiler are the pinned ones. That is also why every command in this guide
+run **without** xpm starts with `PATH="$PWD/build/C/xpacks/.bin:$PATH"`.
+
+**From JSON to CMake.** The JSON never lists sources or tests. It passes
+three values to CMake — `PLATFORM_NAME`, `CMAKE_BUILD_TYPE` and, through the
+build-helper, `CMAKE_TOOLCHAIN_FILE` — and `tests/cmake/tests-main.cmake`
+takes over from there (§1). The ports come from the workspace
+(`../../micro-os-plus-iii-<port>.git`), not from `xpacks/`: a few hidden
+entries (`native-dependencies`, the `link-deps` actions) still name upstream's
+own xPacks, which the build does not use for the port.
+
+**Rules when editing it.**
+
+- Keep it valid JSON: no comments, no trailing commas. Check after every
+  edit with `python3 -c "import json; json.load(open('package.json'))"`.
+- Every `shortConfigurationName` must be unique.
+- Add a `test-*` action for every new CTest case, on the debug entry only,
+  and run `check-actions.py .` (§12.5); a case without an action is invisible
+  in VS Code.
+- A change to a hidden entry reaches every configuration that inherits it;
+  run the emulated sets of all of them.
+- After changing a configuration's `devDependencies`, run
+  `xpm run install --config C` again for its debug **and** release folders.

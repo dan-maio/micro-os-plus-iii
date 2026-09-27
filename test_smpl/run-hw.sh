@@ -194,11 +194,24 @@ ${zero}"
   fi
   local preload_stage=""
   if [[ -n "$PRELOAD" ]]; then
-    preload_stage="echo \"--- stage: pre-load ---\"
+    if [[ "$PRELOAD" =~ (0x3f10001c|0x3f100024|reset) ]]; then
+      say "executing pre-load reset on ${FIRST_TARGET}..."
+      local preload_args=(-s "$(dirname "$CFG")")
+      [[ -n "$SCRIPTS" ]] && preload_args+=(-s "$SCRIPTS")
+      preload_args+=(-f "$CFG")
+      [[ "$CFG_INIT" == "1" ]] && preload_args+=(-c "init")
+      preload_args+=(-c "targets ${FIRST_TARGET}; halt; ${PRELOAD}; shutdown")
+      "$OPENOCD" "${preload_args[@]}" >/dev/null 2>&1 || true
+      say "waiting 12s for board to boot after reset..."
+      sleep 12
+    else
+      preload_stage="echo \"--- stage: pre-load ---\"
 targets ${FIRST_TARGET}
 ${PRELOAD}
 "
+    fi
   fi
+
 
   cat > "$cfg" <<EOF
 ${speed:+$speed

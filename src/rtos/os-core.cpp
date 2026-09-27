@@ -501,23 +501,16 @@ namespace os
               }
           }
         const char* name = th->name ();
-        if (name != nullptr)
+        if (name != nullptr && name[0] == 'i' && name[1] == 'd'
+            && name[2] == 'l' && name[3] == 'e')
           {
-            if (strcmp (name, "idle") == 0 || strcmp (name, "idle0") == 0)
+            if (name[4] == '\0' || name[4] == '0')
               {
                 return (cpu == 0);
               }
-            if (strcmp (name, "idle1") == 0)
+            if (name[4] >= '1' && name[4] <= '9' && name[5] == '\0')
               {
-                return (cpu == 1);
-              }
-            if (strcmp (name, "idle2") == 0)
-              {
-                return (cpu == 2);
-              }
-            if (strcmp (name, "idle3") == 0)
-              {
-                return (cpu == 3);
+                return (cpu == static_cast<unsigned> (name[4] - '0'));
               }
           }
         return (th->cpu_affinity () & (1u << cpu)) != 0;

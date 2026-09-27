@@ -27,6 +27,7 @@ render aarch32-second-board
 render building-aarch32-aarch64
 render cortexm-port
 render posix-arch-port
+render agy-review
 
 render smp-construction \
     --title    "SMP Construction" \

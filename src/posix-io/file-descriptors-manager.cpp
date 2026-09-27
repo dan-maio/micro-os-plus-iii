@@ -16,6 +16,7 @@
 #include <cmsis-plus/posix-io/file-descriptors-manager.h>
 #include <cmsis-plus/posix-io/io.h>
 #include <cmsis-plus/posix-io/socket.h>
+#include <cmsis-plus/rtos/os.h>
 
 #include <cmsis-plus/diag/trace.h>
 
@@ -89,6 +90,8 @@ namespace os
     io*
     file_descriptors_manager::io (int fildes)
     {
+      rtos::interrupts::critical_section ics;
+
       // Check if valid descriptor or buffer not yet initialised
       if ((fildes < 0) || (static_cast<std::size_t> (fildes) >= size__)
           || (descriptors_array__ == nullptr))
@@ -106,6 +109,8 @@ namespace os
     bool
     file_descriptors_manager::valid (int fildes)
     {
+      rtos::interrupts::critical_section ics;
+
       if ((fildes < 0) || (static_cast<std::size_t> (fildes) >= size__)
           || (descriptors_array__ == nullptr)
           || (descriptors_array__[fildes] == nullptr))
@@ -128,6 +133,8 @@ namespace os
           errno = EBUSY;
           return -1;
         }
+
+      rtos::interrupts::critical_section ics;
 
       for (std::size_t i = reserved__; i < size__; ++i)
         {
@@ -169,6 +176,8 @@ namespace os
           return -1;
         }
 
+      rtos::interrupts::critical_section ics;
+
 #pragma GCC diagnostic push
 #if defined(__clang__)
 #pragma clang diagnostic ignored "-Wunsafe-buffer-usage"
@@ -185,6 +194,8 @@ namespace os
 #if defined(OS_TRACE_POSIX_IO_FILE_DESCRIPTORS_MANAGER)
       trace::printf ("file_descriptors_manager::%s(%d)\n", __func__, fildes);
 #endif
+
+      rtos::interrupts::critical_section ics;
 
       if ((fildes < 0) || (static_cast<std::size_t> (fildes) >= size__)
           || (descriptors_array__ == nullptr)
@@ -208,6 +219,9 @@ namespace os
     file_descriptors_manager::socket (int fildes)
     {
       assert ((fildes >= 0) && (static_cast<std::size_t> (fildes) < size__));
+
+      rtos::interrupts::critical_section ics;
+
 #pragma GCC diagnostic push
 #if defined(__clang__)
 #pragma clang diagnostic ignored "-Wunsafe-buffer-usage"
@@ -227,6 +241,8 @@ namespace os
     size_t
     file_descriptors_manager::used (void)
     {
+      rtos::interrupts::critical_section ics;
+
       std::size_t count = reserved__;
       for (std::size_t i = reserved__; i < file_descriptors_manager::size ();
            ++i)
@@ -235,7 +251,7 @@ namespace os
 #if defined(__clang__)
 #pragma clang diagnostic ignored "-Wunsafe-buffer-usage"
 #endif
-          if (descriptors_array__[i] != nullptr)
+          if (descriptors_array__ != nullptr && descriptors_array__[i] != nullptr)
             {
               ++count;
             }

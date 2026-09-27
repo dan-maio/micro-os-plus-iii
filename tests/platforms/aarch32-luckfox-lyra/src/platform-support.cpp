@@ -65,6 +65,8 @@ extern "C"
   {
   }
 
+  extern void initialise_monitor_handles (void);
+
   void
   os_startup_initialize_hardware (void)
   {
@@ -76,11 +78,19 @@ extern "C"
 
     exception::init ();
 
+    // Open the semihosting standard file descriptors (":tt"). WITHOUT this the
+    // semihosting fd table is empty, so the C library's _write() finds no slot
+    // for fd 1 and EVERY printf() in the harness suites is silently discarded
+    // -- the kernel's own unbuffered trace still shows, which makes it look
+    // like a buffering problem when it is not. The AArch32 Pi sibling calls it
+    // here too; the suites then run with no arguments (see
+    // harness_main_trampoline()).
+    initialise_monitor_handles ();
+
     // Line-buffer stdout so the suites' printf output reaches the semihosting
-    // channel line by line, as it does under QEMU. (Opening the semihosting
-    // fds is the real requirement -- see harness_main_trampoline() -- but
-    // without this, stdout could be fully buffered and the output would only
-    // appear when the buffer fills.)
+    // channel line by line, as it does under QEMU. Without this, stdout could
+    // be fully buffered and the output would only appear when the buffer
+    // fills.
     //
     // This must come AFTER the free store: setvbuf() allocates the stdout
     // buffer, and before os_startup_initialize_free_store() there is no heap,
@@ -98,20 +108,16 @@ extern "C"
     // Bring up secondary cores so the suite runs across all cores on SMP.
     smp_install_boot_threads ();
     smp::start_secondary_cores ();
+    extern int test_wait_secondaries (int timeout_ms);
+    test_wait_secondaries (3000);
 
-    // os_startup_initialize_args() ends with initialise_monitor_handles(),
-    // which opens the semihosting standard file descriptors (":tt"). WITHOUT
-    // it the semihosting fd table is empty, so the C library's _write() finds
-    // no slot for fd 1 and EVERY printf() in the harness suites is silently
-    // discarded -- the kernel's own unbuffered trace still shows, which makes
-    // it look like a buffering problem when it is not. It also fetches the
-    // host command line, which a debug probe may return empty, so the suites
-    // still default their parameters (argc <= 1).
-    int argc = 0;
-    char** argv = nullptr;
-    os_startup_initialize_args (&argc, &argv);
-
-    int code = os_main (argc, argv);
+    // Run with no arguments, as the AArch32/AArch64 Pi siblings do.
+    // initialise_monitor_handles() has already opened the semihosting fds
+    // (see os_startup_initialize_hardware()); the AArch32 semihosting args
+    // layer would instead ask the debugger for a command line
+    // (SYS_GET_CMDLINE) that a JTAG run has no answer for. The suites default
+    // their parameters when argc <= 1.
+    int code = os_main (0, nullptr);
 
     // The verdict, then the stop. OpenOCD has no process status, so this line
     // is the result; std::exit() -> the port's strong _Exit() -> SYS_EXIT.
@@ -151,4 +157,22 @@ extern "C"
 
     return 0;
   }
+}
+
+// ----------------------------------------------------------------------------
+// Console mirror.
+extern "C" void os_board_console_mirror (int fildes, const void* buf,
+                                         std::size_t nbyte);
+extern "C" void
+os_board_console_mirror (int /* fildes */, const void* buf, std::size_t nbyte)
+{
+  const char* cbuf = static_cast<const char*> (buf);
+  for (std::size_t i = 0; i < nbyte; ++i)
+    {
+      if (cbuf[i] == '\n')
+        {
+          uart::uart1.putc_uart ('\r');
+        }
+      uart::uart1.putc_uart (cbuf[i]);
+    }
 }

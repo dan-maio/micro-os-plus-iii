@@ -134,7 +134,7 @@ got confused, delete only `build/C/CMakeCache.txt` and run `prepare` again.
 | run one test; it builds whatever it needs first | `xpm run test-<test>-<variant> --config C` |
 | see which tests exist | `PATH="$PWD/build/C/xpacks/.bin:$PATH" ctest --test-dir build/C -N` |
 | run one case by hand | same `PATH`, then `ctest --test-dir build/C -V -R <platform>-<test>-<variant>` |
-| run debug and release in one go | `xpm run test-<platform>-cmake`. This exists for the upstream platforms, `aarch32-rpi-zero-2w`, `aarch64-rpi-zero-2w` and `native`; `test-cortex-cmake` runs the four `qemu-cortex-m*` ones. |
+| run debug and release in one go | `xpm run test-<platform>-cmake`, for every platform with emulated or host tests: `native`, `2xcortex-m33`, `pico2-1cpu`, `cortexm-pico2`, `cortexm-pico2-rp2350b-psram`, the four Raspberry Pi boards, and the four `qemu-cortex-m*` (also via `test-cortex-cmake`). |
 
 Examples:
 

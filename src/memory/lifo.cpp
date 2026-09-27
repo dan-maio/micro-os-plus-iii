@@ -70,13 +70,31 @@ namespace os
     void*
     lifo::do_allocate (std::size_t bytes, std::size_t alignment)
     {
+      if (bytes > total_bytes_)
+        {
+          return nullptr;
+        }
+
       std::size_t block_padding = calc_block_padding (alignment);
       std::size_t alloc_size = rtos::memory::align_size (bytes, chunk_align);
+      if (alloc_size == static_cast<std::size_t> (-1)
+          || alloc_size > total_bytes_)
+        {
+          return nullptr;
+        }
       alloc_size += block_padding;
       alloc_size += chunk_offset;
+      if (alloc_size > total_bytes_)
+        {
+          return nullptr;
+        }
 
       std::size_t block_minchunk = calc_block_minchunk (block_padding);
       alloc_size = os::rtos::memory::max (alloc_size, block_minchunk);
+      if (alloc_size > total_bytes_)
+        {
+          return nullptr;
+        }
 
       chunk_t* chunk = nullptr;
 

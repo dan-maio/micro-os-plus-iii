@@ -66,6 +66,7 @@ if (ENABLE_RTOS_APIS_TEST)
       enable=on,target=native,arg=rtos-apis-test
     # --semihosting-config arg=--verbose
   )
+  set_tests_properties ("rtos-apis-test" PROPERTIES LABELS "qemu" TIMEOUT 1200)
 endif ()
 
 # -----------------------------------------------------------------------------
@@ -93,6 +94,7 @@ if (ENABLE_MUTEX_STRESS_TEST)
       --semihosting-config enable=on,target=native,arg=mutex-stress-test
     # --semihosting-config arg=--verbose
   )
+  set_tests_properties ("mutex-stress-test" PROPERTIES LABELS "qemu" TIMEOUT 1200)
 endif ()
 
 # -----------------------------------------------------------------------------
@@ -122,6 +124,7 @@ if (ENABLE_CMSIS_OS_VALIDATOR_TEST)
       --semihosting-config enable=on,target=native,arg=cmsis-os-validator-test
     # --semihosting-config arg=--verbose
   )
+  set_tests_properties ("cmsis-os-validator-test" PROPERTIES LABELS "qemu" TIMEOUT 1200)
 endif ()
 
 # -----------------------------------------------------------------------------

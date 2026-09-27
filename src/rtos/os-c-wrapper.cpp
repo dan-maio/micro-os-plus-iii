@@ -1506,7 +1506,9 @@ os_timer_construct (os_timer_t* timer, const char* name,
   assert (timer != nullptr);
   if (attr == nullptr)
     {
-      attr = (const os_timer_attr_t*)&timer::periodic_initializer;
+      // The C++ and CMSIS defaults are one-shot timers; only an explicit
+      // periodic attribute (os_timer_attr_get_periodic()) should repeat.
+      attr = (const os_timer_attr_t*)&timer::once_initializer;
     }
   new (timer)
       rtos::timer (name, (timer::func_t)function, (timer::func_args_t)args,
@@ -1547,7 +1549,9 @@ os_timer_new (const char* name, os_timer_func_t function,
 {
   if (attr == nullptr)
     {
-      attr = (const os_timer_attr_t*)&timer::periodic_initializer;
+      // The C++ and CMSIS defaults are one-shot timers; only an explicit
+      // periodic attribute (os_timer_attr_get_periodic()) should repeat.
+      attr = (const os_timer_attr_t*)&timer::once_initializer;
     }
   return reinterpret_cast<os_timer_t*> (
       new rtos::timer (name, (timer::func_t)function, (timer::func_args_t)args,
@@ -1775,7 +1779,21 @@ void
 os_mutex_delete (os_mutex_t* mutex)
 {
   assert (mutex != nullptr);
-  delete reinterpret_cast<rtos::mutex*> (mutex);
+
+  // `mutex` and `mutex_recursive` share the same C storage type and the base
+  // destructor is intentionally non-virtual (so that `os_mutex_t` keeps the
+  // same size as `rtos::mutex`). The concrete type is recorded in the object
+  // itself, so delete through the derived type and run the correct
+  // destructor instead of relying on undefined behaviour.
+  if (reinterpret_cast<rtos::mutex*> (mutex)->type ()
+      == rtos::mutex::type::recursive)
+    {
+      delete reinterpret_cast<rtos::mutex_recursive*> (mutex);
+    }
+  else
+    {
+      delete reinterpret_cast<rtos::mutex*> (mutex);
+    }
 }
 
 /**
@@ -2327,7 +2345,22 @@ void
 os_semaphore_delete (os_semaphore_t* semaphore)
 {
   assert (semaphore != nullptr);
-  delete reinterpret_cast<rtos::semaphore*> (semaphore);
+
+  // `semaphore_binary` and `semaphore_counting` share the same C storage
+  // type and the base destructor is intentionally non-virtual (so that
+  // `os_semaphore_t` keeps the same size as `rtos::semaphore`). The binary
+  // form is the one whose maximum count is 1, so delete through the derived
+  // type and run the correct destructor instead of relying on undefined
+  // behaviour. Both derived destructors are empty, so the routing is safe
+  // even if a counting semaphore is configured with a maximum of 1.
+  if (reinterpret_cast<rtos::semaphore*> (semaphore)->max_value () == 1)
+    {
+      delete reinterpret_cast<rtos::semaphore_binary*> (semaphore);
+    }
+  else
+    {
+      delete reinterpret_cast<rtos::semaphore_counting*> (semaphore);
+    }
 }
 
 /**

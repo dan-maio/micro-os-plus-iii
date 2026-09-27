@@ -39,12 +39,14 @@ function (add_suite_executable name suite)
     COMMAND
       "${_qemu}" --machine ${_qemu_machine} --cpu ${_qemu_cpu} --smp 2
       # QEMU's SSE-200 leaves CPU0's FPU/DSP off by default (unlike the
-      # IoTKit of mps2-an505); enable both so a hard-float image runs.
-      --global sse-200.CPU0_FPU=on --global sse-200.CPU0_DSP=on --kernel
+      # IoTKit of mps2-an505); enable both on BOTH CPUs, so a hard-float
+      # image runs whichever core a migrated FP thread lands on.
+      --global sse-200.CPU0_FPU=on --global sse-200.CPU0_DSP=on
+      --global sse-200.CPU1_FPU=on --global sse-200.CPU1_DSP=on --kernel
       "$<TARGET_FILE:${name}>" --nographic -d unimp,guest_errors
       --semihosting-config enable=on,target=native
   )
-  set_tests_properties ("${PLATFORM_NAME}-${name}" PROPERTIES TIMEOUT 1200)
+  set_tests_properties ("${PLATFORM_NAME}-${name}" PROPERTIES LABELS "qemu" TIMEOUT 1200)
 endfunction ()
 
 # -----------------------------------------------------------------------------

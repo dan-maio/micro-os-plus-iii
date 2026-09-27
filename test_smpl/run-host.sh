@@ -94,4 +94,12 @@ done
 
 echo
 echo "host suite: ${pass} passed, ${skip} skipped, ${fail} failed"
+if [[ -n "$ONLY" && $((pass + skip + fail)) -eq 0 ]]; then
+  echo "ERROR: requested test '${ONLY}' was not found in ${BUILD_DIR}"
+  exit 2
+fi
+if [[ $((pass + skip + fail)) -eq 0 ]]; then
+  echo "ERROR: no tests were executed in ${BUILD_DIR}"
+  exit 2
+fi
 [[ $fail -eq 0 ]]

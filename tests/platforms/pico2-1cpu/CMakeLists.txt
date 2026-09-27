@@ -43,7 +43,7 @@ function (add_suite_executable name suite)
       "$<TARGET_FILE:${name}>" --nographic -d unimp,guest_errors
       --semihosting-config enable=on,target=native
   )
-  set_tests_properties ("${PLATFORM_NAME}-${name}" PROPERTIES TIMEOUT 1200)
+  set_tests_properties ("${PLATFORM_NAME}-${name}" PROPERTIES LABELS "qemu" TIMEOUT 1200)
 endfunction ()
 
 # -----------------------------------------------------------------------------

@@ -36,11 +36,14 @@ thread::delete_system_thread (void)
 {
   if (id_ != id ())
     {
-      void* args = id_.native_thread_->function_args ();
-      if (args != nullptr && function_object_deleter_ != nullptr)
+      if (function_object_ != nullptr && function_object_deleter_ != nullptr)
         {
           // Manually delete the function object used to store arguments.
-          function_object_deleter_ (args);
+          // `function_object_` is our own copy: the kernel clears its
+          // `func_args_` on exit, so reading it here would leak whenever the
+          // thread has already finished.
+          function_object_deleter_ (function_object_);
+          function_object_ = nullptr;
         }
 
       // Manually delete the system thread.
@@ -68,6 +71,7 @@ thread::swap (thread& t) noexcept
 {
   std::swap (id_, t.id_);
   std::swap (function_object_deleter_, t.function_object_deleter_);
+  std::swap (function_object_, t.function_object_);
 }
 
 bool
@@ -87,15 +91,17 @@ thread::join ()
       // it runs on. Deleting it straight away -- which is what this did --
       // frees its bound arguments and kills the system thread; on one core
       // the thread had usually finished by then, on SMP it is still running
-      // on another core. Its arguments are read first: the kernel clears
-      // them when the thread exits.
-      void* args = id_.native_thread_->function_args ();
+      // on another core.
       id_.native_thread_->join ();
 
-      if (args != nullptr && function_object_deleter_ != nullptr)
+      if (function_object_ != nullptr && function_object_deleter_ != nullptr)
         {
           // Manually delete the function object used to store arguments.
-          function_object_deleter_ (args);
+          // Use our own pointer, because the kernel clears `func_args_` when
+          // the thread exits -- which happens before `join()` returns for any
+          // short-lived thread.
+          function_object_deleter_ (function_object_);
+          function_object_ = nullptr;
         }
 
       // Manually delete the system thread, destroyed by now.

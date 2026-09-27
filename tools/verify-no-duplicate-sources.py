@@ -98,7 +98,7 @@ SKIP_REPOS = {
 # Each entry is (repo-or-None, path prefix, reason).  repo None means any.
 EXEMPT = [
     (None, "tests/",
-     "upstream's own test suite, carried as shipped (spec Section 10)"),
+     "unified SMP test suites and platform support harnesses (spec Section 10)"),
     (None, "xpacks/",
      "vendored third-party sources"),
     (None, "test/boards/pico2/usb/tinyusb/",

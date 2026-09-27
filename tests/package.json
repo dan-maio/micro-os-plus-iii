@@ -113,7 +113,7 @@
         "xpm link @xpacks/chan-fatfs"
       ],
       "test": [
-        "xpm run test-aarch32-rpi-zero-2w-cmake"
+        "xpm run test-ci"
       ],
       "install-ci": [
         "xpm install",
@@ -121,7 +121,15 @@
         "xpm install --config aarch32-rpi-zero-2w-cmake-gcc-release"
       ],
       "test-ci": [
-        "xpm run test-aarch32-rpi-zero-2w-cmake"
+        "xpm run test-aarch32-rpi-zero-2w-cmake",
+        "xpm run test-aarch32-rpi3b-cmake",
+        "xpm run test-aarch64-rpi-zero-2w-cmake",
+        "xpm run test-aarch64-rpi3b-cmake",
+        "xpm run test-2xcortex-m33-cmake",
+        "xpm run test-pico2-1cpu-cmake",
+        "xpm run test-cortexm-pico2-cmake",
+        "xpm run test-cortexm-pico2-rp2350b-psram-cmake",
+        "xpm run test-cortex-cmake"
       ],
       "install-qemu-cortex-latest": [
         "xpm install",
@@ -194,7 +202,8 @@
         "xpm run link-deps --config raspberrypi-pico-cmake-gcc-release"
       ],
       "test-all": [
-        "xpm run test-aarch32-rpi-zero-2w-cmake"
+        "xpm run test-ci",
+        "xpm run test-native-cmake"
       ],
       "clean-all": [
         "xpm run clean --all-configs --ignore-errors"
@@ -370,34 +379,34 @@
       "test-raspberrypi-pico-cmake": [
         "xpm run prepare --config raspberrypi-pico-cmake-gcc-debug",
         "xpm run build --config raspberrypi-pico-cmake-gcc-debug",
-        "cd build/raspberrypi-pico-cmake-gcc-debug && ctest -V",
+        "xpm run test --config raspberrypi-pico-cmake-gcc-debug",
         "xpm run prepare --config raspberrypi-pico-cmake-gcc-release",
         "xpm run build --config raspberrypi-pico-cmake-gcc-release",
-        "cd build/raspberrypi-pico-cmake-gcc-release && ctest -V"
+        "xpm run test --config raspberrypi-pico-cmake-gcc-release"
       ],
       "test-nucleo-f411re-cmake": [
         "xpm run prepare --config nucleo-f411re-cmake-gcc-debug",
         "xpm run build --config nucleo-f411re-cmake-gcc-debug",
-        "cd build/nucleo-f411re-cmake-gcc-debug && ctest -V",
+        "xpm run test --config nucleo-f411re-cmake-gcc-debug",
         "xpm run prepare --config nucleo-f411re-cmake-gcc-release",
         "xpm run build --config nucleo-f411re-cmake-gcc-release",
-        "cd build/nucleo-f411re-cmake-gcc-release && ctest -V"
+        "xpm run test --config nucleo-f411re-cmake-gcc-release"
       ],
       "test-nucleo-f767zi-cmake": [
         "xpm run prepare --config nucleo-f767zi-cmake-gcc-debug",
         "xpm run build --config nucleo-f767zi-cmake-gcc-debug",
-        "cd build/nucleo-f767zi-cmake-gcc-debug && ctest -V",
+        "xpm run test --config nucleo-f767zi-cmake-gcc-debug",
         "xpm run prepare --config nucleo-f767zi-cmake-gcc-release",
         "xpm run build --config nucleo-f767zi-cmake-gcc-release",
-        "cd build/nucleo-f767zi-cmake-gcc-release && ctest -V"
+        "xpm run test --config nucleo-f767zi-cmake-gcc-release"
       ],
       "test-nucleo-h743zi-cmake": [
         "xpm run prepare --config nucleo-h743zi-cmake-gcc-debug",
         "xpm run build --config nucleo-h743zi-cmake-gcc-debug",
-        "cd build/nucleo-h743zi-cmake-gcc-debug && ctest -V",
+        "xpm run test --config nucleo-h743zi-cmake-gcc-debug",
         "xpm run prepare --config nucleo-h743zi-cmake-gcc-release",
         "xpm run build --config nucleo-h743zi-cmake-gcc-release",
-        "cd build/nucleo-h743zi-cmake-gcc-release && ctest -V"
+        "xpm run test --config nucleo-h743zi-cmake-gcc-release"
       ],
       "test-aarch32-rpi-zero-2w-cmake": [
         "xpm run prepare --config aarch32-rpi-zero-2w-cmake-gcc-debug",
@@ -414,6 +423,54 @@
         "xpm run prepare --config aarch64-rpi-zero-2w-cmake-gcc-release",
         "xpm run build --config aarch64-rpi-zero-2w-cmake-gcc-release",
         "xpm run test --config aarch64-rpi-zero-2w-cmake-gcc-release"
+      ],
+      "test-aarch32-rpi3b-cmake": [
+        "xpm run prepare --config aarch32-rpi3b-cmake-gcc-debug",
+        "xpm run build --config aarch32-rpi3b-cmake-gcc-debug",
+        "xpm run test --config aarch32-rpi3b-cmake-gcc-debug",
+        "xpm run prepare --config aarch32-rpi3b-cmake-gcc-release",
+        "xpm run build --config aarch32-rpi3b-cmake-gcc-release",
+        "xpm run test --config aarch32-rpi3b-cmake-gcc-release"
+      ],
+      "test-aarch64-rpi3b-cmake": [
+        "xpm run prepare --config aarch64-rpi3b-cmake-gcc-debug",
+        "xpm run build --config aarch64-rpi3b-cmake-gcc-debug",
+        "xpm run test --config aarch64-rpi3b-cmake-gcc-debug",
+        "xpm run prepare --config aarch64-rpi3b-cmake-gcc-release",
+        "xpm run build --config aarch64-rpi3b-cmake-gcc-release",
+        "xpm run test --config aarch64-rpi3b-cmake-gcc-release"
+      ],
+      "test-2xcortex-m33-cmake": [
+        "xpm run prepare --config 2xcortex-m33-cmake-gcc-debug",
+        "xpm run build --config 2xcortex-m33-cmake-gcc-debug",
+        "xpm run test --config 2xcortex-m33-cmake-gcc-debug",
+        "xpm run prepare --config 2xcortex-m33-cmake-gcc-release",
+        "xpm run build --config 2xcortex-m33-cmake-gcc-release",
+        "xpm run test --config 2xcortex-m33-cmake-gcc-release"
+      ],
+      "test-pico2-1cpu-cmake": [
+        "xpm run prepare --config pico2-1cpu-cmake-gcc-debug",
+        "xpm run build --config pico2-1cpu-cmake-gcc-debug",
+        "xpm run test --config pico2-1cpu-cmake-gcc-debug",
+        "xpm run prepare --config pico2-1cpu-cmake-gcc-release",
+        "xpm run build --config pico2-1cpu-cmake-gcc-release",
+        "xpm run test --config pico2-1cpu-cmake-gcc-release"
+      ],
+      "test-cortexm-pico2-cmake": [
+        "xpm run prepare --config cortexm-pico2-cmake-gcc-debug",
+        "xpm run build --config cortexm-pico2-cmake-gcc-debug",
+        "xpm run test --config cortexm-pico2-cmake-gcc-debug",
+        "xpm run prepare --config cortexm-pico2-cmake-gcc-release",
+        "xpm run build --config cortexm-pico2-cmake-gcc-release",
+        "xpm run test --config cortexm-pico2-cmake-gcc-release"
+      ],
+      "test-cortexm-pico2-rp2350b-psram-cmake": [
+        "xpm run prepare --config cortexm-pico2-rp2350b-psram-cmake-gcc-debug",
+        "xpm run build --config cortexm-pico2-rp2350b-psram-cmake-gcc-debug",
+        "xpm run test --config cortexm-pico2-rp2350b-psram-cmake-gcc-debug",
+        "xpm run prepare --config cortexm-pico2-rp2350b-psram-cmake-gcc-release",
+        "xpm run build --config cortexm-pico2-rp2350b-psram-cmake-gcc-release",
+        "xpm run test --config cortexm-pico2-rp2350b-psram-cmake-gcc-release"
       ],
       "build-aarch32-luckfox-lyra-cmake": [
         "xpm run prepare --config aarch32-luckfox-lyra-cmake-gcc-debug",
@@ -1255,7 +1312,7 @@
           "shortConfigurationName": "p2c1d"
         },
         "actions": {
-          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V",
+          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE hwd",
           "test-rtos-apis-test": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R pico2-1cpu-rtos-apis-test",
           "test-mutex-stress-test": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R pico2-1cpu-mutex-stress-test",
           "test-fp-switch-test": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R pico2-1cpu-fp-switch-test",
@@ -1289,7 +1346,7 @@
           "shortConfigurationName": "2cm33d"
         },
         "actions": {
-          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V",
+          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE hwd",
           "test-rtos-apis-test": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R 2xcortex-m33-rtos-apis-test",
           "test-mutex-stress-test": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R 2xcortex-m33-mutex-stress-test",
           "test-fp-switch-test": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R 2xcortex-m33-fp-switch-test",

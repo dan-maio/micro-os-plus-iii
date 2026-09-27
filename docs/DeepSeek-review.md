@@ -1842,6 +1842,1853 @@ CONFIRMED, several small things:
 
 ---
 
+## Third pass code review
+
+A third independent pass over the same four areas, after a round of fixes had
+landed. The kernel's SMP-locking story from passes 1–2 is now largely **fixed
+in-tree** (acquire-atomic scheduler readers, a locked fd table and FatFs
+deferred lists, the timer callback moved outside the spinlock, a periodic
+re-arm guard, the `max()` mutex boost, decomposed `hrclock` math), and pass 1's
+invalid `st_mode` no longer reproduces. The Cortex-M pass-1 defects were fixed
+by `18d91f1` and hold line-for-line with no regression. So this pass went a
+layer down and found new defects.
+
+New conclusions, by area:
+
+- **Kernel.** `realloc()` copies the *new* size out of the *old* block (a heap
+  over-read) and `calloc()` multiplies without overflow, both in
+  `src/libc/stdlib/malloc.cpp`; the C API's `os_timer_construct`/`os_timer_new`
+  default to a **periodic** timer where C++/CMSIS default to one-shot
+  (reachable from `test-c-api.c`); derived `mutex_recursive`/`semaphore_*`
+  objects are deleted through a non-virtual base; `std::system_error` is thrown
+  with a dangling temporary `error_category`.
+- **Ports.** `_port_ctx_pending` is defined twice — once C-linkage, once
+  namespaced — so `reschedule()` writes one array while `port_isr_handler()`
+  reads another (masked only because the ISR re-sets its own copy each tick);
+  on AArch64 the spin-table release word (`0xD8+8*core`) is written cacheable
+  but never `dc cvac`'d (a cold-boot hazard hidden by the debug-in-RAM flow);
+  un-aligned AArch64 LED DMA cleans; AArch64 still defaults `OS_NCPU`/
+  `OS_SMP_IPI_SGI`; no I-cache/BTB invalidate on AArch64 MMU enable; no ISS/FSC
+  decode in the AArch64 fatal reporter. (This pass **disagrees** with pass 2's
+  fatal-reporter, `CNTFRQ_EL0` and `VBAR` items — all fixed in-tree.)
+- **Cortex-M / POSIX.** The Pico 2's hardware harness suites are built
+  `OS_NCPU=2` but nothing launches core 1 or registers `os_idle_thread_core[1]`,
+  so `fp-switch`'s cross-core FPU claim is vacuous there; `.sram_text` (WS2812)
+  and `.noinit` (fault record) are claimed by code/comments but unmapped by
+  every Pico-2 linker script; the `semi_write0` clobber fix landed only in
+  `hw_result.hpp`, so all four `harness-suite.hpp` wrappers still miss
+  `r2/r3/ip/lr`; the null-thread fatal path briefly re-enables IRQs; the POSIX
+  timer lock can be left dead; `hw.sh` tears down with SIGTERM only.
+- **Tests / build.** The aggregate actions (`test`, `test-ci`, `test-all`) run
+  only `aarch32-rpi-zero-2w-cmake`, and 10 of 22 platforms have no wrapper
+  action; the generic per-config `test` (`ctest -V -LE hwd`) is a **green
+  no-op** on every all-`hwd` platform (CTest finds no tests, exits 0);
+  `test-nucleo-*-cmake`/`test-raspberrypi-pico-cmake` hardcode
+  `cd build/<long-config>`; `cmake/uos-app.cmake:77` forces `-O2` after the
+  toolchain flags, so Debug and MinSizeRel compile identically; `2xcortex-m33`
+  enables QEMU's FPU on CPU0 only while running SMP-2 `fp-switch`. The
+  per-config `test-*` actions do match every generated CTest name exactly.
+
+The four third-pass reports follow.
+
+
+---
+
+# µOS++ IIIe SMP kernel — third-pass, independent code review
+
+## Scope
+
+Read-only. No source file was modified, created or deleted; no build was run.
+Reviewed under `/home/dan/Work`:
+
+- Kernel `micro-os-plus-iii-smp.git/src/` and `include/cmsis-plus/`.
+- Concentrated where the two earlier passes were thin: the C API wrapper
+  (`src/rtos/os-c-wrapper.cpp` + `include/cmsis-plus/legacy/cmsis_os.h`), the
+  `os`/`estd` library layer (`src/libcpp/`, `include/cmsis-plus/estd/`), the
+  memory layer (`src/libc/stdlib/malloc.cpp`, `src/memory/*`,
+  `include/cmsis-plus/memory/*`), clocks/idle (`src/rtos/os-clocks.cpp`,
+  `src/rtos/os-idle.cpp`, `src/rtos/internal/os-lists.cpp`), and the semihosting
+  `__posix_*` shim (`src/semihosting/c-syscalls-semihosting.cpp`).
+- Harness `tests/sources/` and `test_smpl/` where a finding is reachable from a
+  suite.
+
+The working tree is mid-fix (uncommitted diff against `HEAD` touches
+`file-system.h`, `file-descriptors-manager.cpp`, `chrono.cpp`, `os-mutex.cpp`,
+`os-thread.cpp`, `os-timer.cpp`, `os-lists.cpp`, `first-fit-top.cpp`,
+`lifo.cpp`, `os-memory.h`). Several pass-1/pass-2 defects are therefore already
+resolved in the tree as checked out; where that is the case it is called out.
+
+## Summary
+
+The two earlier passes were strongest on the SMP locking story, and that story
+is now largely fixed: the scheduler's cross-core readers use acquire atomics,
+the POSIX fd table and the FatFs deferred lists are locked, the timer callback
+runs outside the global spinlock, periodic re-arm is guarded, and the mutex
+priority boost takes the maximum waiter. This pass therefore moved down a
+layer, where it found the highest-value remaining defects in code that no earlier
+pass read line-by-line: the **`realloc()` shim copies the new size out of the old
+block (heap over-read)** and **`calloc()` multiplies without an overflow guard**;
+the C API's **`os_timer_construct`/`os_timer_new` default to a *periodic* timer
+where C++ and CMSIS default to one-shot** (reachable from `test-c-api.c`); the
+**C API deletes `mutex_recursive`/`semaphore_binary`/`semaphore_counting`
+objects through a non-virtual base**; and `estd`'s `__throw_*_error()` **throws a
+`std::system_error` that holds a pointer to a temporary `error_category`**. Several
+medium items follow in the `estd`/`pmr` layer (`select_on_container_copy_construction`,
+`std::thread::join` leak) and in the C API's argument validation.
+
+Severity tally: 0 Critical, 2 High, 9 Medium, 13 Low, 1 Nit (25 findings).
+
+Not verifiable from the sources alone: the exact runtime effect of the host
+`errno` values returned by semihosting (they are copied straight into the target
+`errno` with no translation table); whether any real board reaches
+`busy_wait()` with `freq*micros > 2^32`; and the port-side implementations of
+`port_smp_ipi`/`hardware_counter`, which are outside this tree.
+
+## New/updated findings
+
+### [HIGH] `realloc()` copies the *new* size out of the *old* block — heap over-read — src/libc/stdlib/malloc.cpp:294-298
+
+```cpp
+mem = estd::pmr::get_default_resource ()->allocate (bytes);
+if (mem != nullptr)
+  {
+    memcpy (mem, ptr, bytes);                      // bytes = NEW size
+    estd::pmr::get_default_resource ()->deallocate (ptr, 0);
+  }
+```
+
+**CONFIRMED (static).** POSIX requires the new object to preserve contents "up to
+the lesser of the new and old sizes". Here the old size is unknown (the allocator
+interface deliberately drops it — `deallocate(ptr, 0)`), so the shim *guesses*
+the new size. Growing a block (`realloc(p, old+1MB)`) reads 1 MB past the end of
+`p`: at best it copies adjacent heap metadata/free-list link words into the new
+block, at worst it faults at the arena end. It is a deterministic read overflow on
+every growth realloc, not a race. Not in pass 1 or 2. The allocator would need a
+usable-size query, or `realloc` should allocate-and-copy the *old* usable size.
+
+### [HIGH] `calloc()` products overflow `size_t` with no check — src/libc/stdlib/malloc.cpp:168,178
+
+```cpp
+mem = estd::pmr::get_default_resource ()->allocate (nelem * elbytes);
+...
+memset (mem, 0, nelem * elbytes);
+```
+
+**CONFIRMED (static).** On the only platform that compiles this file (`__ARM_EABI__`,
+32-bit `size_t`), `calloc(0x10001, 0x10000)` wraps to `0`; both the `nelem==0 ||
+elbytes==0` precondition and the wrapped size pass, so a tiny block is returned
+while the caller believes it has 4 GiB and writes past it. Classic CWE-190. Not in
+pass 1 or 2. Guard with `elbytes != 0 && nelem > SIZE_MAX / elbytes`.
+
+### [MEDIUM] C API default timer is *periodic*, C++ and CMSIS default is one-shot — src/rtos/os-c-wrapper.cpp:1509, 1550
+
+```cpp
+// os_timer_construct / os_timer_new, attr == nullptr
+attr = (const os_timer_attr_t*)&timer::periodic_initializer;   // <-- periodic
+```
+
+**CONFIRMED (static, reachable).** The C++ timer default is `once_initializer`
+(`include/cmsis-plus/rtos/os-timer.h:264,274`), `os_timer_attr_init()` documents
+"single shot" and produces `tm_type = run::once` (`os-timer.h:187`;
+`os-c-wrapper.cpp:1462-1466`), and the CMSIS-v1 `osTimerCreate()` honours its
+`type` argument. Only these two NULL-attr entry points silently select periodic.
+It is reachable: `tests/sources/rtos-apis/src/test-c-api.c:359` and `:395` pass
+`NULL` and the surrounding comment reserves "Periodic timer" for the `tm2` case
+that explicitly passes `os_timer_attr_get_periodic()`. The harness only asserts
+the name, so it does not fail, but `tm1`/`tm3` fire repeatedly where one shot was
+intended. Fix: default to `timer::once_initializer` (or `os_timer_attr_init`).
+
+### [MEDIUM] C API destroys derived objects through a non-virtual base — src/rtos/os-c-wrapper.cpp:1750-1758, 1775-1778, 2282-2331
+
+```cpp
+// new
+return ... new rtos::mutex_recursive (name, ...);      // :1756-1757
+return ... new rtos::semaphore_binary  { name, v };    // :2286-2287
+return ... new rtos::semaphore_counting{ name, m, v }; // :2308-2309
+// delete
+delete reinterpret_cast<rtos::mutex*>     (mutex);      // :1778
+delete reinterpret_cast<rtos::semaphore*> (semaphore);  // :2330
+```
+
+**CONFIRMED (static; UB that happens to be benign today).** `rtos::mutex`'s
+destructor is non-virtual (`include/cmsis-plus/rtos/os-mutex.h:382`) and
+`mutex_recursive : public mutex` (`:702`); likewise `semaphore_binary`/
+`semaphore_counting` derive from `semaphore` (`os-semaphore.h:507,578`). Deleting
+a derived object through a base pointer with no virtual destructor is undefined.
+It is benign *only* because the derived classes add no data members and have empty
+destructors (`os-mutex.h:865-867`, `os-semaphore.h:842-844,924-926`); the day one
+gains a member this becomes a leak/size mismatch. `os_mutex_destruct`/`_delete`
+and `os_semaphore_destruct`/`_delete` should be given the concrete derived type
+(or the base a virtual destructor). Not in pass 1 or 2.
+
+### [MEDIUM] `std::system_error` is thrown holding a dangling `error_category` — src/libcpp/system-error.cpp:115, 130
+
+```cpp
+throw std::system_error (std::error_code (ev, system_error_category ()),
+                         what_arg);
+...
+throw std::system_error (std::error_code (ev, cmsis_error_category ()),
+                         what_arg);
+```
+
+**CONFIRMED (static).** `std::error_code` stores a `const error_category*`, and
+the `error_category` objects here are *temporaries* destroyed at the end of the
+throw-expression. The `system_error` (and its `error_code`) live until caught, so
+`what()`, `code().category().name()` and `message()` dereference freed storage.
+`std::error_category` instances are required to have static storage duration; these
+should be function-local `static` singletons. Only reachable with `__EXCEPTIONS`
+defined, which the embedded builds normally exclude — hence Medium, not High. Not
+in pass 1 or 2.
+
+### [MEDIUM] `polymorphic_allocator::select_on_container_copy_construction` discards the allocator — include/cmsis-plus/estd/memory_resource:243-247
+
+```cpp
+return polymorphic_allocator ();      // default resource, not *this
+```
+
+**CONFIRMED (static).** C++17 requires `select_on_container_copy_construction()`
+to return a copy of the allocator (`*this`). Returning a default-constructed one
+means a container copied from a pool-backed allocator silently rebinds to the
+*global* default resource: the copy's allocations and deallocations come from the
+wrong heap (correctness only if the resource is stateless; here it is not). Fix:
+`return *this;`. Not in pass 1 or 2.
+
+### [MEDIUM] `estd::thread::join()` leaks the bound function object for an already-finished thread — src/libcpp/thread-cpp.h:92-102
+
+```cpp
+void* args = id_.native_thread_->function_args ();  // read BEFORE join
+id_.native_thread_->join ();
+if (args != nullptr && function_object_deleter_ != nullptr)
+  function_object_deleter_ (args);
+delete id_.native_thread_;
+```
+
+**CONFIRMED (static).** The kernel clears `func_args_` when the thread exits
+(`src/rtos/os-thread.cpp:1291` in `internal_exit_`), *before* the joiner runs.
+Reading it before `join()` avoids a use-after-free but returns `nullptr` whenever
+the thread already finished — which is the common case for short tasks. The
+`Function_object*` allocated in `thread::thread` (`thread_internal.h:358`) is then
+never deleted: a per-thread leak. `delete_system_thread()` (`thread-cpp.h:35-49`)
+has the same hole. Reachable from `tests/sources/rtos-apis/src/test-iso-api.cpp`
+(`estd::thread`/`std::thread` are used throughout). Not in pass 1 or 2.
+
+### [MEDIUM] `condition_variable::wait_for` ignores the wait result and infers timeout from elapsed wall time — include/cmsis-plus/estd/condition_variable:295-300
+
+```cpp
+ncv_.timed_wait (..., ticks);
+return (Native_clock::now () - start_tp) < rel_time
+           ? cv_status::no_timeout : cv_status::timeout;
+```
+
+**CONFIRMED (static).** The `os::rtos::condition_variable::timed_wait()` return
+value is discarded, so a signalled wake that took longer than `rel_time` (the
+thread was preempted after the signal) is reported as `cv_status::timeout`, and a
+genuine timeout that rounded down to fewer ticks than `rel_time` is reported as
+`no_timeout`. Any error result is lost entirely. This is the `estd` twin of pass
+1's "condvar ETIMEDOUT from the wall clock" (`os-condvar.cpp`), but on this layer
+the wrapper *re-derives* the verdict instead of trusting the kernel, which is the
+sharper bug. Not in pass 1 or 2.
+
+### [MEDIUM] `osThreadAllocatedDef` hands a null stack base to `osThreadCreate` — include/cmsis-plus/legacy/cmsis_os.h:485-498 vs src/rtos/os-c-wrapper.cpp:3533-3540
+
+```c
+#define osThreadAllocatedDef(...) \
+struct { osThread data[instances]; } os_thread_##name; \
+const osThreadDef_t os_thread_def_##name = { ..., &os_thread_##name.data[0], 0 };
+```
+```cpp
+if (attr.th_stack_size_bytes > 0)
+  attr.th_stack_address
+      = &thread_def->stack[(i) * ((thread_def->stacksize + 7) / 8)];
+```
+
+**CONFIRMED (static, latent).** `osThreadDef` defaults to `osThreadAllocatedDef`
+unless `osObjectsStatic` is defined, and that macro sets the final `stack` field
+to `0`. `osThreadCreate` then computes `&NULL[i*...]`: instance 0 gets a null
+stack (the thread allocates its own), but instance 1 onward get a bogus non-null
+stack address. Either the allocated form must leave `th_stack_address` at nullptr,
+or `osThreadCreate` must test `thread_def->stack` for null. Not in pass 1 or 2.
+
+### [MEDIUM] `osEvent` results are partly uninitialised, and `osMailGet` omits `def.mail_id` — src/rtos/os-c-wrapper.cpp:3795, 4038, 4721, 5024, 5065-5069
+
+```cpp
+osEvent event;                 // value./def. indeterminate
+...
+event.status = osEventMail;    // success path; event.def.mail_id never set
+```
+
+**CONFIRMED (static).** Pass 1 reported this only for `osMessageGet`. The same
+aggregate is returned uninitialised by `osWait` (`:3795`), `osSignalWait`
+(`:4038`), `osFlagsWait`, `osMessageGet` (`:4721`) and `osMailGet` (`:5024`); on
+the error/ISR paths `value` is never written, and even on success `def` is never
+written (`osMessageGet` should return `def.message_id`, `osMailGet`
+`def.mail_id`). Callers reading `event.def`/`event.value` get stack garbage. Fix:
+`osEvent event{};` and populate `def`. This is an extension of pass 1's item, not a
+new class.
+
+### [MEDIUM] The C API's low-level entry points validate pointers only with `assert` — src/rtos/os-c-wrapper.cpp:1803, 2355, and 139 similar
+
+```cpp
+os_mutex_lock (os_mutex_t* mutex)
+{
+  assert (mutex != nullptr);
+  return (os_result_t)(reinterpret_cast<rtos::mutex&> (*mutex)).lock ();
+}
+```
+
+**CONFIRMED (static).** 139 `assert(ptr != nullptr)` guards exist against only 18
+`osErrorParameter` returns. The CMSIS-v1 wrappers (`osMutexWait`, …) do validate,
+but the `os_*` layer that the tests and `os-c-api.h` documents as the C API
+(`os_mutex_lock`, `os_semaphore_post`, `os_thread_kill`, …) dereferences in
+release builds. A C caller passing a stale handle gets a fault instead of an error
+code. Either promote these to real checks or document "release builds trust the
+caller". Not identified by either earlier pass as a class.
+
+### [LOW] `first_fit_top` adds the alignment padding without an overflow check — src/memory/first-fit-top.cpp:137, include/cmsis-plus/memory/first-fit-top.h:244-246
+
+```cpp
+return os::rtos::memory::max (block_align, chunk_align) - chunk_align;   // header
+...
+alloc_size += block_padding;   // :137
+```
+
+**SUSPECTED (static).** Pass 2 added guards for `align_size` and each
+`alloc_size > total_bytes_` step, but `alloc_size += block_padding` itself can
+wrap for a near-`SIZE_MAX` `alignment`, after which the later `> total_bytes_`
+test no longer sees it. Requires an absurd alignment (`> SIZE_MAX-8`) so it is Low;
+it is the residual of the pass-2 "allocator arithmetic overflows" item, not new.
+`std::align` is also then called with a non-power-of-two alignment.
+
+### [LOW] `internal_switch_threads` mixes atomic reads with release-store publishes outside the lock — src/rtos/os-core.cpp:605-606
+
+```cpp
+&& (th == old_thread
+    || (th->state_ != thread::state::running
+        && th->context_.port_.stack_ptr != nullptr)))
+```
+
+**SUSPECTED (static).** The ports publish `stack_ptr` with an
+`__atomic_store_n(..., RELEASE)` *after* the outgoing context has left the stack,
+which can be concurrent with this picker read on another core; `state_` is written
+plain (`os-core.cpp:610`, `os-thread.h`) while pass 1's readers were converted to
+`__atomic_load_n`. Reading atomically-written storage non-atomically is still a
+formal race, and `state_` is written non-atomically and read atomically elsewhere
+(mixed access). The `th == old_thread` escape keeps it a rare, not demonstrated,
+failure. Sharpens pass 1's `current_thread_`/`state_` item for the one reader it
+did not convert.
+
+### [LOW] `kill()` still spins on a non-atomic `state_` without the lock — src/rtos/os-thread.cpp:1572
+
+```cpp
+if (!we_claimed)
+  {
+    while (state_ != state::destroyed)
+      { scheduler::uncritical_section sucs; this_thread::yield (); }
+```
+
+**SUSPECTED (static).** Pass 1's three named cross-core readers are now
+`__atomic_load_n`, but this fourth one (the "idle reaper already claimed it"
+path) was missed: it reads `state_` where `internal_destroy_()` writes it as a
+plain `volatile` store under a different lock (`:1417`). Same formal race as
+pass 1; a `__atomic_load_n(&state_, ACQUIRE)` (as at `:1475`) would close it.
+
+### [LOW] `thread::join()` self-join is guarded by `assert` only, so release builds deadlock — src/rtos/os-thread.cpp:1088
+
+```cpp
+// Fail if current thread
+assert (this != this_thread::_thread ());
+```
+
+**CONFIRMED (static).** With `NDEBUG`, `join()` on the current thread sets
+`joiner_ = crt_thread` to itself, suspends itself and never wakes:
+POSIX requires `EDEADLK`. `join()` can be called on `this_thread` in a release
+build and hang forever. Not in pass 1 or 2.
+
+### [LOW] Idle reaper still stops at the first live head — src/rtos/os-idle.cpp:100-103
+
+**CONFIRMED (static).** Pass 2's item is unchanged in the current tree: `if (live)
+{ break; }` abandons *all* later terminated threads while the head is still
+running on another core. It remains a `break` rather than a skip/continue. I
+**agree** with pass 2 (see Agreement).
+
+### [LOW] `atexit` bounds check is still outside the lock — src/libc/stdlib/atexit.cpp:119-132
+
+**CONFIRMED (static).** Pass 2's narrow two-core overrun (`__atexit_functions[OS_
+INTEGER_ATEXIT_ARRAY_SIZE]`) is unchanged: the `NDEBUG` check at `:121-127` runs
+before the critical section at `:130`. I **agree** with pass 2.
+
+### [LOW] Semihosting copies the host `errno` straight into the target — src/semihosting/c-syscalls-semihosting.cpp:160-172
+
+```cpp
+static int __semihosting_get_errno (void)
+{ return call_host (SEMIHOSTING_SYS_ERRNO, nullptr); }
+static int __semihosting_error (int result)
+{ errno = __semihosting_get_errno (); return result; }
+```
+
+**SUSPECTED (static).** `SYS_ERRNO` returns the *debugger host's* errno, whose
+numbering is host-specific; it is assigned to the target `errno` with no
+translation. On a Linux host many low values coincide with newlib's, but not all
+(e.g. `EWOULDBLOCK`/`EAGAIN`, `ENOTSUP`), so `errno`-based recovery in POSIX code
+can branch on the wrong error. Not flagged by either pass (they flagged missing
+`errno` on some paths, not mis-mapping).
+
+### [LOW] `busy_wait()` multiplies a 32-bit frequency by 32-bit micros — tests/sources/mutex-stress/src/main.cpp:36-37
+
+```cpp
+= start + hrclock.input_clock_frequency_hz () * micros / 1000000;
+```
+
+**CONFIRMED (static; test harness).** `input_clock_frequency_hz()` is `uint32_t`
+and `micros` is `unsigned int`, so the product is evaluated in 32 bits and wraps
+for `freq*micros > 2^32` (e.g. a 62.5 MHz input clock with `micros >= 69`; the
+suite draws `micros` in `[10,90)`). The wait is then an order of magnitude short,
+distorting the "intense activity" the stress test claims to inject. Compound on
+real boards with pass 2's "wrong `input_clock_frequency_hz`". Cast one operand to
+`uint64_t`.
+
+### [LOW] `osThreadCreate` reads `state()` of raw BSS storage — src/rtos/os-c-wrapper.cpp:3529-3531
+
+```cpp
+thread* th = (thread*)&thread_def->data[i];
+if (th->state () == thread::state::undefined || ...)
+```
+
+**SUSPECTED (static).** The slot has not been placement-`new`'d yet, so calling
+the non-static member `state()` on it is UB (it happens to read a zeroed
+`state_`). It works because the CMSIS structs are zero-init and `state::undefined
+== 0`, but it should compare the raw bytes or track slot liveness explicitly.
+
+### [LOW] CPU-cycles statistic dereferences a possibly-null current thread — src/rtos/os-core.cpp:549
+
+```cpp
+scheduler::current_thread_[port_cpu_id()]->statistics_.cpu_cycles_ += delta;
+```
+
+**SUSPECTED (static, boot window).** Same window as pass 1's "fallback to a null
+idle thread in the SMP picker": before a secondary core registers its idle thread,
+`current_thread_[cpu]` can be `nullptr` and this unpacks it whenever
+`OS_INCLUDE_RTOS_STATISTICS_THREAD_CPU_CYCLES` is enabled.
+
+### [LOW] `file_descriptors_manager::assign` still clobbers an occupied slot — src/posix-io/file-descriptors-manager.cpp:185
+
+```cpp
+descriptors_array__[fildes] = io;      // previous io silently dropped
+```
+
+**CONFIRMED (static).** Pass 1's `assign()` leak survives the pass-2 locking fix:
+it validates `io->file_descriptor()` but never checks that the slot is empty, so
+re-assigning an in-range fd leaks the previous `io`'s descriptor. I **agree** with
+pass 1's residual wording (its null-deref half was already fixed).
+
+### [LOW] Semihosting `read`/`write` underflow `nbyte - res` if the host over-reports — src/semihosting/c-syscalls-semihosting.cpp:436, 492
+
+```cpp
+pfd->pos += nbyte - res;   // nbyte is size_t, res is int
+```
+
+**SUSPECTED (static).** `SYS_READ`/`SYS_WRITE` return "bytes not transferred"; if
+a misbehaving monitor returns more than `nbyte`, the subtraction wraps `size_t`,
+corrupting `pos` and returning a huge `ssize_t`. Cheap to guard
+(`if (res < 0 || (size_t)res > nbyte) { errno = EIO; return -1; }`). Pass 1 only
+covered the separate `int`-truncation in `lseek`.
+
+### [LOW] `malloc`/`new` can recurse infinitely if pointed at the wrong resource — include/cmsis-plus/memory/malloc.h:243, 280
+
+```cpp
+void* mem = std::malloc (bytes);              // malloc_memory_resource
+...
+void* mem = ::operator new (bytes);           // new_delete_memory_resource
+```
+
+**SUSPECTED (static).** On a target that compiles the custom `malloc()`
+(`__ARM_EABI__`), `malloc()` calls `estd::pmr::get_default_resource()->allocate()`.
+If the default resource is set to `malloc_memory_resource` (or `operator new`'s
+global is rebound to `new_delete_memory_resource`), the resource's `do_allocate`
+calls back into `malloc`/`operator new` and recurses without bound.
+`os_startup_initialize_free_store()` avoids this by pointing the default at a
+`first_fit_top`, so it is a configuration footgun rather than a default-path bug.
+Not in pass 1 or 2.
+
+### [NIT] `condition_variable_any` carries a heap `shared_ptr<mutex>` — include/cmsis-plus/estd/condition_variable:193, 320
+
+**CONFIRMED (static).** `mx_{ std::make_shared<mutex> () }` turns a
+synchronisation primitive into a heap allocation; on the very targets that define
+`estd::condition_variable` for memory-constrained systems this is an avoidable
+failure point (and `make_shared` allocates while a lock may be held). Prefer a
+by-value `mutex`.
+
+## Agreement with earlier passes
+
+Resolved in the tree as checked out (I **agree** with the original report and note
+the fix; these are not repeated as findings):
+
+- **Pass 1, `millisec * 1000u` overflow.** Fixed at every call site, now
+  `((uint64_t) millisec * 1000u)` (`os-c-wrapper.cpp:3755,3804,3883,4067,4178,
+  4371,4661,4759,4897,5060`).
+- **Pass 1, cross-core reads of `current_thread_`/`stack_ptr` in join/kill/idle.**
+  Fixed with `__atomic_load_n(..., __ATOMIC_ACQUIRE)` (`os-thread.cpp:1130,1486`,
+  `os-idle.cpp:96`). Residuals remain (this report's `os-core.cpp:605`, `os-thread.cpp:1572`).
+- **Pass 1, `__posix_stat` invalid `st_mode` (S_IFREG|S_IFCHR).** **DISAGREE /
+  already fixed:** `__semihosting_stat` now guards with `if ((st->st_mode &
+  S_IFMT) == 0)` (`c-syscalls-semihosting.cpp:266-271`) before OR-ing `S_IFCHR`,
+  so `__posix_stat`'s `S_IFREG|S_IREAD` survives and the mode is a valid regular
+  file. Pass 2 called this "unverified"; it is verifiable and no longer reproduces.
+- **Pass 1, `malloc`/`new` drop the requested alignment.** Still true and still
+  unaddressed: `malloc.h:242,279` "Ignore alignment for now", and there is no
+  `operator new(std::size_t, std::align_val_t)` anywhere in `src/`.
+- **Pass 2, POSIX fd table unsynchronised.** Fixed: `io/valid/allocate/assign/
+  deallocate/socket/used` all take `rtos::interrupts::critical_section`
+  (`file-descriptors-manager.cpp:93,112,137,179,198,223,244`).
+- **Pass 2, FatFs deferred file/dir lists unsynchronised.** Fixed: `add_deferred_*`,
+  `allocate_*`, `deallocate_*` are guarded (`file-system.h:825,832,856,888,922,
+  944,977,1012`).
+- **Pass 2, user timer callbacks run holding the global SMP spinlock.** Fixed:
+  `check_timestamp` unlinks under the lock and calls `node->action()` *after*
+  releasing it (`os-lists.cpp:500-537`); the callback now runs lock-free.
+- **Pass 2, periodic timer burst inside one tick.** Fixed by the re-arm guard
+  (`os-timer.cpp:378-382`).
+- **Pass 2, `mutex::boosted_prio_` single slot.** Fixed: the update is now
+  `max(boosted_prio_, prio)` (`os-mutex.cpp:780-784`) and the unlock recompute
+  takes the max over the owner's mutexes (`:920-931`).
+- **Pass 2, `high_resolution_clock::now()` 64-bit overflow.** Fixed by the
+  seconds/remainder decomposition (`chrono.cpp:118-121`).
+- **Pass 2, `align_size` `size_t` overflow.** Fixed by the pre-check returning
+  `(size_t)-1` (`os-memory.h:87-91`).
+
+Still reproducing (I **agree**, with the sharper wording above):
+
+- **Pass 2, idle reaper `break` on a live head** (`os-idle.cpp:100-103`).
+- **Pass 2, `atexit` check outside the lock** (`atexit.cpp:119-132`).
+- **Pass 1, `assign()` clobbering an occupied fd slot** (`file-descriptors-manager.cpp:185`).
+- **Pass 1, `size_t → int` fit test** (`first-fit-top.cpp:160`, `lifo.cpp:91`);
+  my added `block_padding` overflow is a different, Low residual.
+- **Pass 1, `__posix_getcwd` size/NULL** (`c-syscalls-semihosting.cpp:671-677`) and
+  the **`int` `lseek` truncation** (`:188,507`) are unchanged.
+
+Where the earlier passes were right and this pass did not re-derive them
+independently: the `int` truncation in `first-fit-top`/`lifo` and the base
+semihosting fd-table race (covered by pass 1; pass 2's locking fix is for the
+POSIX table, not this one).
+
+## Good practices
+
+- The SMP resource-reclamation gates are now uniformly acquire-loaded and
+  commented with the exact race they prevent (`os-thread.cpp:1097-1105,
+  1464-1526`, `os-idle.cpp:83-104`); the `kill()` comment about the POSIX port's
+  `pthread_sigmask` window (`os-mutex.cpp:799-813`) is an unusually good piece of
+  institutional memory.
+- Locking the *shared* containers at the point of mutation and leaving the
+  per-object `new`/`terminate` outside the lock is the right pattern, and it is
+  applied consistently in `file-system.h` and `file-descriptors-manager.cpp`.
+- `os-timer.cpp`'s re-arm guard and the "unlink inside the lock, call the callback
+  outside" split in `os-lists.cpp` fix the two classic timer pitfalls by design,
+  not by luck.
+- The C API's `static_assert` block (`os-c-wrapper.cpp:41-397`) mechanically pins
+  the C structs, enums, offsets and sizes to their C++ classes — this is exactly
+  the check that makes the pointer-punning ABI acceptable, and it should be kept
+  as-is. It is only the *lifetime* of the punned objects (this report's
+  non-virtual delete) that the asserts do not cover.
+- The board contract and the one-test-per-power-cycle rule in `test_smpl/` remain
+  strong guard rails, and the reachability evidence for the timer-default bug came
+  from reading the suite rather than from speculation.
+
+---
+
+# Third-pass port review — µOS++ IIIe AArch32 / AArch64
+
+## Scope
+
+READ-ONLY, static review of the ARMv7-A (`micro-os-plus-iii-aarch32.git`) and
+ARMv8-A (`micro-os-plus-iii-aarch64.git`) ports, under `src/`, `include/` and
+`test/boards/*`. Where a fact depends on the kernel/SMP contract I read the
+sibling `micro-os-plus-iii-smp.git` (`port/smp-common`, `test_smpl`) and
+`micro-os-plus-iii-devices.git` headers to resolve it.
+
+Abbreviations: **A32** = aarch32 repo, **A64** = aarch64 repo, **SMP** =
+micro-os-plus-iii-smp repo (outside the two ports; read-only, used as context).
+No build or run was performed; one name-lookup behaviour was reproduced with a
+throw-away `g++ -S` in `/tmp/opencode` (no port file touched). Passes 1 and 2 are
+taken as reported; I do not restate them except where I agree/disagree.
+
+## Summary
+
+The two ports are in good shape for the tests that exist, and several pass-1/2
+items are demonstrably fixed in-tree. This pass found one structural,
+cross-module defect that both ports share and that silently defeats a documented
+scheduler contract (a duplicated `_port_ctx_pending` array; the ISR reads one
+object, `reschedule()` writes another), plus a concrete AArch64 secondary-release
+cache hazard on cold boot (the spin-table release word is written cacheable but
+never cleaned, while the adjacent `__smp_spin` slot *is* cleaned), and a set of
+smaller AArch32↔AArch64 drifts — an un-aligned AArch64 LED DMA clean, a
+still-defaulted `OS_NCPU`/`OS_SMP_IPI_SGI` in the AArch64 contract, a missing
+I-cache/BTB invalidate on AArch64 MMU enable, and no ISS/FSC decode in the
+AArch64 fatal reporter. No watchdogs exist anywhere; every fault handler parks in
+`wfi` forever and every secondary-release timeout is silent in normal builds, so
+liveness rests entirely on the host runner's timeout.
+
+## New/updated findings
+
+### F1 — `_port_ctx_pending` is defined twice and the ISR reads the wrong object (A32 **and** A64) — **High, CONFIRMED**
+
+The SMP contract declares the flag *inside* the scheduler namespace:
+
+- `SMP/port/smp-common/cmsis-plus/rtos/port/os-decls.h:93`
+  `extern volatile unsigned _port_ctx_pending[OS_NCPU];`  (C++ linkage, mangled)
+
+The shared port file *also* defines it at global scope with C linkage:
+
+- A32 `src/rtos/os-core.cpp:37-38`
+  `extern "C" {` … `volatile unsigned _port_ctx_pending[OS_NCPU] = {};`
+- A64 `src/rtos/os-core.cpp:44-45` (same shape, `{0, 0, 0, 0}`)
+
+…and because `<cmsis-plus/rtos/os.h>` (line 20) pulls in the namespaced
+declaration *before* the use, the unqualified references inside
+`os::rtos::port::scheduler::reschedule()` bind to the **namespaced** object:
+
+- A32 `src/rtos/os-core.cpp:191` `_port_ctx_pending[cpu] = 1;` and `:199`
+- A64 `src/rtos/os-core.cpp:187` and `:195` (identical)
+
+But the ISR and the per-board definition use the **C-linkage** object:
+
+- A32 `test/boards/rpi-zero-2w/src/rtos/port_isr.cpp:23`
+  `extern volatile unsigned _port_ctx_pending[OS_NCPU];` (inside `extern "C"`),
+  used at `:103`, `:108`, `:117`, `:136`
+- A32 `test/boards/luckfox-lyra/src/rtos/port_isr.cpp:27` (same), used at
+  `:103`, `:108`, `:117`, `:125`
+- A64 `test/boards/rpi-zero-2w/src/rtos/port_isr.cpp:23` (same), used at
+  `:75`, `:80`, `:104`, `:108`
+- A32 `test/boards/rpi-zero-2w/src/port_sys.cpp:17`
+  `volatile unsigned _port_ctx_pending[OS_NCPU] = {0};` (namespaced — a *third*
+  definition, the one `reschedule()` actually writes)
+- A32 `test/boards/luckfox-lyra/src/port_sys.cpp:10`, A64
+  `test/boards/rpi-zero-2w/src/port_sys.cpp:88` (same namespaced shape)
+
+`extern "C"` is the discriminator: `_in_isr` is declared with it
+(`include/.../os-inlines.h:200`) so that one is shared, but
+`_port_ctx_pending` is not. I reproduced the name-lookup in `/tmp`:
+`namespace A{B{extern int x;}} extern "C"{int x=0;} A::B::f(){x=1;}` compiles to
+`leaq _ZN1A1B1xE` — the namespaced object — while `_port_ctx_pending` remains a
+distinct symbol. **Consequence:** a reschedule request raised in handler mode
+(`reschedule()` at A32 `:191/:199`, A64 `:187/:195`) is written to an array no
+consumer reads. It only *appears* to work because `port_isr_handler()` sets its
+own C-linkage copy on every timer/IPI before consulting it (A32 `:103`, `:108`),
+so the switch happens for a different reason and the intended "defer until the
+ISR" path is a no-op. A reschedule requested from an external IRQ that did not
+set the flag (e.g. a USB/GPU handler at A32 `port_isr.cpp:126-129`) is deferred a
+full tick. Fix: one definition; declare `_port_ctx_pending` `extern "C"` in the
+contract, or make the ISR/os-core use the namespaced symbol.
+
+*Unverifiable:* the exact runtime penalty (≤1 ms) without a live run; the
+liveness outcome is inferred from the timer always re-asserting the flag.
+
+### F2 — AArch64 spin-table release word is written cacheable but never cleaned (A64) — **High, SUSPECTED**
+
+`release_one()` cleans the `__smp_spin` slot, then writes the *release word*
+(physical `0xD8 + 8*core`) with no cache maintenance:
+
+- A64 `src/../test/boards/rpi-zero-2w/src/smp.cpp:53-63`
+  ```
+  __smp_spin[core] = entry_for(core);
+  __asm__ volatile("dc cvac, %0" ... &__smp_spin[core]);   // cleaned
+  __asm__ volatile("dsb sy" ...);
+  *release_word(core) = (uint64_t)&_start;                 // NOT cleaned
+  dsb();
+  sev();
+  ```
+  with `release_word()` = `0xD8u + 8u * core` (`:34-38`) and the MMU mapping the
+  low 2 MB as Normal WB (A64 `src/mmu.cpp:95-106`). The parked secondaries read
+  this word through the GPU arm-stub at EL2/EL3 with caches **off**, so a dirty
+  line in core 0's L1/L2 can hide the release. The A32 port does not have this
+  hazard because it releases through the *device* mailbox:
+  A32 `test/boards/rpi-zero-2w/src/smp.cpp:57-58`
+  `mmio_write(local::MBOX_SET0 + 0x10u*core + 4u*local::SPIN_MBOX, &_start)`.
+  This is masked by the debug-in-RAM workflow (`hw.sh` resumes all four cores
+  through OpenOCD, so the spin table is never used); it would bite on a cold SD
+  boot of a SMP test image. Fix: `dc cvac` the release word (or map it Device),
+  mirroring the `__smp_spin` clean two lines above.
+
+### F3 — AArch64 LED mailbox DMA cache ops are not cache-line aligned (A64) — **Medium, CONFIRMED**
+
+The A32 Pi-3B LED path rounds the MVA down and steps a fixed line:
+
+- A32 `test/boards/rpi-zero-2w/include/led.hpp:49`
+  `std::uintptr_t a = reinterpret_cast<std::uintptr_t>(p) & ~(line - 1u);`
+
+The A64 sibling does not, and advances by a fixed 64 from an
+`alignas(16)` buffer start:
+
+- A64 `test/boards/rpi-zero-2w/include/led.hpp:48-54`
+  `std::uintptr_t a = reinterpret_cast<std::uintptr_t>(p);` … `a += 64u;`
+  (same in `cache_invalidate`, `:60-66`, `dc ivac`)
+
+For a 32-byte buffer whose start is, say, `...30 (mod 64)`, the two lines
+`...00` and `...40` are both touched; the A64 loop cleans `...00` then jumps to
+`...70 ≥ end`, **missing `...40`**. The VideoCore can then read a stale second
+half of the mailbox request / the CPU can read a stale response. ARMv8 cache
+maintenance by MVA also requires line-aligned addresses for defined behaviour.
+Scope: Pi 3 B (`BOARD_RPI3B`) LED only — hence Medium not High — but the pattern
+is the template a DMA driver would copy.
+
+### F4 — AArch64 silently defaults the board contract that AArch32 turned into an error (A64) — **Medium, CONFIRMED**
+
+A32 removed the defaults deliberately:
+
+- A32 `include/cmsis-plus/rtos/port/os-c-decls.h:58-63`
+  `#error "OS_NCPU is a board fact…"` / `#error "OS_SMP_IPI_SGI is a board fact…"`
+
+with the comment (lines 46-54) that a wrong default "is not a wrong number, it is
+a different operating system". A64 still defaults both:
+
+- A64 `include/cmsis-plus/rtos/port/os-c-decls.h:52-56`
+  ```
+  #ifndef OS_NCPU
+  #define OS_NCPU       4
+  #endif
+  /* BCM2837 has no GIC/SGIs; cross-core reschedule uses local mailbox 0. */
+  #define OS_SMP_IPI_SGI 0
+  ```
+  `OS_SMP_IPI_SGI 0` is even hard-coded rather than board-supplied. Today A64 has
+  one SoC (BCM2837, always 4 cores), so it is latent — but the two ports have
+  drifted apart on the exact rule A32's comment says must hold.
+
+### F5 — AArch64 MMU enable omits the I-cache / branch-predictor invalidate (A64) — **Medium, SUSPECTED**
+
+A32 invalidates before turning on the MMU:
+
+- A32 `test/boards/rpi-zero-2w/src/mmu.cpp:151-153` /
+  `test/boards/luckfox-lyra/src/mmu.cpp:120-122`
+  `write_tlbiall(); write_bpiall(); write_iciallu();`
+
+A64 does TLB + barriers only:
+
+- A64 `test/boards/rpi-zero-2w/src/mmu.cpp:151-153`
+  `tlbi vmalle1` / `dsb ish` / `isb` — no `ic iallu`, no BTB invalidate.
+
+If a core ever fetches with the old attributes before `SCTLR_EL1` is written
+(arm-stub/hot state), stale fetched lines / predictor entries survive the
+attribute change. Reset state has `SCTLR_EL1.I=0`, so it is likely benign on a
+cold core, hence SUSPECTED; it is nonetheless a divergence from the A32 port's
+own pre-enable sequence.
+
+### F6 — AArch64 fatal reporter does not decode the abort status (A64) — **Medium, CONFIRMED**
+
+A32 names the fault:
+
+- A32 `src/exception_handler.cpp:355-356` (and `:394-395`)
+  `std::uint32_t fs = ((ifsr >> 10) & 1) << 4 | (ifsr & 0xF);`
+  `fault_out << "  Fault: " << fault_status_string(...)`
+
+A64 prints the raw registers only:
+
+- A64 `src/exception_handler.cpp:109-119`
+  `ec = (esr >> 26) & 0x3f;` then `ec_name(ec)`, `ELR/FAR/SPSR` — the ISS/FSC
+  (ESR bits [5:0]/[24:0]) is never decoded, so "translation vs permission vs
+  external abort" must be read by hand. `ec_name` (lines 83-96) even maps
+  `0x24/0x25` to "data abort" without saying *which*. Also no nested-fault
+  guard: `vector_table`'s `fatal_from_vec` (`test/boards/rpi-zero-2w/src/startup.S:555-564`)
+  does `SAVE_FRAME` before `port_fatal_exception` masks DAIF inside.
+
+### F7 — AArch32 SVC handler is a silent infinite loop; AArch64 routes FIQ to the scheduler IRQ (A32/A64) — **Low, CONFIRMED**
+
+- A32 `src/handlers.cpp:79-85`
+  ```
+  extern "C" [[gnu::naked, gnu::weak]] void svc_handler() {
+      __asm__ volatile(".Lsvc_loop: b .Lsvc_loop");
+  }
+  ```
+  An unexpected `SVC` (e.g. a semihosting trap taken when no debugger intercepts
+  it — the documented failure mode in `include/semihosting.hpp:32-34`) hangs the
+  core with no UART word, unlike every other synchronous exception. Pass-1's
+  SYS_EXIT work did not cover this.
+- A64 `test/boards/rpi-zero-2w/src/startup.S:509` maps the *FIQ* slot to
+  `b irq_current`, i.e. the preemptive scheduler. FIQ is masked by the port, so
+  merely misleading today.
+
+### F8 — AArch32/Lyra linker: `_Heap_Limit` assigned twice, RAM region 2 MiB past the mapped DRAM (A32) — **Medium, CONFIRMED**
+
+- A32 `test/boards/luckfox-lyra/linker.ld:89` sets `_Heap_Limit = .;` at the top
+  of the SVC stack (before `.stack_workers`), and `:142` sets it again at the
+  real heap end. The second wins, but the first is a live symbol assignment that
+  silently loses; a reader (or a future section reorder) is one edit from the
+  wrong heap bound.
+- `:29` `RAM (rwx) : ORIGIN = 0x00200000, LENGTH = 0x08000000` spans to
+  `0x08200000`, while `mmu.cpp:38-39` maps only `0x08000000` as Normal
+  (`kDramSizeMb = 128`). Anything the linker ever places in the last 2 MiB is
+  left unmapped. Nothing is placed there today; the region declaration is still
+  wrong by 2 MiB.
+
+### F9 — AArch64 `boot_core3()` is unguarded by `OS_NCPU` (A64) — **Low, CONFIRMED**
+
+- A32 `src/smp_secondary.cpp:27-32` wraps core 3 in `#if OS_NCPU > 3` with a
+  comment about "a write one past the end of `g_core_stage[OS_NCPU]`".
+- A64 `src/smp_secondary.cpp:35-40` has no guard, so an A64 board with
+  `OS_NCPU < 4` would index `g_core_stage[3]` out of bounds. Harmless while
+  A64 is 4-core-only, but the guard exists on the A32 side for exactly this.
+
+### F10 — CPU-id masking disagrees within the AArch32 port (A32) — **Low, CONFIRMED**
+
+- Inline path: A32 `include/.../os-inlines.h:48` `return cpu & 0xFFu;`
+- C path: A32 `test/boards/rpi-zero-2w/src/port_sys.cpp:41` `return mpidr & 3u;`
+- Same file, two masks: A32 `test/boards/luckfox-lyra/src/port_sys.cpp:18`
+  `cpu &= 3U;` vs `:39` `return mpidr & 0xFFu;`
+- A64 `test/boards/rpi-zero-2w/src/port_sys.cpp:108` uses `& 0xFFu` everywhere.
+
+Aff0 is ≤ 3 on both SoCs, so there is no live bug; but `& 3` aliases cores on any
+part with Aff0 > 3 and is inconsistent with the `Assemb0xFF` masking that the
+recent commit `a40aaff`/`3052841` standardised ("mask MPIDR Aff0 with 0xFF").
+
+### F11 — High-res sub-tick count ignores `OS_SYSTICK_DIV` (A32) — **Low, CONFIRMED**
+
+- A32 `include/.../os-inlines.h:312-322`
+  `cycles_per_tick() { return timer_arm::frequency() / 1000; }` and
+  `cycles_since_tick()` uses it.
+- But the ISR reloads the timer with `timer_arm::period_cycles()`, which *is*
+  divided: A32 `test/boards/rpi-zero-2w/src/timer_arm.cpp:48`
+  `return g_freq / 1000u / OS_SYSTICK_DIV;`
+
+So with `-DOS_SYSTICK_DIV=2` (the documented 0.5 ms preemption build) the
+`clock_highres` sub-tick arithmetic compares against a load value twice the real
+one and is wrong. A64 has no `OS_SYSTICK_DIV` and no `period_cycles()` at all
+(see divergences), so the two ports' tick models differ.
+
+### F12 — Console mirror is an unlocked shared buffer and lies in its own header (A32) — **Low, CONFIRMED**
+
+- A32 `test/boards/luckfox-lyra/include/uart.hpp:291-322`: one per-instance
+  `mutable char sh_buf_[256]; mutable unsigned sh_len_;` mutated by
+  `putc()`/`puts()`; the comment (`:289-290`) claims "the multi-core tests
+  serialise with their console mutex", but the kernel's own trace path does not:
+  A32 `src/rtos/os-core.cpp:459` `uart::uart1.puts (chunk);` can run on several
+  cores at once. Output corruption only (no overflow: `sh_putc` flushes at
+  `sh_len_ + 1 >= size` before appending).
+- A32 `test/boards/luckfox-lyra/usb/src/usb_env_stateos.cpp:8-11` says the cache
+  hooks are "no-ops: every DMA buffer lives in the … NC window", but `:92-109`
+  implements real `DCIMVAC`/`DCCIMVAC`. Safe *because* the buffers are NC, but
+  the stated contract and the code disagree, which is the kind of drift that
+  breaks the day a buffer leaves `.dma_nc`.
+
+### F13 — No watchdog, and fault/secondary timeouts are silent (A32/A64) — **Low, CONFIRMED**
+
+`grep -ni watchdog` over both ports returns nothing. Every fault handler ends in
+`while (1) wfi` (A32 `src/exception_handler.cpp:333-336`, A64
+`src/exception_handler.cpp:120-122`), and a core that never comes up is not
+reported in a normal build: A32 `test/boards/rpi-zero-2w/src/smp.cpp:63-69`
+simply falls out of the bounded loop with no check, and A64
+`test/boards/rpi-zero-2w/src/smp.cpp:68-78` reports only under `DEBUG_BOOT`
+(default off). This agrees with pass 1; the sharper point is that the loop being
+*bounded* means a dead core does not stop `start_secondary_cores()` — the
+scheduler is nevertheless built for `OS_NCPU` peers, so later load-balancing /
+IPI to that core hits a core that never enabled its timer. Liveness is therefore
+entirely the host runner's timeout (`SMP/test_smpl/run-hw.sh:234-244`).
+
+### F14 — Dead/aliased declarations in the AArch32 exception header (A32) — **Nit, CONFIRMED**
+
+- A32 `include/exception_handler.hpp:47` adds `std::uint32_t saved_lr;` to
+  `ExceptionContext`, but the assembly stores `fault_pc` at that same word and
+  passes it separately (A32 `src/handlers.cpp:59` `ldr r1, [sp, #56]`); the field
+  aliases the PC and is never read.
+- A32 `include/exception_handler.hpp:79` declares `bool run_tests();` with no
+  definition anywhere in the port.
+
+## AArch32 vs AArch64 divergences
+
+1. **`_port_ctx_pending` contract** — shared defect (F1); A64's namespaced
+   definition is at `port_sys.cpp:88`, A32's at `:17`/`:10`; both ISRs take the
+   C-linkage symbol.
+2. **Secondary release mechanism** — A32/Pi uses a device mailbox
+   (`smp.cpp:57-58`), A64/Pi uses a Normal-cacheable spin-table word with no
+   clean (F2). Same silicon, different coherency requirement, only one handled.
+3. **Board-contract enforcement** — A32 `os-c-decls.h:58-63` hard-errors; A64
+   `:52-56` defaults `OS_NCPU`/`OS_SMP_IPI_SGI` (F4).
+4. **MMU bring-up** — A32 invalidates I-cache/BTB/TLB before enable; A64 omits
+   I-cache/BTB (F5). A32/Pi also sets TTBR0 inner/outer WBWA + shareable
+   (`mmu.cpp:96-102`) whereas A32/Lyra writes a bare TTBR0 (`mmu.cpp:70`); A64
+   expresses this through `TCR_EL1` (`IRGN0/ORGN0/SH0`, `mmu.cpp:139-147`).
+5. **Tick model** — A32 has `period_cycles()` and `OS_SYSTICK_DIV`
+   (`timer_arm.hpp:82`, `:25-27`); A64 has neither and re-arms with
+   `timer_arm::frequency()/1000` inline (`port_isr.cpp:65-66`,
+   `timer_arm.cpp:51-54`), and `clock_highres::cycles_since_tick` is duplicated
+   with the same fixed divisor in both.
+6. **CPU-id masking** — A32 `port_sys.cpp` mixes `& 3` and `& 0xFF` (F10); A64
+   is uniformly `& 0xFF`.
+7. **`_exit` hook** — A64 defines both `_exit` and `_Exit`
+   (`src/handlers.cpp:50-51`); A32 defines only `_Exit`
+   (`src/semihosting-exit.cpp:18-19`). Benign, because the kernel
+   (`SMP/src/libc/stdlib/exit.c:157-158`) declares `_exit` as a weak alias of
+   `_Exit`, so the strong override wins — but the surface differs.
+8. **LED cache maintenance** — A32 aligns/rounds down, A64 does not (F3).
+9. **`boot_core3` guard** — present in A32, absent in A64 (F9).
+10. **USB env docs** — A32 only (F12); no A64 equivalent.
+
+## Agreement with earlier passes
+
+- **Agree — pass 1 `clock_highres` raw CNTFRQ (~19×):** fixed. A32
+  `os-inlines.h:300-310` uses `timer_arm::get_count()` /
+  `timer_arm::frequency()`, and `timer_arm.cpp:29-59` calibrates against the
+  1 MHz system timer.
+- **Agree — pass 1 AArch64 `T1SZ`/`TTBR1`:** fixed. A64 `mmu.cpp:139-147` uses
+  `T0SZ=30` + `EPD1=1`; there is no TTBR1 walk.
+- **Agree — pass 1 `SYS_EXIT` param shape:** fixed. A32
+  `semihosting.hpp:97-117` builds the two-word `{reason, status}` block for the
+  OpenOCD path and a by-value reason for QEMU; A64 `semihosting.hpp:67-73` is
+  two-word.
+- **Agree — pass 1 silent secondary-release timeouts:** still present, sharper:
+  see F13 (bounded loop ⇒ no recovery, no normal-build report, scheduler still
+  counts the core).
+- **Agree — pass 1 `OS_HAS_INTERRUPTS_STACK` vs the frame on the task stack:**
+  still present. Both `os-c-decls.h:76`/`:67` define it, and A64 handles every
+  exception on the current `SP_EL1` (`startup.S` `SAVE_FRAME`), so the
+  `.irqstack` region (`linker.ld:67-71`) is bookkeeping only — the tests still
+  register it (`test/rpi3b/smp_test0/main.cpp:54-55`).
+- **Agree — pass 2 DWC2 only enumerates at `-O0`:** confirmed in-tree by the
+  build, A32 `test/luckfox-lyra/tests.cmake:161-192`.
+- **DISAGREE — pass 2 "AArch64 fatal-exception reporter prints via the
+  semihosting-mirrored UART (re-entry)":** as of this tree it does **not**. A64
+  `src/exception_handler.cpp:19-60,111-119` uses `puts_uart()`/`putc_uart()`,
+  which are UART-only (`include/uart.hpp:89-97`); semihosting is never entered
+  from the fatal path. This looks already fixed, like the pass-1 items.
+- **DISAGREE — pass 2 "AArch64 trusting raw `CNTFRQ_EL0`":** the tree now
+  calibrates (`timer_arm.cpp:20-49`) and only falls back to `get_freq()` when the
+  measurement is zero.
+- **DISAGREE — pass 2 "missing `ISB` after `VBAR`":** A64
+  `startup.S:259-262` has `msr vbar_el1` / `isb`.
+- **Agree — pass 2 "hard-coded RAM bounds in shared AArch64 `startup.S`":** the
+  bounds are still literals (`startup.S:465-474`: `0x00080000`, `0x20000000`,
+  `0x3F000000`) where A32 uses `PORT_RAM_BASE`/`PORT_RAM_END`. One correction:
+  that `startup.S` lives under `test/boards/rpi-zero-2w/src/`, not the shared
+  `src/`, so it is board-local — the hard-coding is the real issue.
+- **Partially agree — pass 2 "luckfox USB no-op cache-maintenance contract
+  behind `-O0`-only":** the `-O0` scoping is real, but the header comment saying
+  the hooks are no-ops is stale (F12); `usb_env_stateos.cpp:92-109` performs real
+  maintenance.
+- **Not re-verified — pass 2 "DWC2 hard-coded 512-byte bulk MPS":** outside the
+  time budget for this pass; no opinion.
+
+## Good practices
+
+- The fault consoles deliberately avoid semihosting: A32 `exception_handler.cpp:16-37`
+  spells out that a fault handler must not use a trap that can itself fault; A64
+  `FaultConsole` follows the same rule. This is the correct pattern.
+- The deferred-publish protocol (`_smp_pub_addr`/`_smp_pub_val`, A32
+  `os-core.cpp:288-297` + `handlers.cpp:199-216`, A64 `SMP_PUBLISH`) is a clean
+  fix for "publish the outgoing stack only after SP has left it", with the lock
+  release ordered owner/depth-before-lock-word and a clear rationale.
+- The `clrex` on every context switch (A32 `handlers.cpp:223`,
+  `context_switch.cpp:84`; A64 `startup.S`) correctly clears a reservation taken
+  by the outgoing thread.
+- The `.dma_nc` Normal-Non-Cacheable window (A32/Lyra `linker.ld:125-132`,
+  `mmu.cpp:81-101`) is a robust way to sidestep DMA/invalidate hazards, and routing
+  `memalign` into it (`usb_env_stateos.cpp:116-118`) moves the whole U-Boot
+  gadget stack without touching USB sources.
+- The Lyra SD path is deliberately polled and DMA-free
+  (`smp_test_int4/sd/sdmmc.hpp:11-15`), which removes an entire class of
+  cache-coherency bugs rather than adding maintenance calls.
+- The custom AArch64 `memset` (`port_sys.cpp:28-82`) pins down the `DC ZVA`
+  behaviour before the MMU is on and avoids the `-ftree-loop-distribute-patterns`
+  recursion; board-contract files (`SMP/test_smpl/src/board-contract.cpp`) turn a
+  missing board fact into a compile error.
+- Guards, tripwires and diagnostics are unusually good: the SMP claim tripwire
+  (A32 `os-core.cpp:249-287`), `validate_context()` per board, the bounded LED
+  mailbox waits (`led.hpp:44`), and the `DEBUG_BOOT` boot markers in A64
+  `startup.S:133-180`.
+
+---
+
+# Third-pass review — µOS++ IIIe Cortex-M and POSIX ports
+
+Read-only review. No source under `/home/dan/Work` was modified. The only file
+written is this report.
+
+## Scope
+
+Trees examined:
+
+- `/home/dan/Work/micro-os-plus-iii-cortexm.git/src`, `include/`,
+  `include-m33/`, `include-rp2350/`, `test/boards/*` (all six boards), and the
+  per-board `test/<board>/` applications.
+- `/home/dan/Work/micro-os-plus-iii-posix-arch.git/src`, `include/`,
+  `test`.
+- The kernel and harness the two ports compile against were read where a port
+  contract can only be judged there: `micro-os-plus-iii-smp.git/src/rtos/os-core.cpp`,
+  `tests/sources/fp-switch/`, `tests/platforms/cortexm-pico2/`, `test_smpl/run-host.sh`.
+
+Baseline: Cortex-M port HEAD `18d91f1` (the pass-2 fix), POSIX arch HEAD
+`0aab776`. Two working trees carry **uncommitted** changes that are part of the
+tree under review: `cortexm/test/boards/shared/hw_result.hpp` (the pass-2
+clobber fix) and `posix-arch/src/host_cpu.cpp` (the macOS tick fix). The kernel
+tree also has a large uncommitted set (join/IPI/mutex); those are noted only
+where a port is affected.
+
+Method: line-by-line re-read of the `18d91f1` diff and its predecessors, the
+FPU/lazy-stacking path on both M33 cores, the RP2350 bootrom handshake and SIO
+usage, the linkers versus the sections the code claims to place, and the POSIX
+signal/thread model against the kernel's lock contract.
+
+## Summary
+
+The four pass-1 defects and the pass-2 follow-ups are genuinely in-tree and the
+`18d91f1` mechanics hold (lock released before the WFI halt, PRIMASK saved and
+restored across the picker, `lock_primask[]` carried through unlock, and the
+dead `SysTick->CTRL & SCB_ICSR_PENDSTSET_Msk` test corrected to `SCB->ICSR` in
+all three inline headers). I found no regression introduced by that commit.
+
+The strongest **new** results are not in the scheduler asm; they are at the
+seams around it:
+
+1. On the Pico 2 the four hardware harness suites are built at `OS_NCPU=2` but
+   **nothing ever launches core 1 or registers `os_idle_thread_core[1]`**, so
+   they execute single-core. The `fp-switch` suite's entire cross-core FPU
+   claim is therefore vacuous on that board (`migrated_rounds` is always 0 and
+   never asserted). CONFIRMED by source absence, not by running.
+2. Two memory sections the RP2350 code and comments depend on — `.sram_text`
+   (WS2812 timing) and `.noinit` (fault record) — are **not mapped by any
+   Pico-2 linker script**; they become orphans and the stated invariants are
+   not guaranteed. CONFIRMED.
+3. The pass-2 `semi_write0` clobber fix was applied only to `hw_result.hpp`;
+   the same missing `r2/r3/ip/lr` clobbers remain in **all four**
+   `harness-suite.hpp` verdict wrappers. CONFIRMED.
+
+Everything else here is mostly hardening/robustness (runner, boot, or
+documentation) plus new evidence for the earlier conclusions.
+
+## New/updated findings
+
+### N1 — Pico 2 harness suites run single-core although built at `OS_NCPU=2` — CONFIRMED — Medium
+
+`test/pico2/tests.cmake:172`:
+
+```
+set (_harness_suites rtos-apis mutex-stress cmsis-os-validator fp-switch)
+```
+
+and `test/boards/pico2/board.cmake:28`:
+
+```
+set (UOS_BOARD_NCPU  2)
+```
+
+`board_test_ncpu()` returns 2 for all four suites (only `_single_core` gets 1).
+`uos_add_app()` derives `OS_USE_SMP_SCHEDULER` from `NCPU`, so the suites link
+the SMP kernel with two cores.
+
+But launching core 1 on the RP2350 is a board act the *test* performs:
+`test/boards/pico2/glue/multicore.cpp:80` `launch_core1(...)` is called only
+from the `test/pico2/smp-test*` mains — never from the harness. The pico2
+harness platform carries no `src/` at all:
+
+```
+tests/platforms/cortexm-pico2: cmake CMakeLists.txt include
+```
+
+whereas the AArch platforms do it in `platform-support.cpp`
+(`tests/platforms/aarch64-rpi-zero-2w/src/platform-support.cpp:101-102`:
+`smp_install_boot_threads (); smp::start_secondary_cores ();`). The harness
+sources do not call it either (`tests/sources/*/src/main.cpp` contain no
+`smp_install_boot_threads`/`launch_core1`). The port's own
+`os-core-rp2350.cpp` `start()` never launches a secondary core.
+
+Consequence: `os_idle_thread_core[1]` stays `nullptr`, CPU 1 never runs the
+picker, and every thread (all default affinity) runs on core 0. In
+particular `tests/sources/fp-switch/src/main.cpp:110-115`:
+
+```
+if (port_cpu_id () != cpu_before)
+  {
+    ++ctx->migrated_rounds;
+  }
+```
+
+can never increment on Pico 2, yet the verdict
+(`main.cpp:180`, `return (bad == 0 && rounds > 0) ? 0 : 1;`) does not require
+`migrated > 0`. A whole class of cross-core FPU defects could regress on this
+board and the suite would still PASS. Suggested: either have the pico2 harness
+platform install the secondary idle and launch core 1, or drop `fp-switch` from
+the NCPU=2 board and state the limitation.
+
+### N2 — `.sram_text` (WS2812) is not mapped to SRAM by any linker script — CONFIRMED — Medium
+
+`test/boards/pico2/glue/ws2812.cpp:120-126`:
+
+```
+// Runs from SRAM (.sram_text): the straight-line NOP bit timing must not be
+// stalled by flash XIP fetch contention ...
+__attribute__ ((section (".sram_text")))
+void
+set_pin (...)
+```
+
+No linker script under `test/boards/` defines an output section that matches
+`.sram_text` (grep for `sram_text` across every `*.ld` returns nothing). The
+nearest intent is stated in the same comment ("Projects that want it in SRAM
+place .sram_text inside the .data output section") — the pico2 scripts do not.
+`.sram_text` is orphaned; `ld` will place it with `.text` in FLASH (attributes
+`AX`), which is exactly the case the comment says must be avoided. The CDC
+gadget test (`PICO2_HAS_WS2812`, `test/boards/pico2/board.cmake`) uses this
+driver, so WS2812 bit-timing is exposed to the flash contention the code claims
+to be immune to. (The actual garbling is hardware-timing; the missing mapping is
+CONFIRMED.)
+
+### N3 — `.noinit` (fault record) is not mapped by any Pico-2 linker script — CONFIRMED — Medium
+
+`test/boards/pico2/glue/rtos-glue.cpp:18-19,37`:
+
+```
+// Fault record retained across a warm reset (placed in .noinit, which boot.S
+// does NOT zero — see the linker script).
+...
+__attribute__ ((section (".noinit"))) volatile struct pico2_fault_record
+    g_fault_rec;
+```
+
+There is no `.noinit` in `linker.ld`, `pico2-rp2350b.ld`,
+`pico2-rp2350b-psram.ld`, or `pico2-rp2350b-ram.ld`. The record's survival
+depends entirely on orphan placement landing it outside
+`__bss_start__..__bss_end__` (which `boot.S:218-225` zeroes) and on the load
+segment not carrying initial zeros to RAM. The code and its comment assert an
+invariant the linker script does not establish ("see the linker script" is not
+true). This is brittle rather than silently broken today, but any linker/output
+reordering can zero or relocate the record.
+
+### N4 — Pass-2 `semi_write0` clobber fix was applied to `hw_result.hpp` only — CONFIRMED — Medium
+
+The uncommitted working-tree fix is present at
+`cortexm/test/boards/shared/hw_result.hpp:43-46`:
+
+```
+__asm__ volatile ("bkpt 0xAB"
+                  :
+                  : "r" (r0), "r" (r1)
+                  : "r2", "r3", "ip", "lr", "memory", "cc");
+```
+
+but every board's own verdict wrapper still has only `"memory"`:
+
+- `test/pico2/harness-suite.hpp:27`
+- `test/nucleof411/harness-suite.hpp:26`
+- `test/weactf411/harness-suite.hpp:26`
+- `test/weactf412/harness-suite.hpp:28`
+
+```
+__asm__ volatile ("bkpt 0xAB" : : "r" (r0), "r" (r1) : "memory");
+```
+
+The ARM semihosting ABI allows the BKPT handler to clobber r1-r3/ip/lr; the
+compiler is told it only clobbers memory. Today the callers happen not to keep
+live values in those call-clobbered registers across the call, so this is
+latent, but it is the same defect pass 2 found and the fix is only half applied.
+
+### N5 — Runner teardown can hang past the budget and mislabels OpenOCD death — CONFIRMED — Low
+
+`test/boards/pico2/hw.sh:107` (identical shape in the other boards):
+
+```
+kill "$OCD_PID" 2>/dev/null; wait "$OCD_PID" 2>/dev/null
+```
+
+Only SIGTERM, no escalation to SIGKILL, then `wait` with no timeout. If OpenOCD
+is wedged in a CMSIS-DAP USB transfer (the very failure mode that pushes the
+watcher loop to its limit), SIGTERM may be ignored and `wait` blocks past the
+CTest timeout. Separately, when OpenOCD exits on its own (bad probe, empty
+target list), the `while kill -0` body never runs, `waited` stays 0, `rc` stays
+2, and the script prints `TIMEOUT after 600s` (pico2/hw.sh:124) for a run that
+lasted a second. This sharpens pass 2's point: the 600 s is not the amount
+waited, and it is not the only way to hang.
+
+### N6 — M33/RP2350 null-thread fatal path briefly re-enables IRQs before halting — CONFIRMED — Low
+
+`src/rtos/os-core-m33.cpp:478-487` (mirrored at `os-core-rp2350.cpp:458-467`):
+
+```
+_smp_klock.depth = _smp_klock.depth - 1;
+if (_smp_klock.depth == 0)
+  {
+    _smp_klock.owner = SMP_NO_OWNER;
+    _smp_klock_raw_release ();
+  }
+__set_PRIMASK (pri);
+__asm__ volatile ("cpsid if" ::: "memory");
+for (;;)
+  __asm__ volatile ("wfi");
+```
+
+`pri` is the PRIMASK captured at entry, normally 0, so between `__set_PRIMASK
+(pri)` and `cpsid if` the core runs with interrupts enabled in a state the
+scheduler has already declared fatal. It cannot be preempted by PendSV
+(PendSV is lowest priority and we are inside it), but it can take an arbitrary
+device IRQ whose handler may call RTOS APIs against a half-torn scheduler state.
+The release fix itself is correct; only ordering the `cpsid if` before the
+release (or simply not restoring `pri` here) would close the window. This is a
+new observation, not a repeat of the pass-2 lock-release fix.
+
+### N7 — `lock_primask[]` is declared for the generic NCPU=1 SMP path but never defined or used there — CONFIRMED — Low (latent)
+
+`include/cmsis-plus/rtos/port/os-decls.h:126` (added by `18d91f1`):
+
+```
+extern uint32_t lock_primask[OS_NCPU];
+```
+
+The definition exists only in `os-core-m33.cpp:246` and `os-core-rp2350.cpp:194`.
+The generic `os-core.cpp` — used by the `OS_USE_SMP_SCHEDULER=1, OS_NCPU=1`
+harness builds on `nucleof411` and the WeAct boards — neither defines nor
+references it. No link error today because nothing references it, but the
+declaration advertises a contract one of the three "SMP" ports does not
+implement. If any shared/ SMP code grows a `lock_primask` read, the generic
+Cortex-M build fails to link.
+
+### N8 — `multicore::launch_core1` bounds the readiness wait but not the handshake — SUSPECTED — Low
+
+`test/boards/pico2/glue/multicore.cpp:109-117` bounds core 1's readiness wait:
+
+```
+volatile std::uint32_t guard = 0;
+while (!fifo_read_valid ())
+  {
+    if (++guard > 2000000U)
+      {
+        break;
+      }
+  }
+```
+
+but the command loop that follows has no bound of its own:
+
+```
+fifo_push (cmd);
+std::uint32_t response = fifo_pop ();
+seq = (cmd == response) ? seq + 1 : 0;
+```
+
+`fifo_pop()` (`multicore.cpp:71-77`) is `while (!fifo_read_valid ()) {}`, and
+`fifo_push()` (`:61-69`) is `while (!fifo_write_ready ()) {}`. If core 1 is
+debug-halted, wedged, or never released, the guard `break`s and the code then
+blocks forever in `fifo_pop`. The comment at `:101-105` acknowledges the
+livelock case but the guard only covers the first phase. A bounded overall
+handshake (or a reset) would turn a silent hang into a diagnosable failure.
+Unverifiable without hardware; SUSPECTED.
+
+### N9 — RP2350 `port_smp_ipi` is documented non-blocking but calls a blocking push — CONFIRMED — Low
+
+`src/rtos/os-core-rp2350.cpp:628-641`:
+
+```
+// Cross-core IPI: wake another core over the SIO inter-core FIFO.
+// Non-blocking: if the FIFO is full the target already has a pending IPI.
+void
+port_smp_ipi (unsigned cpu)
+{
+  ...
+  if (multicore::fifo_write_ready ())
+    {
+      multicore::fifo_push (0x4D53u); // "SM"
+    }
+}
+```
+
+`fifo_push()` busy-waits for `FIFO_ST_RDY` (`glue/multicore.cpp:61-69`). The
+readiness check narrows but does not remove the wait: two cores can both observe
+"ready" and both push, or an overflow/ROE condition can leave `RDY` clear, and
+the second caller blocks inside `fifo_push`. The call sites are outside the
+kernel lock (`os-thread.cpp:734`, `:1515`) in thread mode, so this is a bounded
+wait in practice, but the comment promises non-blocking where the callee is not.
+Note also the FIFO is a single shared channel while `port_smp_ipi(cpu)` takes a
+target — the `cpu` argument is unused (any push wakes "the other" core), which is
+correct for two cores but silently breaks if `OS_NCPU > 2`.
+
+### N10 — POSIX `_smp_tlock` / `port_tmr_lock` / `port_tmr_unlock` / `port_smp_depth` are dead — CONFIRMED — Low
+
+Declared and defined at `include/cmsis-plus/rtos/port/os-decls.h:156-162` and
+`include/cmsis-plus/rtos/port/os-inlines.h:124-149`, and stored in
+`src/rtos/os-core.cpp:99` (`smp_tlock_t _smp_tlock = { 0 };`), but no caller
+exists anywhere in the kernel (`grep port_tmr_lock` over `micro-os-plus-iii-smp.git/src`
+and `include` is empty). It is the AArch-family "timer leaf lock" carried over
+without the timer back-end that used it. Not harmful, but it advertises an SMP
+invariant (`port_smp_depth`) that nothing enforces.
+
+### N11 — macOS tick model: per-CPU masking is not achievable with one process-directed timer — SUSPECTED — Low/Medium
+
+The uncommitted fix (`src/host_cpu.cpp:230-238`) arms the process timer on CPU 0
+only and (`:169-175`) calls `os_systick_handler()` on whichever CPU receives the
+signal. That does prevent the clock from stalling (pass 2's concern) and, because
+delivery preempts only the host thread that receives it, it does not violate
+another CPU's critical section. But the abstraction degrades: there is one tick
+for N "cores", its CPU attribution is whatever the kernel chooses, and
+`SIGEV_THREAD_ID` (the correct per-CPU timer, `host_cpu.cpp:228-229`) is
+Linux-only. I also could not verify two assumptions this branch rests on:
+`SIGRTMIN` being usable and `timer_create(CLOCK_MONOTONIC, SIGEV_SIGNAL)` being
+implemented on Darwin. If `timer_create` is absent, `arm_tick()` reaches
+`fatal("timer_create")` (`:242-245`). **Unverifiable here** (no macOS host).
+
+### N12 — Generic `os-core.cpp` SMP `switch_stacks` lacks the guards its two siblings now have — CONFIRMED — Low
+
+`src/rtos/os-core.cpp:887-909` is the third SMP scheduler copy. It does not
+check `new_thread == nullptr` before `new_thread->context_.port_.stack_ptr`
+(`:906`) and has no `__disable_irq()` around the picker, unlike
+`os-core-m33.cpp:452-488` and `os-core-rp2350.cpp:424-468`. For its only current
+consumer (`OS_NCPU=1`, so the picker always falls back to the core-0 idle) this
+cannot fault, and the base port already masks via BASEPRI/PRIMASK around the
+section. It is a documentation/consistency hazard: three files that must stay
+isomorphic are not, and the pass-2 fix touched two.
+
+### N13 — Stale/incorrect comments (documentation drift) — CONFIRMED — Nit
+
+- `test/pico2/fp-switch/harness-suite.cpp:1` — "The harness suite
+  \"mutex-stress\" on the Pico 2" and "shared by its three suites" (four exist)
+  in a file that is actually the fp-switch placeholder.
+- `test/boards/weactf411/linker.ld:2` — "Linker script for the ST
+  Nucleo-F411RE" in the WeAct F411CE board's script.
+- `test/boards/pico2/glue/rtos-glue.cpp:8-9` — claims it overrides
+  `SysTick_Handler`; it does not (the port's `os-core-rp2350.cpp:761` owns it).
+- `include/cmsis-plus/rtos/port/os-decls.h:130-132` still says the RP2350 lock
+  "is SIO hardware spinlock 0" while the struct it documents has no `lock`
+  word — the lock word lives in SIO, so the comment is right but the struct
+  shape silently differs from `include-m33`'s three-field struct (pass-2 point,
+  restated for location).
+
+### N14 — POSIX `switch_stacks` assumes `new_thread != old_thread` implies a full context save; no belt-and-braces for the `nullptr` incoming — CONFIRMED — Low
+
+`src/rtos/os-core.cpp:332-338` aborts on `new_thread == nullptr`, which is the
+correct response and better than the ARM ports' WFI halt. But unlike the ARM
+ports it does not verify that `new_thread->context_.port_.stack_ptr` is
+consistent with the deferred-publish protocol before `swapcontext`; a corrupted
+publish slot simply resumes an abandoned ucontext. This is informational given
+the abort, and I found no concrete path to it.
+
+## Agreement with earlier passes
+
+**Pass 1 — AGREE.** The four defects were real and are now fixed:
+
+- `switch_stacks` halting while holding the kernel lock: fixed; both
+  `os-core-m33.cpp:478-483` and `os-core-rp2350.cpp:458-463` release before the
+  `cpsid if`/WFI loop (modulo N6).
+- RP2350 lost M33 PRIMASK save/restore + `port_put_lock(0)`: fixed;
+  `os-core-rp2350.cpp:344` saves `lock_primask[cpu]`, `:354` restores it, and
+  `include/cmsis-plus/rtos/port/os-inlines.h:126` now externs the array.
+- No local IRQ masking around the picker: fixed in both SMP cores
+  (`os-core-m33.cpp:455-456`, `os-core-rp2350.cpp:427-428`). The rationale is
+  sound: an ISR preempting `internal_switch_threads` would recurse the
+  owner/depth lock and can still interleave non-atomic list-pointer updates.
+- Dead high-res overflow test: fixed and correct in all three inline headers —
+  `(SCB->ICSR & SCB_ICSR_PENDSTSET_Msk) != 0` (`include/…:462`,
+  `include-m33/…:397`, `include-rp2350/…:511`). `SCB_ICSR_PENDSTSET_Msk` is
+  bit 26 of `SCB->ICSR`; bit 26 of `SysTick->CTRL` is reserved, so the old test
+  was always false.
+- POSIX macOS process-directed tick: the uncommitted `host_cpu.cpp` change
+  addresses the stall; see N11 for the residual abstraction loss.
+
+**Pass 2 — mostly AGREE, with two corrections.**
+
+- AGREE: the four fixes hold in-tree, and `18d91f1` introduced no regression
+  that I could find.
+- AGREE: scheduler duplication and drift (`|1` vs `&~1`, three- vs two-field
+  `_smp_klock`) is real; N12 is a concrete new instance (the generic
+  `os-core.cpp` SMP branch was not given the guards its siblings received).
+- AGREE, sharper: the `semi_write0` clobber defect is fixed in one file only
+  (N4).
+- AGREE, sharper: per-board `hw.sh` collapses OpenOCD problems into a timeout —
+  and in fact reports `TIMEOUT after 600s` even when it waited ~0 s (N5).
+- AGREE: macOS lacks a per-CPU tick path; the residual is N11.
+- DISAGREE (narrow): pass 2's phrasing that the `semi_write0` clobbers are
+  "missing" in `hw_result.hpp` is no longer true — the fix is present there,
+  uncommitted. The live defect moved to the four `harness-suite.hpp` copies.
+
+**Unverifiable.** macOS build/signal facts (N11); hardware behaviour of the
+bootrom handshake, PSRAM/XIP marginality, WS2812 and watchdog (N2, N3, N8);
+whether `signal_nesting` is ever incremented (the validator shim that the
+comment describes, `os-decls.h:127-131`, is not in this workspace, so
+`in_handler_mode()` may or may not see the validator's SGUSR1 handler).
+
+## Good practices
+
+- The three `os-inlines.h` overflow fixes are the *right* fix, not a
+  workaround: consulting `SCB->ICSR` rather than inferring overflow from
+  `SysTick->CTRL`. Same for the RP2350 `lock_primask[]` round-trip through
+  recursive unlock.
+- `tests/platforms/cortexm-pico2/CMakeLists.txt` reuses the port's own builder
+  rather than duplicating the test list; board facts stay in `board.cmake`. The
+  port/harness boundary is otherwise clean — which is precisely why the missing
+  secondary-core launch (N1) is easy to see once you look for the launch, and
+  easy to miss otherwise.
+- The RP2350 `reboot_to_index` quiesces the other core via PSM FRCE_OFF before
+  arming the watchdog (`clocks.cpp:437-446`), and the port drains the SIO FIFO
+  before enabling the FIFO IRQ in both core-0 and core-1 bring-up
+  (`os-core-rp2350.cpp:661-667`, `:702-709`) — the bootrom handshake hazard is
+  understood, not stumbled into.
+- The POSIX port's deferred-publish protocol and its comments are unusually
+  explicit about the exact race they exist for, and the `restore_errno`
+  out-of-line helper (`host_cpu.cpp:127-131`) correctly identifies that `errno`
+  is the µOS++ thread's, not the host thread's.
+- The FPU path uses the standard ASPEN/LSPEN + `tst lr,#0x10` lazy-stacking
+  scheme consistently on core 0 (`start()`), core 1
+  (`port_smp_secondary_start`), and in the boot assembly, and the `fp-switch`
+  test checks all of s0-s31 and the FPSCR from hand-written assembly. The
+  scheme is right; the board wiring that would exercise migration is what is
+  missing (N1).
+
+---
+
+# Third-pass review — µOS++ IIIe test harness / platforms / build system
+
+Date: 2026-09-27.  Read-only.  No product file was modified; only this report
+was written (under `/tmp/opencode`).  No build that changes the tree was run.
+All `file:line` are against the current working tree of
+`/home/dan/Work/micro-os-plus-iii-smp.git`.
+
+> **Important revision note.** The working tree is *dirty* and four files carry
+> uncommitted edits that specifically answer Pass 1/Pass 2:
+> `git status` shows `M test_smpl/run-qemu.sh`, `M test_smpl/run-host.sh`,
+> `M tests/platforms/aarch32-luckfox-lyra/src/platform-support.cpp`,
+> `M tools/verify-no-duplicate-sources.py`.
+> This review judges the **working tree**; where HEAD differs this is called
+> out.  That is why two Pass-2 findings now read DISAGREE: the fix is present
+> locally but *not committed*, so HEAD still has the defect.
+
+## Scope
+
+- `tests/CMakeLists.txt`, `tests/cmake/*` (`common-options`, `global-definitions`,
+  `tests-main`).
+- All 22 `tests/platforms/*` `CMakeLists.txt`, `cmake/definitions.cmake`,
+  `cmake/dependencies-folders.cmake`, `cmake/platform-library.cmake`.
+- `tests/sources/{blinky,cmsis-os-validator,fp-switch,instrumentation,mutex-stress,rtos-apis}`.
+- `tests/device-qemu-cortexm/*`.
+- `tests/package.json` (45 top-level actions, 42 build configurations) and
+  `tests/package-lock.json` sanity.
+- `test_smpl/run-qemu.sh`, `run-host.sh`, `run-hw.sh`, `include/hw_result.hpp`,
+  `src/board-contract.cpp`.
+- Harness docs: `tests/README.md`, `docs/tests/*.md`.
+- Adjacent artefacts that the tests depend on, only where the tests invoke
+  them: `cmake/uos-app.cmake` and the sibling ports' `test/<board>/`.
+
+Method: the already-generated `tests/build/*/platform-bin/CTestTestfile.cmake`
+and `build.ninja` were parsed to enumerate the **actual** CTest case matrix per
+configuration (names, `LABELS`, `TIMEOUT`, `ENVIRONMENT`) and the **actual**
+compile lines (`compile_commands.json`), then cross-checked against
+`package.json`.  `ctest 4.4.3` was used in a scratch tree under `/tmp/opencode`
+to settle the "zero tests" exit-status question.
+
+## Summary
+
+The port-driven registration pattern (glob the port's `test/<board>/` and
+register one CTest case per directory) is sound and, for every configuration
+that has per-test actions, the actions match the generated CTest names
+**exactly** — 0 missing, 0 extra.  The real defects are around it:
+
+- The **aggregate actions** (`test`, `test-ci`, `test-all`, `test-cortex-cmake`)
+  cover a small and inconsistent subset of the 22 platforms; `test-all` runs
+  exactly one board.
+- The **generic per-configuration `test`** is `ctest -V -LE hwd`, which on every
+  hardware-only platform selects **zero** tests and exits 0 — a green no-op
+  (this is Pass 2's theme, now proven and widened).
+- The **legacy wrappers** (`test-nucleo-*-cmake`, `test-raspberrypi-pico-cmake`)
+  hardcode the build path and call `ctest -V`, bypassing both the
+  `buildFolderRelativePath` template (breaks the documented Windows support)
+  and the `-LE hwd` filter.
+- The kernel's `cmake/uos-app.cmake` forces `-O2` on all bare-metal apps, so on
+  most platforms the `-gcc-debug` and `-gcc-release` configurations differ only
+  in `NDEBUG`/asserts, not in optimisation.
+- Several documentation statements are now false (platform lists, toolchains,
+  `test-all`, CI workflows, `ENABLE_HW_TESTS`, `LABELS hw`).
+
+Severity tally: 3 High, 6 Medium, 6 Low/Nit (plus the doc-drift list).
+
+## New/updated findings
+
+### 1. HIGH — `test` / `test-ci` / `test-all` run one platform, not "all"  (CONFIRMED)
+
+`tests/package.json:115-117`:
+
+```json
+"test": [ "xpm run test-aarch32-rpi-zero-2w-cmake" ],
+```
+
+and identically `test-ci` (`:123-125`) and `test-all` (`:196-198`).  The four
+qemu-cortex platforms are only reached through `test-cortex-cmake`
+(`:332-338`) / `run-qemu-cortex-latest` (`:137-142`).  The 10 remaining platforms
+(`2xcortex-m33`, `pico2-1cpu`, `cortexm-pico2`, `cortexm-pico2-pizero`,
+`cortexm-pico2-rp2350b-psram`, `cortexm-nucleof411`, `cortexm-weactf411`,
+`cortexm-weactf412`, `aarch32-rpi3b`, `aarch64-rpi3b`) have a full
+`buildConfiguration` with `test` and per-test actions but **no top-level
+wrapper action** at all.  `grep` of the 45 top-level actions confirms only
+`aarch32-rpi-zero-2w`, `aarch64-rpi-zero-2w` and `native` get per-platform
+`test-*-cmake`.  This directly contradicts `tests/README.md:13-15` and
+`docs/tests/README-DEVELOPER.md:56-64`.
+
+### 2. HIGH — the generic `test` action is a green no-op on every hardware-only platform  (CONFIRMED; AGREE with Pass 2)
+
+`tests/package.json` gives these configurations `"test": "cd … && ctest -V -LE hwd"`:
+
+| config | line | CTest cases | cases passing `-LE hwd` |
+|---|---|---|---|
+| `cortexm-pico2-pizero-cmake-gcc-debug` | 1325 | 14 | **0** (all `hwd`) |
+| `cortexm-nucleof411-…` | 1413 | 4 | **0** |
+| `cortexm-weactf411-…` | 1446 | 5 | **0** |
+| `cortexm-weactf412-…` | 1480 | 5 | **0** |
+| `aarch32-luckfox-lyra-…` | 1728 | 20 | **0** |
+| `nucleo-f411re-…` | 1516 | 4 | **0** |
+| `nucleo-f767zi-…` | 1556 | 3 | **0** |
+| `nucleo-h743zi-…` | 1587 | 3 | **0** |
+| `raspberrypi-pico-…` | 1173 | 3 | **0** |
+
+Measured in a scratch tree with the same toolchain: `ctest -V -LE hwd` with no
+matching test prints `No tests were found!!!` and returns **EXIT=0** with
+`ctest version 4.4.3`.  So `xpm run test --config <hw-only>` is silently green.
+The last four rows are *new* relative to Pass 2 (it named only the
+hardware-only platforms); the legacy `nucleo-*`/`raspberrypi-pico`
+configurations are affected too.  `docs/tests/TESTS-CATALOG.md:32` asserts the
+opposite implication — that `-LE hwd` merely "excludes" hardware cases — and
+never says the result can be an empty, successful run.
+
+### 3. HIGH — `test-nucleo-*-cmake` / `test-raspberrypi-pico-cmake` hardcode the build path and run `hwd` tests  (CONFIRMED)
+
+`tests/package.json:373` (raspberrypi-pico), `:381`, `:389`, `:397`:
+
+```json
+"cd build/nucleo-f411re-cmake-gcc-debug && ctest -V",
+```
+
+Three problems, all confirmed against the generated matrix:
+
+1. **Not the templated path.**  Every other wrapper uses
+   `{{ properties.buildFolderRelativePath }}`.  The `short-win-paths-properties`
+   config defines that on Windows as `build/{{ shortConfigurationName }}`
+   (`package.json:709-715`; the `nucleo-*` configs inherit it at `:1504`,
+   `:1547`, `:1578`), so on Windows the directory is `build/nf4d`, and the
+   hardcoded `build/nucleo-f411re-cmake-gcc-debug` does not exist.
+   `tests/README.md:39` states the tests are performed on Windows.
+2. **Bypasses the `-LE hwd` filter.**  The wrapper runs raw `ctest -V`, which
+   includes the `hwd` cases, while the same configurations declare
+   `"test": "… ctest -V -LE hwd"` (lines 1516, 1556, 1587, 1173).  The two
+   paths disagree about what "test" means.
+3. **No power-cycle.**  On hardware the suite is one-test-per-power-cycle
+   (`test_smpl/run-hw.sh:21-28`), yet these wrappers run all `hwd` cases back to
+   back.  `raspberrypi-pico`'s own `CMakeLists.txt:146-151` even documents that
+   the generic action must skip them.
+
+### 4. MEDIUM — `link-deps-all` is wrong: duplicate `gcc13-debug`, missing `gcc14-debug`  (CONFIRMED)
+
+`tests/package.json:157-160`:
+
+```json
+"xpm run link-deps --config native-cmake-gcc13-debug",
+"xpm run link-deps --config native-cmake-gcc13-release",
+"xpm run link-deps --config native-cmake-gcc13-debug",   // duplicate
+"xpm run link-deps --config native-cmake-gcc14-release", // gcc14-debug missing
+```
+
+`native-cmake-gcc14-debug` exists (it inherits `gcc14-dependencies`), so the
+`-debug` leg is never linked.  `raspberrypi-pico` is also listed twice
+(`:185-186` and `:193-194`).
+
+### 5. MEDIUM — `-O2` is forced by the kernel, erasing the Debug/MinSizeRel distinction on port-built platforms  (CONFIRMED)
+
+`cmake/uos-app.cmake:75-82` (in the kernel repo, included by the AArch32/AArch64
+and Cortex-M ports via `uos_add_app`):
+
+```cmake
+if (CMAKE_SYSTEM_NAME STREQUAL "Generic")
+  target_compile_options (${_name} PRIVATE
+    -O2 -g3 -fmessage-length=0 -fsigned-char …)
+```
+
+This is appended *after* the toolchain's `CMAKE_<LANG>_FLAGS_<CONFIG>`, and the
+last `-O` wins.  Parsed `compile_commands.json`:
+
+| config | `-O` flags as emitted | effective |
+|---|---|---|
+| `aarch32-rpi-zero-2w-…-debug` | `-O0 -O2` | `-O2` |
+| `aarch32-rpi-zero-2w-…-release` | `-Os -O2` | `-O2` |
+| `cortexm-nucleof411-…-debug` | `-O0 -O2` | `-O2` |
+| `cortexm-nucleof411-…-release` | `-Os -O2` | `-O2` |
+| `2xcortex-m33-…-debug` / `-release` | `-O0` / `-Os` | honoured |
+| `pico2-1cpu-…-debug` / `-release` | `-O0` / `-Os` | honoured |
+| `native-…-gcc-debug` / `-release` | `-O0` / `-O3` | honoured |
+| `qemu-cortex-m3-…-debug` / `-release` | `-O0` / `-Os` | honoured |
+
+Consequence: for the port-built platforms the `-gcc-debug` and `-gcc-release`
+builds are the same optimisation level; only `-DDEBUG`/`-DTRACE` (Debug) and
+`-DNDEBUG` (MinSizeRel) differ.  The ports do document `-O2` as their intended
+level (`micro-os-plus-iii-aarch32.git/CMakeLists.txt:223-225`) and the Lyra USB
+stack deliberately overrides back to `-O0` per source
+(`test/luckfox-lyra/tests.cmake:188-192`), so this is "as designed" for the
+firmware — but the harness's `-debug`/`-release` pairs advertise a build-type
+difference the harness itself cannot deliver on these platforms.  At minimum
+`tests/README.md`/`STEPS.md` should not imply `-debug` is an `-O0` build.
+
+### 6. MEDIUM — `2xcortex-m33` enables the FPU on CPU0 only, but runs `fp-switch` SMP-2  (SUSPECTED)
+
+`tests/platforms/2xcortex-m33/CMakeLists.txt:39-45`:
+
+```cmake
+"${_qemu}" --machine mps2-an521 --cpu cortex-m33 --smp 2
+# QEMU's SSE-200 leaves CPU0's FPU/DSP off by default … enable both so a hard-float image runs.
+--global sse-200.CPU0_FPU=on --global sse-200.CPU0_DSP=on --kernel
+```
+
+The comment says "enable both" but only CPU0 is enabled.  `docs/tests/TESTS-CATALOG.md:117`
+states `fp-switch` uses **unpinned** threads that migrate to the other core,
+and `:135-136` lists `2xcortex-m33` as an `fp-switch` platform.  Probed QEMU
+9.2.4-1.1: a bogus `-global sse-200.NOPE=on` fails configuration with
+`Property 'sse-200.NOPE' not found`, while `-global sse-200.CPU1_FPU=on` and
+`-global sse-200.CPU1_DSP=on` are accepted — so the CPU1 properties exist and
+are not being set.  If CPU1's FPU is off, a migrated FP thread can take a fault
+(or the lazy-FP save/restore can misbehave).  Not executable here (no free
+QEMU run of the whole suite), hence SUSPECTED, but the comment and the code
+disagree and the fix is a one-line addition.
+
+### 7. MEDIUM — legacy tests have no `TIMEOUT`, and qemu-cortex has no `LABELS` either  (CONFIRMED; extends Pass 1)
+
+Parsed from the generated `CTestTestfile.cmake`:
+
+| family | LABELS | TIMEOUT |
+|---|---|---|
+| `qemu-cortex-m0/m3/m4f/m7f` (12 cases) | — | — |
+| `nucleo-f411re/f767zi/h743zi` (10 cases) | `hwd` | — |
+| `raspberrypi-pico` (3 cases) | `hwd` | — |
+
+Pass 1 flagged the qemu-cortex labels/timeouts; the sharper point is that the
+three `nucleo-*` and `raspberrypi-pico` families **do** carry `hwd` but still
+carry **no** `TIMEOUT`, unlike every `cortexm-*`/`aarch*` hwd case (300–1200 s).
+A hung OpenOCD therefore runs to CTest's default instead of the board runner's
+budget.
+
+### 8. MEDIUM — `2xcortex-m33` / `pico2-1cpu`: `ctest -V` instead of `-LE hwd`, and no labels  (CONFIRMED; refines Pass 2)
+
+`tests/package.json:1258` (`pico2-1cpu`) and `:1292` (`2xcortex-m33`) use
+`"test": "cd … && ctest -V"` — the only two QEMU configurations that do *not*
+pass `-LE hwd`.  Their generated cases carry no `LABELS` at all.  Harmless
+today (no `hwd` cases exist there), but it violates the invariant stated in
+`TESTS-CATALOG.md:32` and would silently run a future `hwd` case on a plain
+`xpm run test`.
+
+### 9. MEDIUM — four Pi platforms define `micro-os-plus::platform`/`-support` targets that nothing links  (CONFIRMED; hardens Pass 1)
+
+`tests/platforms/aarch32-rpi3b/cmake/platform-library.cmake:38`, `:109` (and
+the `rpi-zero-2w`, `aarch64-rpi3b`, `aarch64-rpi-zero-2w` twins) create
+`platform-<name>-interface` / `-support-interface`.  In the four corresponding
+build trees, `grep -rl` for those target names returns **0 files**.  The port's
+own builder compiles the harness support source directly:
+`micro-os-plus-iii-aarch32.git/test/rpi3b/tests.cmake:92`
+
+```cmake
+"${CMAKE_SOURCE_DIR}/platforms/${PLATFORM_NAME}/src/platform-support.cpp"
+```
+
+so the CMake targets are dead.  They also hardcode the QEMU variant
+(`QEMU_BUILD`, `-T${UOS_BOARD_LINKER_QEMU}` at
+`platform-library.cmake:54,73`), which is misleading because the file is never
+used for the hardware image.  The Lyra's equivalent *is* used
+(`aarch32-luckfox-lyra/CMakeLists.txt:66-69` links both aliases and correctly
+omits `QEMU_BUILD`), which makes the four Pi copies look like leftovers.
+
+### 10. MEDIUM — `ENABLE_HW_TESTS=ON` is dead  (CONFIRMED; AGREE with Pass 1)
+
+`tests/package.json:1725` (Lyra `commandCMakeReconfigure`):
+
+```json
+"… -D PLATFORM_NAME={{ properties.platformName }} -D ENABLE_HW_TESTS=ON"
+```
+
+`grep -rn ENABLE_HW_TESTS` over `tests/**/*.cmake`, `tests/**/CMakeLists.txt`
+and all three sibling ports returns **only** this line.  The option is not
+declared or read anywhere; the Lyra's hardware registration is unconditional
+(`aarch32-luckfox-lyra/CMakeLists.txt:49-57`).  `docs/tests/HARNESS-BOARD-TEST-CHEATSHEET.md:312-333`
+still documents the `option(ENABLE_HW_TESTS …)` + `add_hw_test()` pattern that
+is not what the code does.
+
+### 11. MEDIUM — the pinned-toolchain guard is missing from every Cortex-M platform  (CONFIRMED; expands Pass 1)
+
+Five definitions files guard the compiler version:
+
+```
+aarch32-luckfox-lyra/cmake/definitions.cmake:37-45
+aarch32-rpi3b/cmake/definitions.cmake:34-42
+aarch32-rpi-zero-2w/cmake/definitions.cmake:26-34
+aarch64-rpi3b/cmake/definitions.cmake:30-38
+aarch64-rpi-zero-2w/cmake/definitions.cmake:22-30
+```
+
+e.g. `aarch32-rpi3b/…:34-35`:
+
+```cmake
+if (DEFINED CMAKE_C_COMPILER_VERSION
+    AND NOT CMAKE_C_COMPILER_VERSION MATCHES "^15\\.2\\.")
+```
+
+None of `2xcortex-m33`, `pico2-1cpu`, `cortexm-pico2*`, `cortexm-nucleof411`,
+`cortexm-weactf411/412`, `nucleo-*` or `raspberrypi-pico` has an equivalent,
+even though every Cortex-M config pins the same `arm-none-eabi-gcc` 15.2.1
+(`package.json`, `arm-none-eabi-gcc-dependencies`).  These platforms therefore
+silently accept a stray system `arm-none-eabi-gcc` (the exact failure mode the
+guard exists for).  The `native` configurations are intentionally unguarded.
+
+### 12. LOW/MEDIUM — Pico 2 hwd timeout budget is much smaller than its siblings  (SUSPECTED)
+
+`tests/platforms/cortexm-pico2/CMakeLists.txt:86` runs `hw.sh <app> 240` with
+`TIMEOUT 300`, whereas `cortexm-pico2-pizero/CMakeLists.txt:47,51` and
+`cortexm-pico2-rp2350b-psram/CMakeLists.txt:83,87` use `hw.sh <app> 600` /
+`TIMEOUT 1200`.  Same silicon (2× Cortex-M33).  The 300 s budget also covers
+flashing, so a chatty test on the Pico 2 is likelier to be reported as a
+timeout than the identical test on the other two boards.
+
+### 13. LOW/MEDIUM — `run-qemu.sh` / `run-host.sh` single-test path has a tee/grep race  (SUSPECTED)
+
+`test_smpl/run-qemu.sh:114-118` (and `run-host.sh:75`):
+
+```bash
+timeout "$tmo" … > >(tee "$log") 2>&1
+```
+
+The shell does not wait for the `tee` process-substitution before the very next
+statement, `rc=$?` and then `grep -q 'RESULT: PASS' "$log"`.  If `tee` has not
+flushed, a passing test can be judged `NO RESULT`.  The multi-test path
+(`:120-122`) writes with plain `>` and has no such race, so only the
+`UOS_QEMU_ONLY` / `UOS_RUN_ONLY` path is exposed — precisely the path every
+`<platform>-<app>-qemu`/`-host` per-test action uses.  (The existing added
+guards at `:146-153` are correct for the missing-image case.)
+
+### 14. LOW — `file(GLOB _test_dirs …)` without `CONFIGURE_DEPENDS` in every "port builder" platform  (CONFIRMED, by design)
+
+`native/CMakeLists.txt:36`, `cortexm-pico2*/CMakeLists.txt:54`, `aarch32-*`/`aarch64-*`
+`CMakeLists.txt:55/57/67`, `aarch32-luckfox-lyra/CMakeLists.txt:35`.  A test
+added to a port does not appear in CTest until CMake reconfigures.
+`STEPS.md:172-173,191-192` documents this, so not a defect, but the globs are
+silently unguarded and the docs elsewhere (e.g. `HARNESS-BOARD-TEST-CHEATSHEET.md:367`
+"does not glob") describe the opposite mechanism.
+
+### 15. LOW — hwd registration is unguarded while qemu registration is `if (TARGET …)`  (CONFIRMED, latent)
+
+`cortexm-pico2/CMakeLists.txt:68` guards the qemu case with
+`if (TARGET "${_app}-qemu")`, but `:84-87` registers the `hwd` case
+unconditionally for every source-bearing directory.  If the port's builder ever
+stops emitting `<app>-hwd` (e.g. a directory becomes include-only, or a test is
+excluded by `tests.cmake`), the case still appears and fails at run time inside
+`hw.sh`, not at configure time.  For the current content the sets match exactly
+(pico2 16/16, pizero 14/14, rp2350b 14/14), so this is latent.
+
+### 16. LOW — `qemu-cortex-m0`'s CTest command is the M3 command  (CONFIRMED, documented)
+
+`tests/platforms/qemu-cortex-m0/CMakeLists.txt:68,95,124` all use
+`--machine mps2-an385 --cpu cortex-m3` while the platform compiles with
+`-mcpu=cortex-m0` (`qemu-cortex-m0/cmake/platform-library.cmake:59`).  The
+catalogue acknowledges this (`TESTS-CATALOG.md:65`), so it is a known
+"compiler-only M0" coverage; still worth noting that the runtime exercises no
+M0-specific behaviour.
+
+## Agreement with earlier passes
+
+**Pass 1**
+
+- AGREE — *pinned-toolchain guard only in aarch32/64*: confirmed, and it *is*
+  present in all five aarch32/aarch64 definitions (including Lyra), missing in
+  all Cortex-M ones (finding 11).
+- AGREE (hardened) — *four Pi platforms' unused `platform`/`platform-support`
+  targets + hard-wired `QEMU_BUILD`/QEMU linker*: 0 references in the generated
+  build trees (finding 9).
+- AGREE — *`ENABLE_HW_TESTS=ON` unused*: referenced only by the package.json
+  override (finding 10).
+- AGREE — *legacy qemu-cortex tests without labels/timeouts*: confirmed from
+  the matrix; extended to nucleo/raspberrypi-pico lacking `TIMEOUT` (finding 7).
+- DISAGREE — *Lyra platform-support never releasing secondaries*: the working
+  tree calls `smp_install_boot_threads()`, `smp::start_secondary_cores()` and
+  (uncommitted) `test_wait_secondaries(3000)`
+  (`aarch32-luckfox-lyra/src/platform-support.cpp:98-102`).  It does release
+  them.  HEAD already had the first two calls; the third is a local edit.
+- UNVERIFIED — *AArch64 `_gettimeofday` stub constant*: outside the files
+  re-read here; not re-checked.
+
+**Pass 2**
+
+- AGREE — *hardware-only `xpm run test` runs zero tests*: proven with
+  `ctest 4.4.3` (`No tests were found!!!`, exit 0), and widened to the
+  `nucleo-*`/`raspberrypi-pico` configurations (finding 2).
+- AGREE — *the duplicate-source gate exempts all of `tests/`*:
+  `tools/verify-no-duplicate-sources.py:100` still reads
+  `(None, "tests/", …)`, so anything under any repo's `tests/` is skipped
+  wholesale (the working-tree edit only changed the reason string).
+- DISAGREE — *`run-qemu.sh`/`run-host.sh` exit 0 when the `UOS_QEMU_ONLY`/
+  `UOS_RUN_ONLY` image is missing*: the current working tree guards this and
+  exits **2** (`run-qemu.sh:146-153`, `run-host.sh:97-104`).  **Caveat:** those
+  guards are *uncommitted* — HEAD (`git diff` base) still lacks them, so the
+  finding is valid for the committed revision.
+- DISAGREE — *the live Lyra `platform-support.cpp` is the stale copy*: the
+  working-tree file is current (releases secondaries, waits, mirrors the
+  console); the uncommitted diff only *adds* the wait and the console mirror.
+- AGREE — *`pico2-1cpu`/`2xcortex-m33` have no CTest labels*: confirmed; plus
+  their `test` action is the only one using bare `ctest -V` (finding 8).
+
+## Documentation drift
+
+1. `tests/README.md:21-37` lists **8** platforms; `tests/platforms/` has
+   **22**.  Missing: `2xcortex-m33`, `pico2-1cpu`, `cortexm-pico2`,
+   `cortexm-pico2-pizero`, `cortexm-pico2-rp2350b-psram`, `cortexm-nucleof411`,
+   `cortexm-weactf411/412`, `aarch32-rpi3b`, `aarch64-rpi3b`, `aarch32-luckfox-lyra`.
+2. `tests/README.md:56` "the toolchain is arm-none-eabi-gcc 14" vs every
+   Cortex-M config pinning `arm-none-eabi-gcc 15.2.1-1.1.1`
+   (`package.json:arm-none-eabi-gcc-dependencies`).
+3. `tests/README.md:8-15` points at `.github/workflows/ci.yml` and
+   `test-all.yml`; there is **no `.github/workflows/` directory** in the repo,
+   and `test-all` does not run all platforms (finding 1).
+4. `tests/README.md:41` "Exactly the same source files are used on all
+   platforms, without changes" — false for the board tests and the per-board
+   `platform-support.cpp` / `harness-suite.hpp`, which are inherently
+   board-specific.  True only for `tests/sources/`.
+5. `docs/tests/README-DEVELOPER.md:56-64` "Run all tests … with all available
+   toolchains: `xpm run test-all`" vs finding 1.  `:66-73` labels the section
+   "Run QEMU Cortex-M tests" but runs `install-qemu-cortex-latest` twice; the
+   second should be `run-qemu-cortex-latest`.
+6. `docs/tests/README-MAINTAINER.md:99-106` "To run al available tests … `xpm
+   run test-all`" — same contradiction (and a typo, "al").
+7. `docs/tests/TESTS-CATALOG.md:32` "`-hwd` cases … are excluded from `xpm run
+   test` (`ctest -LE hwd`)" never warns that on an all-`hwd` platform this is a
+   zero-test success; §9 `:282` likewise.  §2 `:74-79` is otherwise accurate.
+8. `docs/tests/HARNESS-BOARD-TEST-CHEATSHEET.md:312-333, 375-376, 383-387, 457`
+   describe `option(ENABLE_HW_TESTS …)`, `add_hw_test()`, `LABELS hw` and
+   `ctest -LE hw`; the code uses no such option, globs the port, and labels
+   `hwd`.  §D uses `BUILD=…/platform-bin` where the live code uses
+   `…/port-tests`.
+9. `docs/tests/HARNESS-TESTS-PARADIGM.md` is explicitly marked historical
+   (`:3-9`), but `:180` "anything else → the kernel itself" is now false
+   (`tests-main.cmake:84-105` adds the POSIX/Cortex-M ports for `native`/cortexm/
+   pico2), and `:339` still says `LABELS hw` / `ctest -LE hw`.  Since the doc
+   invites the reader to treat the code as truth, this is acceptable but should
+   not be quoted as current.
+10. `docs/tests/STEPS.md:235` lists the suites without `fp-switch`, which
+    `TESTS-CATALOG.md:117,135` and `sources/fp-switch/` do have.  (STEPS is
+    otherwise the most accurate of the harness docs.)
+
+## Good practices
+
+- The port-builder + glob + per-`(app,variant)` loop
+  (`cortexm-pico2/CMakeLists.txt:54-92`, `aarch32-rpi-zero-2w/CMakeLists.txt:55-94`)
+  makes the action list a *checked* contract: every config with per-test
+  actions matches the generated CTest names exactly (verified mechanically).
+- `test_smpl/run-qemu.sh` / `run-host.sh` keep fresh logs
+  (`rm`-less for qemu but `>` truncates; `.qemu-logs`/`.host-logs` are
+  per-configuration), classify `PASS`/`SKIP`/`FAIL`/`TIMEOUT`/`NO-RESULT`, and
+  now fail loudly when the requested image is absent.
+- `run-hw.sh` refuses `all` with a clear reason
+  (`test_smpl/run-hw.sh:280-286`) and distinguishes "debug link lost" from a
+  firmware fault (`:239-241, 256-258`) — a genuinely useful diagnostic.
+- `hw_result::fail()` routes through `std::exit(1)` (`cortexm.git/test/boards/shared/hw_result.hpp`),
+  so the Cortex-M `-qemu` CTest cases read a real non-zero exit and cannot
+  silently pass.
+- `tools/verify-no-duplicate-sources.py` refuses a `SIBLINGS` entry that has
+  become byte-identical and flags stale entries (`:236-242, 481-493`) rather
+  than granting a permanent pardon — a sound design, even though `tests/` as a
+  whole is exempt from it.
+
+### Unverifiables / limits
+
+- No full QEMU/hardware run was performed (read-only, no tree-changing build),
+  so findings 6, 12 and 13 are SUSPECTED (reasoned from QEMU property
+  acceptance, generated files and shell semantics, respectively).
+- The sibling ports' sources were read only for cross-checks the harness itself
+  invokes (test directories, `tests.cmake`, `hw_result.hpp`); a full review of
+  the ports is out of this pass's scope.
+- Pass 1's AArch64 `_gettimeofday` stub was not re-examined.
+
+---
+
 # First pass — detailed findings
 
 

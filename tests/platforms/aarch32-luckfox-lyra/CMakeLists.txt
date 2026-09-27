@@ -60,9 +60,21 @@ endforeach ()
 # The harness suites, on the same board. They supply no main() and no startup
 # hooks, so they link micro-os-plus::platform-support. The image lands where
 # the board's hw.sh looks for it, <bin>/port-tests/test/<name>-hwd.
+#
+# The board's shared SMP bring-up (test/luckfox-lyra/src/test-smp-boot.cpp:
+# smp_install_boot_threads() and test_wait_secondaries()) is compiled in here
+# too. The port's own builder adds test/<board>/src/*.cpp to every test it
+# builds, which is how the Pi harness suites get these symbols; this platform
+# registers its harness suites itself, so it names the file directly.
 function (add_harness_suite _suite _name)
   cmake_parse_arguments (T "" "" "LIBRARIES" ${ARGN})
   add_executable (${_name})
+  target_include_directories (
+    ${_name} PRIVATE "${_port_test_dir}/include"
+  )
+  target_sources (
+    ${_name} PRIVATE "${_port_test_dir}/src/test-smp-boot.cpp"
+  )
   target_link_libraries (
     ${_name}
     PRIVATE micro-os-plus::common-options test::${_suite} micro-os-plus::iii

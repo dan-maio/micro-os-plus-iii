@@ -400,7 +400,8 @@ each with its reason: FatFs's `ff.c` against the Lyra's C++ `ff.cpp`; the
 RK3506 polled SD driver against the interrupt-driven variant `smp_test_int4`
 exists to exercise; the three `smp-test-nested-clock` pairs, which differ in N
 and B and in one working matrix versus two, with comments recording a measured
-PSRAM aliasing failure at N=500 on 2 MB; `cortexm`'s two port cores; the
+PSRAM aliasing failure at N=500 on 2 MB; `cortexm`'s generic-M33 versus
+RP2350/generic `os-decls.h` and `os-c-decls.h` pairs; the
 single-core and SMP kernel-object tests; and TinyUSB's per-class
 `tusb_config.h`. Merging any of them would delete the difference that is the
 reason the file exists.
@@ -704,6 +705,11 @@ wrong, not the idea.
   before a scheduler exists. `uos_add_app()` takes `NO_KERNEL`, the port
   exports a board-only `micro-os-plus::cortexm-bare` beside the full target,
   and `BOARD_TEST_NO_KERNEL` names them. Do not rewrite them as RTOS tests.
+- **The port exports generic QEMU cores** beside the board ones:
+  `micro-os-plus::cortexm-qemu-m0/-m3/-m4f/-m7` (with `::cortexm-qemu` as an
+  alias of the M7 core) and `micro-os-plus::cortexm-qemu-m33`. The harness's
+  `qemu-cortex-*`, `pico2-1cpu` and `2xcortex-m33` platforms link them with
+  `tests/device-qemu-cortexm` at `OS_NCPU=1` (or `2` for `2xcortex-m33`).
 - **On the RP2350 boards, SMP is a per-TEST fact, not a board fact.**
   `smp-test1` (single-core RTOS bring-up) and `sc-test-ko` (single-core
   kernel-object test) define `OS_USE_SMP_SCHEDULER` in no Makefile.
@@ -784,7 +790,7 @@ wrong, not the idea.
   `port::scheduler::switch_stacks`, `port::stack::element_t`, plus a kernel
   lock and an IPI.
 - **`cortexm` SMP is not from scratch, and it is not portable.** pico2's
-  `os-core.cpp` is a complete dual-core Cortex-M33 SMP port, but its lock, IPI
+  `os-core-rp2350.cpp` is a complete dual-core Cortex-M33 SMP port, but its lock, IPI
   and CPU index are RP2350 SIO registers. It is 91% the same file as
   upstream's single-core core, and its port headers already handle every M
   profile (`6M`, `7M`, `7EM`, `8M_MAIN`) with the SMP parts gated on
@@ -807,8 +813,10 @@ wrong, not the idea.
   PSM reset `launch_core1()` issues, so the launch hangs forever on the
   bootrom readiness word. Also `reset init`, never a bare `reset` — that does
   not re-run the bootrom/XIP setup and the new image never boots.
-- **The STM32 boards are the workspace's only `OS_NCPU=1` boards.** They are
-  therefore the only ones that build the kernel's non-SMP branch at all.
+- **The STM32 boards are the only boards whose every image is `OS_NCPU=1`.**
+  The harness's `pico2-1cpu` and `qemu-cortex-m0/m3/m4f/m7f` platforms also
+  build the kernel's non-SMP branch at `OS_NCPU=1`, as do `pico2`'s
+  `sc-test-ko` and `smp-test1`.
 - **`posix-arch` was pristine upstream v1.0.1** — single host thread,
   `ucontext` coroutines, cooperative only — and is now a preemptive SMP port.
   The three POSIX defects D12 names are all fixed: `pthread_sigmask` for

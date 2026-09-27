@@ -242,6 +242,9 @@ target_link_libraries(your-target PRIVATE
 the C API and the ISO C++ API
 - `tests/sources/mutex-stress` - a stress test with 10 threads fighting for a mutex
 - `tests/sources/cmsis-os-validator` - the Arm CMSIS OS validator
+- `tests/sources/fp-switch` - FPU context-switch test (needs an FPU)
+- `tests/sources/blinky` - LED demo (`nucleo-f411re` only)
+- `tests/sources/instrumentation` - SEGGER SystemView cases (`nucleo-f411re` only)
 
 The Arm CMSIS RTOS validator is available from the separate project
 [xpacks/arm-cmsis-rtos-validator](https://github.com/xpacks/arm-cmsis-rtos-validator).

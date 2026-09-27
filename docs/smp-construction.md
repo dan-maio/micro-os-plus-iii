@@ -12,8 +12,8 @@ micro-os-plus-iii-smp          the kernel, the shared tests, the shared build ru
 micro-os-plus-iii-devices      SD, flatfs, DWC2, FatFs, BCM2837 SoC support
 micro-os-plus-iii-aarch32      ARMv7-A port
 micro-os-plus-iii-aarch64      ARMv8-A port
-micro-os-plus-iii-cortexm      ARMv7E-M / ARMv8-M port      (not yet migrated)
-micro-os-plus-iii-posix-arch   native host port             (not yet migrated)
+micro-os-plus-iii-cortexm      ARMv7E-M / ARMv8-M port
+micro-os-plus-iii-posix-arch   native host port
 ```
 
 Dependencies run **one way**. An architecture project consumes the kernel and,
@@ -99,8 +99,9 @@ extern smp_tlock_t       _smp_tlock;
 extern volatile unsigned _port_ctx_pending[OS_NCPU];
 ```
 
-This file contains no machine instructions, and all three ARM ports had it
-byte-identical but for one missing `volatile`. It therefore lives **once**, in
+This file contains no machine instructions, and the two AArch ports had it
+byte-identical but for one missing `volatile` (cortexm keeps its own, larger
+`os-decls.h`). It therefore lives **once**, in
 the kernel repository at `port/smp-common/`, and a port opts in:
 
 ```cmake

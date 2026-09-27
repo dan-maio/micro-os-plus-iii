@@ -908,9 +908,11 @@ this chapter applies unchanged.
    `@xpack-dev-tools/arm-none-eabi-gcc` 15.x,
    `@xpack-dev-tools/aarch64-none-elf-gcc` 15.x (for the QEMU shim),
    `@xpack-dev-tools/qemu-arm` 9.x.
-3. **Retire the plain-kernel platforms.** `native`, `qemu-cortex-m0/m3/m4f/m7f`,
-   `nucleo-*` and `raspberrypi-pico` all link `micro-os-plus::iii-cortexm` or
-   `micro-os-plus::iii-posix-arch`, which the SMP kernel does not provide. Remove
+3. **Retire the plain-kernel platforms.** `nucleo-*` and `raspberrypi-pico`
+   still link `micro-os-plus::iii-cortexm`, which the SMP kernel does not
+   provide. (The `qemu-cortex-m0/m3/m4f/m7f` platforms were instead reworked to
+   link the local Cortex-M port's generic cores, and `native` to the POSIX-arch
+   port.) Remove
    their entries from `buildConfigurations`, from every
    `dependencies-folders.cmake` you keep, and from the `install-ci` / `test-ci` /
    `test-all` aggregates. Leave the old harness under `micro-os-plus-iii.git`
@@ -1102,7 +1104,8 @@ test/hw.sh mutex-stress
 - [ ] `tests/` sits inside `micro-os-plus-iii-aarch32/` (so `..` is the port).
 - [ ] `micro-os-plus-iii-smp` and `-devices` are siblings (or passed via `-D`).
 - [ ] No platform or config still references `micro-os-plus::iii-cortexm` /
-      `iii-posix-arch`.
+      `iii-posix-arch`. (Satisfied for `native`, `qemu-cortex-*` and the
+      `cortexm-*`/`pico2*` platforms; `nucleo-*`/`raspberrypi-pico` remain.)
 - [ ] `CMAKE_CXX_STANDARD` is 20.
 - [ ] `platform-library.cmake` links `micro-os-plus::aarch32` and adds the
       linker script.

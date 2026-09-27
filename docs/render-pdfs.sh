@@ -3,7 +3,7 @@
 #
 # One renderer (md2pdf.py) and one record of how each document is called, so
 # the title pages and running footers are not something to be recovered from
-# the PDFs later. Re-running this on an unchanged tree reproduces all fourteen
+# the PDFs later. Re-running this on an unchanged tree reproduces all sixteen
 # files byte for byte.
 #
 #     ./docs/render-pdfs.sh            # all of them

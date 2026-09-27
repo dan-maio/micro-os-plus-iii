@@ -1753,10 +1753,12 @@ board's CPU count.
 
 ## 15. The tests
 
-Eleven applications. Nine are the SMP object tests carried from the ARM boards
+Fifteen applications. Nine are the SMP object tests carried from the ARM boards
 — **not rewritten, not adapted**: the same `main.cpp`, compiled against the
-same `uart.hpp`/`led.hpp`/`smp.hpp`/`timer_arm.hpp` API. The other two are
-upstream's own, and both run at `OS_NCPU=1` (§17).
+same `uart.hpp`/`led.hpp`/`smp.hpp`/`timer_arm.hpp` API. Two are regression
+tests added for the 2026-09-26 fixes (`flatfs-test`, `mutex-ceiling-test`), and
+four are upstream's own: `mutex-stress` and `rtos-apis` at `OS_NCPU=1`, and
+`smp-mutex-stress` and `smp-rtos-apis` at `OS_NCPU` (§17).
 
 | test | CPUs | what it exercises | runtime |
 |---|---|---|---|
@@ -1987,7 +1989,8 @@ way: `mutex-stress` ran, passed, and printed nothing at all.
 
 The port is dual-branch on `OS_USE_SMP_SCHEDULER`, which `uos_add_app()`
 derives from `NCPU GREATER 1`. This is the same arrangement `cortexm` uses to
-run its three STM32 boards at `OS_NCPU=1` off the RP2350's SMP core, and it is
+run its three STM32 boards at `OS_NCPU=1` off upstream's single-core core
+(`src/rtos/os-core.cpp`), and it is
 the first clause of step 5's gate.
 
 The surface is small, because the kernel spells only one thing two ways:

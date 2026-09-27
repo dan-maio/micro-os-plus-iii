@@ -17,10 +17,13 @@ rather than per board.
 micro-os-plus-iii-cortexm/
 ├── CMakeLists.txt
 ├── include/cmsis-plus/rtos/port/     upstream's port contract
+├── include-m33/…/port/               the generic Cortex-M33 (SSE-200 CPUID/MHU)
 ├── include-rp2350/…/port/            os-c-decls.h, os-inlines.h: the SMP branch
 ├── src/rtos/os-core.cpp              upstream: PendSV, SysTick, criticals
+├── src/rtos/os-core-m33.cpp          the generic M33 core (SSE-200 CPUID/MHU)
 ├── src/rtos/os-core-rp2350.cpp       the same, plus the SMP branch
 ├── src/semihosting-exit.cpp          strong _Exit() through SYS_EXIT
+├── src/libc/getentropy.c             getentropy() for libstdc++
 └── test/
     ├── CMakeLists.txt  hw.sh  qemu.sh
     ├── boards/<id>/     board.cmake, include/, src/, linker.ld,
@@ -44,6 +47,13 @@ tests QEMU's generic Cortex-M can run (`pico2`: `smp-test1`, `sc-test-ko` and
 the four suites; `pico2-rp2350b-psram`: `smp-test1`, `sc-test-ko`); every
 other test is listed `BOARD_TEST_HWD_ONLY`. What each test does is in
 [`tests/TESTS-CATALOG.md`](tests/TESTS-CATALOG.md).
+
+The port also exports **generic QEMU cores** beside the board ones:
+`micro-os-plus::cortexm-qemu-m0`, `-m3`, `-m4f` and `-m7` (with
+`micro-os-plus::cortexm-qemu` aliasing the M7 core), plus
+`micro-os-plus::cortexm-qemu-m33`. The harness's `qemu-cortex-*`, `pico2-1cpu`
+and `2xcortex-m33` platforms link them with the generic device in
+`tests/device-qemu-cortexm`, at `OS_NCPU=1` (or `2` for `2xcortex-m33`).
 
 ### The three RP2350 boards
 
@@ -150,13 +160,16 @@ reached the scheduler.
 
 ---
 
-## 3. Two port cores, and why they are not one
+## 3. Three port cores, and why they are not one
 
 `src/rtos/os-core.cpp` is upstream's, single-core.
 `src/rtos/os-core-rp2350.cpp` is the predecessor's pico2 core: **the same file
 plus an `OS_USE_SMP_SCHEDULER` branch**, 91% identical by line. Its port
 headers already handle every M profile — `__ARM_ARCH_6M__`, `7M`, `7EM`,
 `8M_MAIN` — and every RP2350 reference in them is inside the SMP branch.
+`src/rtos/os-core-m33.cpp` is the generic Cortex-M33 core, whose SMP branch
+uses the SSE-200's `CPUID`/MHU instead of the RP2350 SIO; the harness's
+`pico2-1cpu` and `2xcortex-m33` platforms link it.
 
 So they *could* be one file. They are not, for a reason rather than an
 oversight: **the three STM32 boards are hardware-proven on upstream's core.**
@@ -176,7 +189,7 @@ set (UOS_BOARD_PORT_INCLUDE "include-rp2350;include")
 and `os-decls.h`, the same code for both cores, comes from `include/`.
 
 Defaults are upstream's, so a board that says nothing gets what the STM32
-boards get. Merging the two is a later, explicit step.
+boards get. Merging the three is a later, explicit step.
 
 **`pico2` forces `-D__ARM_ARCH_7EM__`** although the M33 is ARMv8-M, as the
 predecessor's Makefiles did. The v7E-M path is the one that board was brought
@@ -371,7 +384,7 @@ Verified in the linked image:
   software), `pico2-sdk` (the Pico SDK) and `pico2-sdk-min` (**byte-identical**
   port files to `pico2-sdk` — not a separate port). They differ from `pico2`
   in the kernel lock and nothing else, so each is a sibling board when wanted.
-- **Merging the two port cores** (§3).
+- **Merging the three port cores** (§3).
 - **The rest of pico2's 36 application directories** — the XIP loaders and
   the `*xip*` set, which need fixture images, plus the `mini-a` board's own
   pair. None of them is about SMP.

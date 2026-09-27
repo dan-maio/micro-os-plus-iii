@@ -5,68 +5,76 @@
 The µOS++ testing strategy is to compile the sources with as many
 toolchains as possible, and run them on as many platforms as possible.
 
-There is a GitHub Actions CI workflow that runs a selection of the
-tests on every push; for details see
-[ci.yml](../.github/workflows/ci.yml) (to be activated soon for automated
-tests).
-
-A second workflow is triggered manually, and runs all available tests
-on all supported platforms; for details see
-[test-all.yml](../.github/workflows/test-all.yml) (to be activated soon).
+The harness is driven by **xpm** and **CTest**. The authoritative guides are
+[`docs/tests/STEPS.md`](../docs/tests/STEPS.md) (how to install, build, run
+and add tests) and
+[`docs/tests/TESTS-CATALOG.md`](../docs/tests/TESTS-CATALOG.md) (every
+platform, test and probe). This file is only a short orientation.
 
 ## Platforms
 
-The supported platforms for running the µOS++ IIIe tests are:
+There are 22 platforms under `platforms/`, grouped by the port they exercise:
 
-- `platforms/native` - run the test applications as native process
-  on the development machine, compiled with gcc or clang
-- `platforms/qemu-cortex-m7f` - run the tests as fully semihosted applications
-  on a QEMU mps2-an500 emulated board (an Arm Cortex-M7F development board)
-- `platforms/qemu-cortex-m4f` - run the tests as fully semihosted applications
-  on a QEMU mps2-an386 emulated board (an Arm Cortex-M4F development board)
-- `platforms/qemu-cortex-m3` - run the tests as fully semihosted applications
-  on a QEMU mps2-an385 emulated board (an Arm Cortex-M3 development board)
-- `platforms/qemu-cortex-m0` - run the tests as fully semihosted applications
-  on a QEMU mps2-an385 emulated board (an Arm Cortex-M3 development board,
-  used to run the M0 code)
-- `platforms/raspberrypi-pico` - run the tests on a physical Raspberry Pi
-  Pico (Cortex-M0+) via OpenOCD semihosting
-- `platforms/nucleo-f767zi` - run the tests on a physical NUCLEO-F767ZI
-  board (Cortex-M7) via OpenOCD semihosting
-- `platforms/nucleo-h743zi` - run the tests on a physical NUCLEO-H743ZI
-  board (Cortex-M7) via OpenOCD semihosting
+- `aarch32-rpi-zero-2w`, `aarch32-rpi3b`, `aarch32-luckfox-lyra` — the AArch32 port
+- `aarch64-rpi-zero-2w`, `aarch64-rpi3b` — the AArch64 port
+- `cortexm-pico2`, `cortexm-pico2-pizero`, `cortexm-pico2-rp2350b-psram`,
+  `cortexm-nucleof411`, `cortexm-weactf411`, `cortexm-weactf412` — the Cortex-M
+  port on real boards
+- `pico2-1cpu`, `2xcortex-m33` — the Cortex-M port's generic Cortex-M33 core
+  in QEMU (single core and dual-core SMP)
+- `qemu-cortex-m0`, `qemu-cortex-m3`, `qemu-cortex-m4f`, `qemu-cortex-m7f` —
+  the Cortex-M port's generic M0/M3/M4F/M7 cores in QEMU, run single-core
+- `native` — the POSIX-arch port, as a host process (gcc or clang)
+- `nucleo-f411re`, `nucleo-f767zi`, `nucleo-h743zi`, `raspberrypi-pico` —
+  the upstream plain-kernel platforms
+
+See [`docs/tests/TESTS-CATALOG.md`](../docs/tests/TESTS-CATALOG.md) for the
+full table with QEMU machines, CPU counts and probes.
 
 The tests are performed on GNU/Linux, macOS and Windows.
 
-Exactly the same source files are used on all platforms, without
-changes.
-
-It is planned to add more platforms, like RISC-V, but no dates are set.
+Exactly the same source files are used on all platforms, without changes.
 
 ## Toolchains
 
-For a better portability, the builds are repeated with multiple toolchains,
-even with multiple versions of the same toolchain.
-
 For native tests, the toolchains used are:
 
-- GCC 11, 12, 13, 14 (not on macOS)
-- clang 16, 17, 18, 19
+- GCC 11, 12, 13, 14 and the latest (`native-cmake-gcc`)
+- clang 13, 14, 15, 16, 17, 18, 19
 
-For Cortex-M tests, the toolchain is arm-none-eabi-gcc 14.
+For Cortex-M tests, the toolchain is arm-none-eabi-gcc 15.2.
 
 ## Tests details
+
+All commands run from this `tests/` folder. To build and run the emulated
+Cortex-M sets, debug and release:
+
+```sh
+xpm run test-cortex-cmake
+```
+
+To build and run one platform, debug and release:
+
+```sh
+xpm run test-<platform>-cmake      # e.g. test-aarch32-rpi-zero-2w-cmake
+```
+
+To run the CI set plus the native suites:
+
+```sh
+xpm run test-all
+```
 
 To run the tests in a forever loop:
 
 ```sh
 set -e
-while (true); do xpm run test-cortex-cmake -C "${HOME}/Work/micro-os-plus-iii/micro-os-plus-iii.git/tests"; done
+while (true); do xpm run test-cortex-cmake -C "${HOME}/Work/micro-os-plus-iii-smp.git/tests"; done
 ```
 
 ```sh
 set -e
-while (true); do xpm run test-all -C "${HOME}/Work/micro-os-plus-iii/micro-os-plus-iii.git/tests"; done
+while (true); do xpm run test-all -C "${HOME}/Work/micro-os-plus-iii-smp.git/tests"; done
 ```
 
 The tests ran many hours in loops without problems.
@@ -85,7 +93,19 @@ threads and checking the distribution.
 
 ### cmsis-os-validator
 
-This test uses the Arm CMSIS Validator.
+This test uses the Arm CMSIS Validator (60 cases).
+
+### fp-switch
+
+Six threads at three priorities each load their own FPU pattern and check it
+survives preemption (and, on SMP, migration). Needs an FPU; without one it
+passes with nothing to test.
+
+### blinky and instrumentation
+
+Small demos enabled only on `nucleo-f411re`. `blinky` is registered as
+`blinky-test`; `instrumentation` (SEGGER SystemView) is built but not
+registered — it runs from SEGGER Ozone with a J-Link.
 
 ### deprecated
 

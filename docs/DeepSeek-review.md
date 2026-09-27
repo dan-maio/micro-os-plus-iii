@@ -1,5 +1,10 @@
 # DeepSeek review of µOS++ IIIe — kernel, ports, platforms and tests
 
+> **Historical snapshot.** This review was taken before the 2026-09-27
+> qemu-cortex rework; some findings below (the qemu-cortex linkage, test
+> naming, labels/timeouts, and the platform README typos) have since been
+> fixed. The code is the truth where they disagree.
+
 A read-only review of the three working copies that make up the µOS++ IIIe test
 workspace: the **SMP kernel** and its harness (`micro-os-plus-iii-smp.git`), the
 **architecture ports** (`micro-os-plus-iii-{aarch32,aarch64,cortexm,posix-arch}.git`)

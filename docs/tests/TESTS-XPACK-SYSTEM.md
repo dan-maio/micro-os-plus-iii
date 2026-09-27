@@ -104,10 +104,9 @@ The key idea: **layer 2 (the test sources) is invariant**; layers 3–5 select
 *Layout*
 
 ```
-micro-os-plus-iii.git/
+micro-os-plus-iii-smp.git/
 ├── CMakeLists.txt                 # the library under test: micro-os-plus::iii
 ├── package.json                   # xPack metadata (name, version, tooling)
-├── .github/workflows/ci.yml       # GitHub Actions: matrix of OSes
 └── tests/                         # ← everything test-related lives here
     ├── package.json               # the xPack "tests" package: the matrix
     ├── CMakeLists.txt             # top-level test build entry point
@@ -119,10 +118,14 @@ micro-os-plus-iii.git/
     │   ├── rtos-apis/             #   test::rtos-apis
     │   ├── mutex-stress/          #   test::mutex-stress
     │   ├── cmsis-os-validator/    #   test::cmsis-os-validator
+    │   ├── fp-switch/             #   test::fp-switch
     │   ├── instrumentation/       #   (instrumentation support)
     │   └── blinky/                #   (simple demo/led test)
-    ├── platforms/                 # one folder per supported platform
+    ├── platforms/                 # one folder per supported platform (22)
     │   ├── native/                #   host process (gcc / clang)
+    │   ├── aarch32-*/ aarch64-*/  #   the ARM ports' boards (QEMU + hwd)
+    │   ├── cortexm-*/             #   the Cortex-M port's boards (hwd; some qemu)
+    │   ├── pico2-1cpu/ 2xcortex-m33/ # generic M33 core in QEMU (1 and 2 CPUs)
     │   ├── qemu-cortex-m0/        #   QEMU mps2-an385 (M3 machine, M0 code)
     │   ├── qemu-cortex-m3/        #   QEMU mps2-an385
     │   ├── qemu-cortex-m4f/       #   QEMU mps2-an386
@@ -264,13 +267,14 @@ fragments that configurations `inherit` from:
 | `native-dependencies` | `@micro-os-plus/posix-arch`, `@xpack-3rd-party/libucontext` |
 | `cortexm-dependencies` | `@micro-os-plus/micro-os-plus-iii-cortexm` |
 | `arm-cmsis-dependencies` | `@xpacks/arm-cmsis` |
+| `arm-cmsis-core-dependencies` | `@xpack-3rd-party/arm-cmsis-core` |
 | `arm-none-eabi-gcc-dependencies` | `@xpack-dev-tools/arm-none-eabi-gcc` |
 | `gccNN-dependencies` / `clangNN-dependencies` | pinned host compilers |
 | `qemu-arm-dependencies` | `@xpack-dev-tools/qemu-arm` |
 | `openocd-dependencies` | `@xpack-dev-tools/openocd` |
 | `short-win-paths-properties` | short build folder names on Windows (`m7fd`, `nf7r`, …) |
 
-Example (`tests/package.json:958-974`), abbreviated:
+Example (`tests/package.json:1103-1125`), abbreviated:
 
 *File:* [`micro-os-plus-iii.git/tests/package.json`](micro-os-plus-iii.git/tests/package.json)
 
@@ -279,7 +283,8 @@ Example (`tests/package.json:958-974`), abbreviated:
 "qemu-cortex-m0-cmake-gcc-debug": {
   "inherit": [
     "cortexm-actions", "cmake-actions", "cortexm-dependencies",
-    "arm-cmsis-dependencies", "arm-none-eabi-gcc-dependencies",
+    "arm-cmsis-dependencies", "arm-cmsis-core-dependencies",
+    "arm-none-eabi-gcc-dependencies",
     "qemu-arm-dependencies", "short-win-paths-properties"
   ],
   "properties": {
@@ -338,9 +343,9 @@ configurations:
 
 | Action | Coverage |
 |--------|----------|
-| `test` | default: `test-qemu-cortex-m7f-cmake` |
+| `test` | default: `test-ci` |
 | `install-all` | `npm install` + `xpm install --all-configs` |
-| `test-all` | `test-native-cmake` + `test-cortex-cmake` |
+| `test-all` | `test-ci` + `test-native-cmake` |
 | `test-native-cmake` | host GCC 11–14 + clang 16–19, debug & release (on macOS: system compiler + clang 16–19; clang 13–15 currently disabled) |
 | `test-cortex-cmake` | QEMU M0, M3, M4F, M7F, debug & release |
 | `install-ci` / `test-ci` | the CI subset (OS-aware via Liquid `{% if os.platform … %}`) |
@@ -394,11 +399,17 @@ include("cmake/common-options.cmake")                    # micro-os-plus::common
 include("platforms/${PLATFORM_NAME}/cmake/definitions.cmake")
 include("platforms/${PLATFORM_NAME}/cmake/dependencies-folders.cmake")
 xpack_add_dependencies_subdirectories("${xpack_dependencies_folders}" "xpacks-bin")
-add_subdirectory(".." "top-bin")                          # the library under test
+# Select the library under test from PLATFORM_NAME: the aarch32/aarch64/native/
+# cortexm/posix-arch port, or (fallback) the kernel one level above.
+if(PLATFORM_NAME MATCHES "^aarch32")    # ... aarch64, native, cortexm|qemu-cortex, pico2|2xcortex
+  add_subdirectory("${UOS_AARCH32_DIR}" "port-bin")
+else()
+  add_subdirectory(".." "top-bin")                        # the plain kernel
+endif()
 add_subdirectory("platforms/${PLATFORM_NAME}" "platform-bin")  # executables + tests
 ```
 
-(`tests/cmake/tests-main.cmake:41-65`.)
+(`tests/cmake/tests-main.cmake:41-119`.)
 
 ### 7.2 `common-options` — the shared compile/link interface
 
@@ -446,15 +457,15 @@ set(xpack_dependencies_folders
   "${CMAKE_SOURCE_DIR}/sources/rtos-apis"
   "${CMAKE_SOURCE_DIR}/sources/mutex-stress"
   "${CMAKE_SOURCE_DIR}/sources/cmsis-os-validator"
-  "${CMAKE_BINARY_DIR}/xpacks/@micro-os-plus/micro-os-plus-iii-cortexm"
-  "${CMAKE_BINARY_DIR}/xpacks/@xpacks/arm-cmsis"
   "${CMAKE_SOURCE_DIR}/device-qemu-cortexm"
   "${CMAKE_SOURCE_DIR}/xpacks/@xpacks/arm-cmsis-rtos-validator"
   "${CMAKE_SOURCE_DIR}/xpacks/@xpacks/chan-fatfs"
+  "${CMAKE_BINARY_DIR}/xpacks/@xpacks/arm-cmsis"
+  "${CMAKE_BINARY_DIR}/xpacks/@xpack-3rd-party/arm-cmsis-core"
 )
 ```
 
-(`tests/platforms/qemu-cortex-m7f/cmake/dependencies-folders.cmake:24-37`.)
+(`tests/platforms/qemu-cortex-m7f/cmake/dependencies-folders.cmake:8-21`.)
 
 Note the two roots: `CMAKE_SOURCE_DIR` for source xPacks, and
 `CMAKE_BINARY_DIR` for the per-config dependencies installed by xpm.
@@ -463,8 +474,10 @@ Note the two roots: `CMAKE_SOURCE_DIR` for source xPacks, and
 `micro-os-plus::platform` (alias of `platform-<name>-interface`). This is
 where CPU flags, float ABI, `-nostartfiles`, `--gc-sections`, linker script
 selection, RPATH handling (native), and the platform→library links live. For
-Cortex-M platforms it links `micro-os-plus::iii-cortexm` and
-`micro-os-plus::device` (`tests/platforms/qemu-cortex-m7f/cmake/platform-library.cmake:110-113`).
+the `qemu-cortex-*` platforms it links the local port's generic core
+(`micro-os-plus::cortexm-qemu-m0/-m3/-m4f/-m7`),
+`xpack-3rd-party::arm-cmsis-core-m` and `micro-os-plus::device`
+(`tests/platforms/qemu-cortex-m7f/cmake/platform-library.cmake:23-38`).
 
 ### 7.4 The library under test and the device package
 
@@ -490,6 +503,7 @@ library and a namespaced alias:
 | RTOS C & C++ APIs, FatFS | `test-rtos-apis-interface` | `test::rtos-apis` |
 | Mutex stress & uniformity | `test-mutex-stress-interface` | `test::mutex-stress` |
 | Arm CMSIS OS validator | `test-cmsis-os-validator-interface` | `test::cmsis-os-validator` |
+| FPU context switch | `test-fp-switch-interface` | `test::fp-switch` |
 
 They list their `INTERFACE` sources (so they are compiled into whichever
 executable links them) and expose their `include/` folder. Example:
@@ -515,12 +529,12 @@ then registers it with CTest:
 
 - **native** (`tests/platforms/native/CMakeLists.txt:75`):
   `add_test(NAME "rtos-apis-test" COMMAND rtos-apis-test)`
-- **QEMU** (`tests/platforms/qemu-cortex-m7f/CMakeLists.txt:61-68`):
+- **QEMU** (`tests/platforms/qemu-cortex-m7f/CMakeLists.txt:37-45`):
   ```cmake
-  add_test(NAME "rtos-apis-test" COMMAND
-    qemu-system-arm --machine mps2-an500 --cpu cortex-m7 --kernel rtos-apis-test.elf
+  add_test(NAME "${PLATFORM_NAME}-rtos-apis-test" COMMAND
+    "${_qemu}" --machine mps2-an500 --cpu cortex-m7 --kernel "$<TARGET_FILE:rtos-apis-test>"
     --nographic -d unimp,guest_errors
-    --semihosting-config enable=on,target=native,arg=rtos-apis-test)
+    --semihosting-config enable=on,target=native)
   ```
 - **physical board via OpenOCD**
   (`tests/platforms/nucleo-f767zi/CMakeLists.txt:66-73`):
@@ -585,7 +599,7 @@ such as RISC-V) are available to every µOS++ project.
 | `qemu-cortex-m4f` | `mps2-an386` | `cortex-m4` | `-mcpu=cortex-m4 -mfloat-abi=hard` | DSP + FPU |
 | `qemu-cortex-m7f` | `mps2-an500` | `cortex-m7` | `-mcpu=cortex-m7 -mfloat-abi=hard` | double-precision FPU |
 
-- **Toolchain:** `arm-none-eabi-gcc` 14.2.1; hard-float only on M4F/M7F.
+- **Toolchain:** `arm-none-eabi-gcc` 15.2.1; hard-float only on M4F/M7F.
 - **Execution:** fully semihosted. Tests are compiled with
   `OS_USE_TRACE_SEMIHOSTING_STDOUT` and QEMU is launched with
   `--semihosting-config enable=on,target=native,arg=<test>`.
@@ -621,7 +635,7 @@ on `PATH`.
 |------|-------|----------------|
 | Host GCC 11–14 | `@xpack-dev-tools/gcc` | 11.5.0-2.1 … 14.2.0-2.1 |
 | Host clang 13–19 | `@xpack-dev-tools/clang` | 13.0.1-1.1 … 19.1.7-1.1 |
-| Arm cross GCC | `@xpack-dev-tools/arm-none-eabi-gcc` | 14.2.1-1.1.1 |
+| Arm cross GCC | `@xpack-dev-tools/arm-none-eabi-gcc` | 15.2.1-1.1.1 |
 | QEMU Arm | `@xpack-dev-tools/qemu-arm` | 8.2.6-1.1 |
 | OpenOCD | `@xpack-dev-tools/openocd` | 0.12.0-6.1 |
 | CMake | `@xpack-dev-tools/cmake` | 3.26.5-1.1 |
@@ -663,12 +677,11 @@ Steps:
 - xpm run test-ci -C tests
 ```
 
-`install-ci` and `test-ci` are OS-aware: on Linux they run the GCC (latest,
-i.e. GCC 14) and clang (latest) native suites; on macOS they run the system
-compiler (`native-cmake-sys`) and clang; and every OS runs the QEMU
-Cortex-M0/M3/M7F suites (M4F is not in CI). Physical-board tests are excluded
-(no hardware in CI). A second, manually triggered workflow (`test-all.yml`,
-referenced in `tests/README.md`) is planned to run the full matrix.
+`install-ci` installs the top tools and the first configuration; `test-ci`
+runs the emulated sets: the four Raspberry Pi platforms, `2xcortex-m33`,
+`pico2-1cpu`, `cortexm-pico2`, `cortexm-pico2-rp2350b-psram`, and
+`test-cortex-cmake` (the four `qemu-cortex-*`, M4F included). Physical-board
+tests are excluded (no hardware in CI). `test-all` adds the native suites.
 
 ---
 
@@ -1459,10 +1472,12 @@ The aliases are the linking vocabulary shared across files:
 | `sources/rtos-apis` | `test-rtos-apis-interface` | `test::rtos-apis` |
 | `sources/mutex-stress` | `test-mutex-stress-interface` | `test::mutex-stress` |
 | `sources/cmsis-os-validator` | `test-cmsis-os-validator-interface` | `test::cmsis-os-validator` |
+| `sources/fp-switch` | `test-fp-switch-interface` | `test::fp-switch` |
 | `platforms/<p>/cmake/platform-library.cmake` | `platform-<p>-interface` | `micro-os-plus::platform` |
 | `device-qemu-cortexm` | `device-qemu-cortexm-interface` | `micro-os-plus::device` |
-| `xpacks/…/micro-os-plus-iii-cortexm` | — | `micro-os-plus::iii-cortexm` |
+| the local cortexm port's generic core | — | `micro-os-plus::cortexm-qemu-m0/-m3/-m4f/-m7` |
 | `xpacks/…/arm-cmsis` | — | `xpacks::arm-cmsis` |
+| `xpacks/…/arm-cmsis-core` | — | `xpack-3rd-party::arm-cmsis-core-m` |
 
 Rules:
 
@@ -1490,7 +1505,7 @@ rtos-apis-test
 ├── xpacks::chan-fatfs                → portable dependency
 └── micro-os-plus::platform           → platform-<name>-interface
     ├── CPU / float-ABI / -nostartfiles / --gc-sections / linker script
-    ├── micro-os-plus::iii-cortexm    → Cortex-M port
+    ├── micro-os-plus::cortexm-qemu-m* → Cortex-M port (generic QEMU core)
     └── micro-os-plus::device         → vectors, startup, exception handlers
         └── xpacks::arm-cmsis         → CMSIS headers
 ```

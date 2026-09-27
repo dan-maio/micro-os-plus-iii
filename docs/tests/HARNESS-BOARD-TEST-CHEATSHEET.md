@@ -380,8 +380,8 @@ CTest entry invokes the port's `hw.sh`.
   }
   ```
 
-  > Every hardware test carries `LABELS hw`, and the generic `test` action runs
-  > `ctest -LE hw`: on the Lyra that selects **nothing** (all four tests are
+  > Every hardware test carries `LABELS hwd`, and the generic `test` action runs
+  > `ctest -LE hwd`: on the Lyra that selects **nothing** (all four tests are
   > hardware tests), so a stray `test` cannot start a board run — use the named
   > `test-*` actions, one per power cycle. The QEMU platforms keep the inherited
   > `test` action unchanged.

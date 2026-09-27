@@ -137,7 +137,7 @@ add_library (test::mutex-stress ALIAS test-mutex-stress-interface)
 
 A suite supplies **no `main()` and no startup hooks** — that is what
 `platform-support` is for. The suites are `blinky`, `cmsis-os-validator`,
-`instrumentation`, `mutex-stress`, `rtos-apis`.
+`fp-switch`, `instrumentation`, `mutex-stress`, `rtos-apis`.
 
 ### 3.4 `package.json` — the configurations and actions
 
@@ -177,13 +177,15 @@ configuration still needs `xpm run install` once.
 |---|---|
 | `aarch32` | `micro-os-plus-iii-aarch32.git` (`add_subdirectory`) |
 | `aarch64` | `micro-os-plus-iii-aarch64.git` |
+| `native` | `micro-os-plus-iii-posix-arch.git` |
+| `cortexm`, `qemu-cortex` | `micro-os-plus-iii-cortexm.git` |
+| `pico2`, `2xcortex` | `micro-os-plus-iii-cortexm.git` |
 | anything else | the **kernel itself** (`add_subdirectory("..")`) |
 
-So the `qemu-cortex-*`, `raspberrypi-pico`, `nucleo-*` and `native` platforms
-test the **kernel** on Cortex-M (and on the host), while the `aarch32-*` and
-`aarch64-*` platforms test the ports. The `-cortexm` port is the same kind of
-thing as `-aarch32`: a port with its own `test/`, which a platform would select
-by adding a matching branch here.
+So the `qemu-cortex-*`, `cortexm-*`, `pico2-1cpu` and `2xcortex-m33` platforms
+test the local Cortex-M port, the `aarch32-*`/`aarch64-*` platforms the ARM
+ports, and `native` the POSIX-arch port; only `nucleo-*` and
+`raspberrypi-pico` fall through to the kernel itself.
 
 **Add the kernel only once.** The port already adds the kernel (and the devices
 package), so a platform must not `add_subdirectory()` them too — the duplicate
@@ -336,7 +338,7 @@ xpm run prepare --config <config> \
 * **Configure with the toolchain.** Use `commandCMakePrepareWithToolchain` in
   any action that configures, or a fresh tree picks the host compiler.
 * **Board tests are one per power cycle** on hardware; give them
-  `LABELS hw` and keep the generic `test` action to `ctest -LE hw`.
+  `LABELS hwd` and keep the generic `test` action to `ctest -LE hwd`.
 * **Tests come from the port clone**, not from `tests/`: `_port_test_dir` is
   `${UOS_AARCH32_DIR}/test/<board>`, and `add_hw_test()` enumerates them.
 

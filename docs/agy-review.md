@@ -1,5 +1,9 @@
 # µOS++ SMP Comprehensive Codebase Review
 
+> **Historical snapshot.** This review was taken before the 2026-09-27
+> qemu-cortex rework; see the resolution matrix below and the current guides
+> ([`tests/STEPS.md`](tests/STEPS.md), [`tests/TESTS-CATALOG.md`](tests/TESTS-CATALOG.md)).
+
 **Author**: Antigravity AI Pair Programmer  
 **Date**: September 2026  
 **Language Standard**: ISO/IEC 14882:2020 (C++20)  

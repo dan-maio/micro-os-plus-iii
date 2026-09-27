@@ -1,6 +1,6 @@
 # Building the AArch32 and AArch64 ports
 
-Everything needed to go from empty directory to twenty-four test images per
+Everything needed to go from empty directory to thirty test images per
 architecture, running under QEMU or on a Raspberry Pi.
 
 ---
@@ -94,8 +94,8 @@ cmake -S . -B build-lyra   -DBOARD=luckfox-lyra ...
 | board dir | `test/boards/rpi-zero-2w` | `test/boards/rpi-zero-2w` | `test/boards/luckfox-lyra` |
 | define | `LED_PIN=29` | `BOARD_RPI3B` | `SOC_RK3506` |
 | `OS_NCPU` | 4 | 4 | 3 |
-| applications | 12 | 12 | 19 |
-| build targets | 24 (both variants) | 24 (both variants) | 19 (`hwd` only) |
+| applications | 15 | 15 | 19 |
+| build targets | 30 (both variants) | 30 (both variants) | 19 (`hwd` only) |
 | QEMU machine | `raspi3b` + shim | `raspi3b` + shim | none — hardware only |
 
 `rpi3b` selects `linker-rpi3b.ld` and defines `BOARD_RPI3B`.
@@ -439,12 +439,12 @@ title page and running footer so they do not have to be recovered from the PDFs
 later:
 
 ```sh
-./docs/render-pdfs.sh                            # all thirteen
+./docs/render-pdfs.sh                            # all sixteen
 ./docs/render-pdfs.sh building-aarch32-aarch64   # just this one
 ```
 
 It calls `docs/md2pdf.py`, which takes the Markdown and the PDF as positional
 arguments and `--title`, `--subtitle`, `--footer`, `--meta KEY:VALUE` and
-`--toc` as options. This document is one of the five rendered plainly — no
+`--toc` as options. This document is one of the six rendered plainly — no
 title page, no footer, its own H1 opens page 1. Re-running the script on an
-unchanged tree reproduces all thirteen files byte for byte.
+unchanged tree reproduces all sixteen files byte for byte.

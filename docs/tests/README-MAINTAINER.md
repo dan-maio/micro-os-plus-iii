@@ -1,40 +1,46 @@
-[![GitHub issues](https://img.shields.io/github/issues/micro-os-plus/micro-os-plus-iii.svg)](https://github.com/micro-os-plus/micro-os-plus-iii/issues/)
-[![GitHub pulls](https://img.shields.io/github/issues-pr/micro-os-plus/micro-os-plus-iii.svg)](https://github.com/micro-os-plus/micro-os-plus-iii/pulls)
+[![GitHub issues](https://img.shields.io/github/issues/micro-os-plus/micro-os-plus-iii-smp.svg)](https://github.com/micro-os-plus/micro-os-plus-iii-smp/issues/)
+[![GitHub pulls](https://img.shields.io/github/issues-pr/micro-os-plus/micro-os-plus-iii-smp.svg)](https://github.com/micro-os-plus/micro-os-plus-iii-smp/pulls)
 
 # Maintainer info
+
+> **Scope.** This file is the upstream library/packaging guide, kept for
+> reference. The test harness of this repository lives in
+> `micro-os-plus-iii-smp.git/tests`; the current guides are
+> [`STEPS.md`](STEPS.md) and [`TESTS-CATALOG.md`](TESTS-CATALOG.md).
+
 
 ## Project repository
 
 The project is hosted on GitHub:
 
-- <https://github.com/micro-os-plus/micro-os-plus-iii.git>
+- <https://github.com/micro-os-plus/micro-os-plus-iii-smp.git>
 
 To clone the stable branch (`xpack`), run the following commands in a
 terminal (on Windows use the _Git Bash_ console):
 
 ```sh
-rm -rf ~/Work/micro-os-plus/micro-os-plus-iii.git && \
+rm -rf ~/Work/micro-os-plus-iii-smp.git && \
 mkdir -p ~/Work/micro-os-plus && \
 git clone \
-  https://github.com/micro-os-plus/micro-os-plus-iii.git \
-  ~/Work/micro-os-plus/micro-os-plus-iii.git
+  https://github.com/micro-os-plus/micro-os-plus-iii-smp.git \
+  ~/Work/micro-os-plus-iii-smp.git
 ```
 
 For development purposes, clone the `xpack-development` branch:
 
 ```sh
-rm -rf ~/Work/micro-os-plus/micro-os-plus-iii.git && \
+rm -rf ~/Work/micro-os-plus-iii-smp.git && \
 mkdir -p ~/Work/micro-os-plus && \
 git clone \
   --branch xpack-development \
-  https://github.com/micro-os-plus/micro-os-plus-iii.git \
-  ~/Work/micro-os-plus/micro-os-plus-iii.git
+  https://github.com/micro-os-plus/micro-os-plus-iii-smp.git \
+  ~/Work/micro-os-plus-iii-smp.git
 ```
 
 Or, if the repo was already cloned:
 
 ```sh
-git -C ~/Work/micro-os-plus/micro-os-plus-iii.git pull
+git -C ~/Work/micro-os-plus-iii-smp.git pull
 ```
 
 ## Prerequisites
@@ -50,7 +56,7 @@ There are no fixed releases, the project aims to follow the upstream releases.
 
 ### Check Git
 
-In the `micro-os-plus/micro-os-plus-iii` Git repo:
+In the `micro-os-plus/micro-os-plus-iii-smp` Git repo:
 
 - switch to the `xpack-development` branch
 - if needed, merge the `xpack` branch
@@ -67,7 +73,7 @@ for example `7.1.0-pre.1`.
 
 Check GitHub issues and pull requests:
 
-- <https://github.com/micro-os-plus/micro-os-plus-iii/issues/>
+- <https://github.com/micro-os-plus/micro-os-plus-iii-smp/issues/>
 
 and fix them; assign them to a milestone (like `7.1.0`).
 
@@ -96,13 +102,13 @@ related to the new version:
 
 ### Testing
 
-To run al available tests:
+To run all available tests:
 
 ```sh
-git -C ~/Work/micro-os-plus/micro-os-plus-iii.git pull
-xpm run deep-clean -C ~/Work/micro-os-plus/micro-os-plus-iii.git/tests
-xpm run install-all -C ~/Work/micro-os-plus/micro-os-plus-iii.git/tests
-xpm run test-all -C ~/Work/micro-os-plus/micro-os-plus-iii.git/tests
+git -C ~/Work/micro-os-plus-iii-smp.git pull
+xpm run deep-clean -C ~/Work/micro-os-plus-iii-smp.git/tests
+xpm run install-all -C ~/Work/micro-os-plus-iii-smp.git/tests
+xpm run test-all -C ~/Work/micro-os-plus-iii-smp.git/tests
 ```
 
 ### Commit the new version
@@ -118,7 +124,7 @@ xpm run test-all -C ~/Work/micro-os-plus/micro-os-plus-iii.git/tests
 - the `postversion` npm script should also update tags via `git push origin --tags`
 
 The workflow result and logs are available from the
-[Actions](https://github.com/micro-os-plus/micro-os-plus-iii/actions) page.
+[Actions](https://github.com/micro-os-plus/micro-os-plus-iii-smp/actions) page.
 
 ### Update the repo
 

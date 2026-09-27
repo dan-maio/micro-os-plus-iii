@@ -42,7 +42,7 @@ Three files, all edited by hand, decide what exists:
 |---|---|
 | **platform** | One board or emulator setup, e.g. `aarch32-rpi-zero-2w`, `cortexm-pico2`, `native`. |
 | **configuration** (`C`) | A platform plus a compiler plus a build type, e.g. `cortexm-pico2-cmake-gcc-debug`. Each one has its own folder, `build/C/`. |
-| **case** | One CTest test, named `<platform>-<test>-<variant>`. |
+| **case** | One CTest test, named `<platform>-<test>-<variant>`. A harness suite is registered as `<platform>-<suite>-test` (e.g. `qemu-cortex-m0-rtos-apis-test`), with no variant suffix. |
 | **variant** | Where the test runs. `qemu` runs in the emulator, `host` runs on the PC, and `hwd` runs on the real board. |
 | **action** | A named command in `package.json`, run as `xpm run <action> --config C`. |
 | **board test** | A test that belongs to one board. It lives in the port: `<port>/test/<board>/<test>/`. |
@@ -224,16 +224,18 @@ for pass.
 2. **Make it known to a platform.** Add `"${CMAKE_SOURCE_DIR}/sources/<name>"`
    to `tests/platforms/<platform>/cmake/dependencies-folders.cmake`.
 3. **Register it.** Add `add_harness_suite(<name> <name>-test)` to that
-   platform's `CMakeLists.txt`. The upstream platforms use
-   `add_test_executable` instead.
+   platform's `CMakeLists.txt`. The helper differs by family (see §12.6):
+   the Pi platforms use the port's own builder, `pico2-1cpu`, `2xcortex-m33`
+   and the four `qemu-cortex-m*` use `add_suite_executable`, and only
+   `nucleo-*`/`raspberrypi-pico` use `add_test_executable`.
 4. **Re-scan, add the action and run** it, as in steps 5–7 of section 5.
 
 The suite links `micro-os-plus::platform-support`, which supplies `main()`
 and the start-up hooks. A board test must **not** link it, because it has its
 own `main()`.
 
-Suites today: `mutex-stress`, `rtos-apis`, `cmsis-os-validator`, plus
-`blinky` and `instrumentation` (`nucleo-f411re` only). The validator raises
+Suites today: `mutex-stress`, `rtos-apis`, `cmsis-os-validator`, `fp-switch`,
+plus `blinky` and `instrumentation` (`nucleo-f411re` only). The validator raises
 NVIC IRQ 0: on Cortex-M that is the NVIC, on `native` the validator xpack's
 signal shims, and on the four Raspberry Pi platforms the BCM2837's local
 Mailbox 1 (see `TESTS-CATALOG.md` §4).
@@ -276,9 +278,9 @@ these five pieces. **All five are needed.**
 **A platform:**
 
 1. Copy the closest folder in `tests/platforms/`.
-2. The name must start with a prefix that `tests/cmake/tests-main.cmake`
-   knows: `aarch32`, `aarch64`, `native`, `cortexm`, `pico2` or `2xcortex`.
-   Otherwise add a new branch there.
+2.    The name must start with a prefix that `tests/cmake/tests-main.cmake`
+   knows: `aarch32`, `aarch64`, `native`, `cortexm`, `qemu-cortex`, `pico2`
+   or `2xcortex`. Otherwise add a new branch there.
 3. Set the board in `cmake/definitions.cmake`:
    `set (BOARD "<id>" CACHE STRING "" FORCE)`.
 
@@ -348,7 +350,7 @@ probe each board uses are in [`TESTS-CATALOG.md`](TESTS-CATALOG.md).
 | `pico2-1cpu` (1 × Cortex-M33) | the 3 suites + `fp-switch` | 4 qemu | – |
 | `2xcortex-m33` (2 × Cortex-M33, SMP) | the 3 suites + `fp-switch` | 4 qemu | – |
 | `qemu-cortex-m0 / m3 / m4f / m7f` | the 3 suites | 3 qemu each | – |
-| `nucleo-f411re` | 3 suites + `blinky`, `instrumentation` | – | 4 |
+| `nucleo-f411re` | 3 suites + `blinky` (`instrumentation` built, not registered) | – | 4 |
 | `nucleo-f767zi`, `nucleo-h743zi`, `raspberrypi-pico` | the 3 suites | – | 3 each |
 
 **Verified passing** (what has been run and seen to pass, not everything
@@ -444,7 +446,8 @@ xpm run test-flatfs-test-host --config native-cmake-gcc-debug
 xpm run test-flatfs-test-host --config native-cmake-gcc-release
 ```
 
-The action name is `test-<test>-<variant>`: `-qemu`, `-host` or `-hwd`.
+The action name is `test-<test>-<variant>`: `-qemu`, `-host` or `-hwd`. A
+harness suite's action is `test-<suite>-test` (e.g. `test-rtos-apis-test`).
 `xpm run` with no action lists the actions of **every** configuration, each
 expanded to its real command; to see one configuration's:
 
@@ -526,8 +529,10 @@ A portable test with `os_main()` and no `main()`; §6 has the details.
 2. For each platform that runs it: add the folder to
    `platforms/<platform>/cmake/dependencies-folders.cmake` and register it in
    `platforms/<platform>/CMakeLists.txt` with that platform's own helper
-   (`add_harness_suite()` on the Pi and Lyra platforms,
-   `add_suite_executable()` on `pico2-1cpu` and `2xcortex-m33`).
+   (the helper differs by family: `add_harness_suite()` only on
+   `aarch32-luckfox-lyra`; the Pi platforms build the suites through the
+   port's own builder; `add_suite_executable()` on `pico2-1cpu`, `2xcortex-m33`
+   and the four `qemu-cortex-m*`).
 3. On a cortexm board, also give it a board app (§7).
 4. `prepare`, add the actions, run (§12.5 steps 4–6).
 

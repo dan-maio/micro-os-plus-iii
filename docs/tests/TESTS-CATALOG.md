@@ -60,12 +60,12 @@ semihosting and mirrored on the UART.
 | `cortexm-weactf411` | cortexm | WeAct Studio F411CE | 1× Cortex-M4F | 1 | hwd only | DAPLink CMSIS-DAP (or WCH-Link) |
 | `cortexm-weactf412` | cortexm | WeAct Studio F412RE | 1× Cortex-M4F | 1 | hwd only | ST-Link |
 | `native` | posix-arch | the Linux host | host threads as CPUs | 4 (`-DNCPU`) | host | — |
-| `2xcortex-m33` | harness | QEMU `mps2-an521` | 2× Cortex-M33 | 2 | QEMU | — |
-| `pico2-1cpu` | harness | QEMU `mps2-an505` | 1× Cortex-M33 | 1 | QEMU | — |
-| `qemu-cortex-m0` | harness (upstream) | QEMU `mps2-an385` | Cortex-M3 (the platform passes `--cpu cortex-m3`, not an M0) | 1 | QEMU | — |
-| `qemu-cortex-m3` | harness (upstream) | QEMU `mps2-an385` | Cortex-M3 | 1 | QEMU | — |
-| `qemu-cortex-m4f` | harness (upstream) | QEMU `mps2-an386` | Cortex-M4 | 1 | QEMU | — |
-| `qemu-cortex-m7f` | harness (upstream) | QEMU `mps2-an500` | Cortex-M7 | 1 | QEMU | — |
+| `2xcortex-m33` | cortexm | QEMU `mps2-an521` | 2× Cortex-M33 | 2 | QEMU | — |
+| `pico2-1cpu` | cortexm | QEMU `mps2-an505` | 1× Cortex-M33 | 1 | QEMU | — |
+| `qemu-cortex-m0` | cortexm | QEMU `mps2-an385` | Cortex-M3 (the platform passes `--cpu cortex-m3`, not an M0) | 1 | QEMU | — |
+| `qemu-cortex-m3` | cortexm | QEMU `mps2-an385` | Cortex-M3 | 1 | QEMU | — |
+| `qemu-cortex-m4f` | cortexm | QEMU `mps2-an386` | Cortex-M4 | 1 | QEMU | — |
+| `qemu-cortex-m7f` | cortexm | QEMU `mps2-an500` | Cortex-M7 | 1 | QEMU | — |
 | `nucleo-f411re` | harness (upstream) | ST Nucleo-F411RE | Cortex-M4F | 1 | board | ST-Link (`interface/stlink-dap.cfg`) |
 | `nucleo-f767zi` | harness (upstream) | ST Nucleo-F767ZI | Cortex-M7 | 1 | board | ST-Link (`interface/stlink-dap.cfg`) |
 | `nucleo-h743zi` | harness (upstream) | ST Nucleo-H743ZI | Cortex-M7 | 1 | board | ST-Link (`interface/stlink-dap.cfg`) |
@@ -74,14 +74,22 @@ semihosting and mirrored on the UART.
 Every platform has a `-cmake-gcc-debug` and a `-cmake-gcc-release`
 configuration; `native` also has `-cmake-sys-*`, `-cmake-gccNN-*` and
 `-cmake-clangNN-*`. Only these configurations carry per-test `test-<app>-<variant>`
-actions: the `cortexm-*`, `aarch32-*`, `aarch64-*`, `2xcortex-m33`, `pico2-1cpu`,
-`native-cmake-gcc-*` and `native-cmake-sys-*` ones (the release configurations
-inherit them from debug).
+actions: the `cortexm-*`, `aarch32-*`, `aarch64-*`, `qemu-cortex-*`, `2xcortex-m33`,
+`pico2-1cpu`, `native-cmake-gcc-*` and `native-cmake-sys-*` ones (the release
+configurations inherit them from debug).
 
 The QEMU machine for the Pis is `raspi3b -smp 4`; the AArch32 images are
 started through a small AArch64 boot shim (`shim8.img`, image at `0x10000`).
 The Cortex-M `-qemu` images of `cortexm-pico2` and `cortexm-pico2-rp2350b-psram`
 run on `mps2-an500 -cpu cortex-m7`.
+
+The four `qemu-cortex-*` platforms link the local Cortex-M port's generic
+single-core QEMU cores (`micro-os-plus::cortexm-qemu-m0/-m3/-m4f/-m7`) and the
+generic device in `tests/device-qemu-cortexm`, and run the SMP kernel
+single-core (`OS_NCPU=1`, no `OS_USE_SMP_SCHEDULER`). Each registers three
+suites: `<platform>-rtos-apis-test`, `-mutex-stress-test` and
+`-cmsis-os-validator-test`. (`2xcortex-m33` and `pico2-1cpu` likewise link the
+local generic M33 core, `micro-os-plus::cortexm-qemu-m33`.)
 
 ## 3. Probes
 
@@ -130,7 +138,8 @@ Where each suite runs:
 | `native` | host (`rtos-apis`, single; `smp-rtos-apis`, SMP 4) | host (`mutex-stress`, single; `smp-mutex-stress`, SMP 4) | host | see §8 |
 | `2xcortex-m33` | QEMU | QEMU | QEMU | SMP 2 |
 | `pico2-1cpu` | QEMU | QEMU | QEMU | single |
-| `qemu-cortex-m*`, `nucleo-*`, `raspberrypi-pico` | yes | yes | yes | single (upstream); `nucleo-f411re` adds `blinky-test` |
+| `qemu-cortex-m0/m3/m4f/m7f` | QEMU | QEMU | QEMU | single (local cortexm port's generic QEMU cores, `OS_NCPU=1`) |
+| `nucleo-*`, `raspberrypi-pico` | yes | yes | yes | single (upstream); `nucleo-f411re` adds `blinky-test` |
 
 `fp-switch` runs where an M33 FPU does: `cortexm-pico2` (qemu, hwd),
 `2xcortex-m33` (QEMU, SMP 2) and `pico2-1cpu` (QEMU, single).

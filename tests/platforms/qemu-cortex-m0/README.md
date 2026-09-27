@@ -1,19 +1,28 @@
 # platforms/qemu-cortex-m0
 
-Support files for building Cortex-M0 application to run on the
-QEMU "mps2-an385" emulated board (which is a Cortex-M3 board).
+Support files for building a Cortex-M0 application to run on QEMU's
+`mps2-an385` emulated board. QEMU models no Cortex-M0 mps2 board, so the
+Thumb-1 image runs on the Cortex-M3 core that machine provides
+(`--cpu cortex-m3`).
+
+The library under test is the local Cortex-M port's generic single-core M0
+core, `micro-os-plus::cortexm-qemu-m0`, running the SMP kernel's non-SMP
+branch (`OS_NCPU=1`, no `OS_USE_SMP_SCHEDULER`). The platform links the
+generic device in `tests/device-qemu-cortexm` (vector table, CMSIS core,
+linker script) and registers three harness suites:
+`qemu-cortex-m0-rtos-apis-test`, `qemu-cortex-m0-mutex-stress-test` and
+`qemu-cortex-m0-cmsis-os-validator-test`.
 
 ## Include folders
 
-The following folders should be passed to the compiler during the build:
-
-- none
+The platform supplies its own `include/` (`cmsis-plus/platform.h`); the build
+adds it automatically.
 
 ## Source files
 
-The source files to be added to user projects are:
-
-- none
+Provided by the local Cortex-M port (`micro-os-plus::cortexm-qemu-m0`) and the
+generic device `tests/device-qemu-cortexm` (vectors, CMSIS, linker script);
+the platform links them automatically.
 
 ## Memory range
 
@@ -29,16 +38,16 @@ returned by `SEMIHOSTING_SYS_HEAPINFO`.
 
 ## QEMU invocation
 
-To run tests, pass the ELF file and the arguments:
+Each test is registered with CTest; the command is:
 
 ```sh
-qemu-system-arm --machine mps2-an365 --cpu cortex-m3 --nographic -d unimp,guest_errors --kernel "unit-test.elf" --semihosting-config enable=on,target=native,arg=unit-test
+qemu-system-arm --machine mps2-an385 --cpu cortex-m3 --nographic -d unimp,guest_errors --kernel "rtos-apis-test.elf" --semihosting-config enable=on,target=native
 ```
 
 For debug sessions start QEMU in GDB server mode by passing both `-s -S`:
 
 ```sh
-qemu-system-arm --machine mps2-an5365 --cpu cortex-m3 --nographic -d unimp,guest_errors -s -S --semihosting-config enable=on,target=native,arg=test
+qemu-system-arm --machine mps2-an385 --cpu cortex-m3 --nographic -d unimp,guest_errors -s -S --semihosting-config enable=on,target=native
 ```
 
 ## Links

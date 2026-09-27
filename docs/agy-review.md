@@ -879,6 +879,77 @@ Every test across all native and cross-compiled QEMU configurations was compiled
 | `micro-os-plus-iii-posix-arch.git` | Clean | Verified 100% compliant across Native POSIX test suite |
 | `micro-os-plus-iii-devices.git` | Clean | Verified 100% compliant across SD/MMC, FATFS, FlatFS, USB |
 
+---
+
+## 10. Analysis and Resolution of External Review (`DeepSeek-review.md`)
+
+### 10.1 Technical Evaluation of DeepSeek Review
+
+A comprehensive, read-only external code review was ingested from [`docs/DeepSeek-review.md`](file:///home/dan/Work/micro-os-plus-iii-smp.git/docs/DeepSeek-review.md). The review analyzed all layers of the codebase (SMP kernel, architecture ports for Cortex-M, AArch32, AArch64, POSIX, and test platforms).
+
+The evaluation confirmed several critical bugs, architectural divergence issues, and timing hazards:
+1. **Cortex-M SMP Spinlock Deadlock on Null Thread (`Critical`)**: In `switch_stacks()`, if `new_thread == nullptr`, the core entered a permanent `wfi` loop without releasing `_smp_klock`, instantly freezing the peer core upon its next critical section.
+2. **RP2350 `lock_primask` Omission (`High`)**: `port_put_lock(0)` unconditionally re-enabled interrupts with `__set_PRIMASK(0)`, corrupting the interrupt state of callers who entered critical sections with interrupts already masked.
+3. **Cortex-M SMP PendSV Reentrancy (`High`)**: `switch_stacks()` ran with interrupts enabled; higher-priority ISRs could interrupt `internal_switch_threads()` while walking `ready_threads_list_` and mutate it concurrently because `owner == cpu` permitted recursion.
+4. **Luckfox Lyra Secondary Core Boot Omission (`High`)**: In `tests/platforms/aarch32-luckfox-lyra/src/platform-support.cpp`, `harness_main_trampoline()` never called `smp_install_boot_threads()` or `smp::start_secondary_cores()`, leaving the 3-core Cortex-A7 system running tests solely on core 0.
+5. **C++20 Memory Model Data Races (`High`)**: Cross-core reads of `current_thread_[]`, thread `state_`, and `stack_ptr` in `join()`, `kill()`, and the idle reaper lacked atomic acquire semantics against the ports' release stores.
+6. **Pi AArch32 High-Resolution Clock Calibration (`High`)**: `clock_highres` read uncalibrated `CNTFRQ` (19.2 MHz) instead of the calibrated `timer_arm::frequency()` (~1 MHz), producing an ~19× timing discrepancy.
+7. **`block_pool::internal_construct_` Inverted Assertion (`High`)**: `if (res != nullptr) assert (res != nullptr)` silently ignored alignment failures.
+8. **CMSIS Timeout 32-bit Overflow (`Medium`)**: `(uint64_t)(millisec * 1000u)` overflowed 32 bits before widening for timeouts exceeding ~71.5 minutes.
+9. **Cortex-M SysTick Overflow Check (`Medium`)**: `SysTick->CTRL & SCB_ICSR_PENDSTSET_Msk` was dead code because bit 26 in `SysTick->CTRL` is reserved (should read `SCB->ICSR`).
+10. **AArch64 MMU TTBR1 Unmapped Table Walks (`Medium`)**: `TCR_EL1` left `EPD1=0`, causing invalid upper-half pointer dereferences to attempt unmapped translation table walks.
+11. **POSIX File Descriptor Manager Null Dereferences (`Medium`)**: `valid()`, `deallocate()`, and `socket()` lacked nullptr slot checks.
+12. **Semihosting `st_mode` Mask Inconsistency (`Medium`)**: In `__semihosting_stat`, setting `S_IFCHR` unconditionally combined with `S_IFREG` to yield invalid `0xA100`.
+
+---
+
+### 10.2 Implemented Resolutions
+
+| ID / Area | Target Files | Nature of Fix |
+|---|---|---|
+| **Cortex-M Spinlock** | `os-core-m33.cpp`, `os-core-rp2350.cpp` | Added release of `_smp_klock` (`depth--`, `owner = SMP_NO_OWNER`, `_smp_klock_raw_release()`) and PRIMASK restoration before halting in `wfi` on `new_thread == nullptr`. |
+| **RP2350 PRIMASK** | `os-decls.h`, `os-core-rp2350.cpp` | Declared `lock_primask[OS_NCPU]`, recorded caller `pri` on lock, and restored `port_put_lock(lock_primask[cpu])`. |
+| **PendSV Reentrancy** | `os-core-m33.cpp`, `os-core-rp2350.cpp` | Masked local interrupts via `uint32_t pri = __get_PRIMASK(); __disable_irq();` across `switch_stacks()` and restored `__set_PRIMASK(pri)` upon exit. |
+| **SysTick Overflow** | `include/cmsis-plus/rtos/port/os-inlines.h`, `include-m33/`, `include-rp2350/` | Corrected register read to `((SCB->ICSR & SCB_ICSR_PENDSTSET_Msk) != 0)`. |
+| **Luckfox Lyra SMP** | `aarch32-luckfox-lyra/src/platform-support.cpp` | Included `<smp.hpp>` and invoked `smp_install_boot_threads()` and `smp::start_secondary_cores()` in `harness_main_trampoline()`. |
+| **Memory Order** | `os-thread.cpp`, `os-idle.cpp` | Applied `__atomic_load_n(..., __ATOMIC_ACQUIRE)` on cross-core reads of `current_thread_[]`, `state_`, and `stack_ptr`. |
+| **Thread Detach** | `os-thread.cpp` | Allowed parentless top-level threads to be detached successfully without returning `EINVAL`. |
+| **Block Pool** | `src/memory/block-pool.cpp` | Inverted check to `if (res == nullptr) { assert (res != nullptr); }`. |
+| **CMSIS Timeouts** | `src/rtos/os-c-wrapper.cpp` | Replaced all 10 occurrences with `((uint64_t) millisec * 1000u)`. |
+| **List Iterators** | `include/cmsis-plus/utils/lists.h` | Added method invocation syntax `node_->next()` and `node_->prev()` in `double_list_iterator` operators. |
+| **POSIX FD Manager** | `src/posix-io/file-descriptors-manager.cpp` | Added slot nullptr checks in `valid()`, `deallocate()`, and `socket()`. |
+| **Semihosting Stat** | `src/semihosting/c-syscalls-semihosting.cpp` | Added `if ((st->st_mode & S_IFMT) == 0)` guard before setting `S_IFCHR`. |
+| **AArch32 High-Res** | `micro-os-plus-iii-aarch32.git/.../os-inlines.h` | Switched `input_clock_frequency_hz()` and `cycles_per_tick()` to call calibrated `timer_arm::frequency()`. |
+| **AArch32 SYS_EXIT** | `micro-os-plus-iii-aarch32.git/include/semihosting.hpp` | Standardized hardware exit to pass 2-word `{code, subcode}` block. |
+| **AArch64 MMU** | `micro-os-plus-iii-aarch64.git/.../mmu.cpp` | Added `(1ULL << 23)` (`EPD1`) to `TCR_EL1` to disable unmapped TTBR1 table walks. |
+
+---
+
+### 10.3 Multi-Platform Verification Matrix (Post-DeepSeek Fixes)
+
+Every platform suite was compiled with **C++20** (`-std=c++20`) and executed:
+
+| Platform Architecture | Test Preset | Tests Run | Passed | Failed | Pass Rate | Execution Time |
+|---|---|---|---|---|---|---|
+| **Native Linux Host** | `native-cmake-gcc-debug` | 16 | 16 | 0 | **100%** | 213.70 s |
+| **ARMv8-A AArch64** | `aarch64-rpi-zero-2w-cmake-gcc-debug` | 15 | 15 | 0 | **100%** | 203.14 s |
+| **ARMv7-A AArch32** | `aarch32-rpi-zero-2w-cmake-gcc-debug` | 15 | 15 | 0 | **100%** | 206.60 s |
+| **ARMv8-M Cortex-M33** | `2xcortex-m33-cmake-gcc-debug` | 4 | 4 | 0 | **100%** | 39.64 s |
+| **ARMv8-M RP2350 Pico 2** | `cortexm-pico2-cmake-gcc-debug` | 6 | 6 | 0 | **100%** | 40.64 s |
+| **TOTAL** | — | **56** | **56** | **0** | **100%** | **703.72 s (~11.7 min)** |
+
+---
+
+### 10.4 Third-Pass Commit Audit Trail
+
+| Repository | Commit SHA | Summary |
+|---|---|---|
+| `micro-os-plus-iii-cortexm.git` | `18d91f1` | `fix(port): release klock on null thread in switch_stacks, mask IRQs during context switch, and restore RP2350 PRIMASK` |
+| `micro-os-plus-iii-aarch32.git` | `cfec772` | `fix(port): use calibrated timer_arm::frequency() for clock_highres, pass 2-word block in SYS_EXIT` |
+| `micro-os-plus-iii-aarch64.git` | `04a6b4b` | `fix(mmu): set TCR_EL1.EPD1 to disable unmapped TTBR1 translation walks` |
+| `micro-os-plus-iii-smp.git` | `c1ef180` | `fix(kernel): address DeepSeek review defects across memory, CMSIS, atomics, and platform support` |
+
+
 
 
 

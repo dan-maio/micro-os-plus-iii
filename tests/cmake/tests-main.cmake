@@ -88,8 +88,9 @@ elseif (PLATFORM_NAME MATCHES "^native")
     message (FATAL_ERROR "Cannot find the POSIX-arch port at ${UOS_POSIX_ARCH_DIR}")
   endif ()
   add_subdirectory ("${UOS_POSIX_ARCH_DIR}" "port-bin")
-elseif (PLATFORM_NAME MATCHES "^cortexm")
-  # The Cortex-M port (RP2040/RP2350, STM32F4...): brings iii + devices.
+elseif (PLATFORM_NAME MATCHES "^cortexm" OR PLATFORM_NAME MATCHES "^qemu-cortex")
+  # The Cortex-M port (RP2040/RP2350, STM32F4...) and the generic QEMU
+  # Cortex-M machines (qemu-cortex-m0/m3/m4f/m7f): brings iii + devices.
   message (VERBOSE "Adding the Cortex-M port (brings iii + devices)...")
   if (NOT EXISTS "${UOS_CORTEXM_DIR}/CMakeLists.txt")
     message (FATAL_ERROR "Cannot find the Cortex-M port at ${UOS_CORTEXM_DIR}")

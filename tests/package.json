@@ -1106,6 +1106,7 @@
           "cmake-actions",
           "cortexm-dependencies",
           "arm-cmsis-dependencies",
+          "arm-cmsis-core-dependencies",
           "arm-none-eabi-gcc-dependencies",
           "qemu-arm-dependencies",
           "short-win-paths-properties"
@@ -1115,6 +1116,12 @@
           "platformName": "qemu-cortex-m0",
           "toolchainFileName": "arm-none-eabi-gcc.cmake",
           "shortConfigurationName": "m0d"
+        },
+        "actions": {
+          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE hwd",
+          "test-rtos-apis-test": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R qemu-cortex-m0-rtos-apis-test",
+          "test-mutex-stress-test": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R qemu-cortex-m0-mutex-stress-test",
+          "test-cmsis-os-validator-test": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R qemu-cortex-m0-cmsis-os-validator-test"
         }
       },
       "qemu-cortex-m0-cmake-gcc-release": {
@@ -1132,6 +1139,7 @@
           "cmake-actions",
           "cortexm-dependencies",
           "arm-cmsis-dependencies",
+          "arm-cmsis-core-dependencies",
           "arm-none-eabi-gcc-dependencies",
           "qemu-arm-dependencies",
           "short-win-paths-properties"
@@ -1141,6 +1149,12 @@
           "platformName": "qemu-cortex-m3",
           "toolchainFileName": "arm-none-eabi-gcc.cmake",
           "shortConfigurationName": "m3d"
+        },
+        "actions": {
+          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE hwd",
+          "test-rtos-apis-test": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R qemu-cortex-m3-rtos-apis-test",
+          "test-mutex-stress-test": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R qemu-cortex-m3-mutex-stress-test",
+          "test-cmsis-os-validator-test": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R qemu-cortex-m3-cmsis-os-validator-test"
         }
       },
       "qemu-cortex-m3-cmake-gcc-release": {
@@ -1158,6 +1172,7 @@
           "cmake-actions",
           "cortexm-dependencies",
           "arm-cmsis-dependencies",
+          "arm-cmsis-core-dependencies",
           "arm-none-eabi-gcc-dependencies",
           "qemu-arm-dependencies",
           "short-win-paths-properties"
@@ -1167,6 +1182,12 @@
           "platformName": "qemu-cortex-m4f",
           "toolchainFileName": "arm-none-eabi-gcc.cmake",
           "shortConfigurationName": "m4fd"
+        },
+        "actions": {
+          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE hwd",
+          "test-rtos-apis-test": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R qemu-cortex-m4f-rtos-apis-test",
+          "test-mutex-stress-test": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R qemu-cortex-m4f-mutex-stress-test",
+          "test-cmsis-os-validator-test": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R qemu-cortex-m4f-cmsis-os-validator-test"
         }
       },
       "qemu-cortex-m4f-cmake-gcc-release": {
@@ -1184,6 +1205,7 @@
           "cmake-actions",
           "cortexm-dependencies",
           "arm-cmsis-dependencies",
+          "arm-cmsis-core-dependencies",
           "arm-none-eabi-gcc-dependencies",
           "qemu-arm-dependencies",
           "short-win-paths-properties"
@@ -1193,6 +1215,12 @@
           "platformName": "qemu-cortex-m7f",
           "toolchainFileName": "arm-none-eabi-gcc.cmake",
           "shortConfigurationName": "m7fd"
+        },
+        "actions": {
+          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE hwd",
+          "test-rtos-apis-test": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R qemu-cortex-m7f-rtos-apis-test",
+          "test-mutex-stress-test": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R qemu-cortex-m7f-mutex-stress-test",
+          "test-cmsis-os-validator-test": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R qemu-cortex-m7f-cmsis-os-validator-test"
         }
       },
       "qemu-cortex-m7f-cmake-gcc-release": {

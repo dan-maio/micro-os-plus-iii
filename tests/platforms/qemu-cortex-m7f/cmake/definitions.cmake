@@ -1,31 +1,17 @@
 # -----------------------------------------------------------------------------
+# Platform: µOS++ III Cortex-M7F on QEMU's generic Cortex-M machine (single core).
 #
-# This file is part of the µOS++ project (https://micro-os-plus.github.io/).
-# Copyright (c) 2022-2025 Liviu Ionescu. All rights reserved.
-#
-# Permission to use, copy, modify, and/or distribute this software for any
-# purpose is hereby granted, under the terms of the MIT license.
-#
-# If a copy of the license was not distributed with this file, it can be
-# obtained from https://opensource.org/licenses/mit.
-#
+# `qemu-cortex-m7f` runs the portable harness suites on the SMP kernel's
+# single-core branch (OS_NCPU=1, no OS_USE_SMP_SCHEDULER), compiled for the
+# Cortex-M7F ISA (hard float) and executed on QEMU's mps2-an500 machine.
 # -----------------------------------------------------------------------------
-
-# Platform specific definitions.
-
-# -----------------------------------------------------------------------------
-
-message (VERBOSE
-         "Including tests/platforms/${PLATFORM_NAME}/cmake/definitions.cmake..."
-)
-
-# -----------------------------------------------------------------------------
-
-# Required in devices-qemu-cortexm.
-set (xpack_device_compile_definition "MICRO_OS_PLUS_DEVICE_QEMU_CORTEX_M7")
 
 set (xpack_platform_compile_definition "MICRO_OS_PLUS_PLATFORM_QEMU_CORTEX_M7F")
 
+# The generic QEMU Cortex-M7 device (device-qemu-cortexm) and its AN500 map.
+set (xpack_device_compile_definition "MICRO_OS_PLUS_DEVICE_QEMU_CORTEX_M7")
 set (xpack_device_linker_script_file_name "mem-mps2-an500.ld")
 
-# -----------------------------------------------------------------------------
+# The port's board this platform derives from. The generic image does not link
+# the board, but the Cortex-M port reads BOARD to pick its board.cmake.
+set (BOARD "nucleof411" CACHE STRING "Target board (the port's board id)" FORCE)

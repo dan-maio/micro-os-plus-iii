@@ -246,8 +246,9 @@ Three boards on the same silicon (2× Cortex-M33): `pico2`, `pico2-pizero` and
 | `smp-test-nested-clock_250` | The same, with 250 MHz enabled. | SMP 2 | — | — | hwd |
 | `rtos-apis`, `mutex-stress`, `cmsis-os-validator`, `fp-switch` | The harness suites (§4). | SMP 2 (hwd); single (qemu) | qemu, hwd | — | — |
 | `cmsis-os-validator-ram`, `mutex-stress-ram`, `rtos-apis-ram` | RAM-resident harness suites executing entirely from internal SRAM (no flash writes). | single | hwd | — | — |
+| `smp-mat-test-ram` | Parallel block solver executing entirely from internal SRAM (no flash writes). | SMP 2 | hwd | — | — |
 
-Case counts: `pico2` 25, `pico2-pizero` 14, `pico2-rp2350b-psram` 16.
+Case counts: `pico2` 26, `pico2-pizero` 14, `pico2-rp2350b-psram` 16.
 
 ### 7.2 STM32F4 boards (one CPU)
 

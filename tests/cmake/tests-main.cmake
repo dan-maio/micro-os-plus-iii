@@ -59,15 +59,24 @@ xpack_add_dependencies_subdirectories (
 # adding it twice fails on the duplicate alias. The port is chosen from the
 # platform name.
 message (VERBOSE "Selecting the library under test for ${PLATFORM_NAME}...")
-set (UOS_AARCH32_DIR "${CMAKE_SOURCE_DIR}/../../micro-os-plus-iii-aarch32.git"
+get_filename_component (_uos_siblings "${CMAKE_SOURCE_DIR}/../.." ABSOLUTE)
+
+set (UOS_AARCH32_DIR "${_uos_siblings}/micro-os-plus-iii-aarch32"
      CACHE PATH "µOS++ III AArch32 port working copy")
-set (UOS_AARCH64_DIR "${CMAKE_SOURCE_DIR}/../../micro-os-plus-iii-aarch64.git"
+set (UOS_AARCH64_DIR "${_uos_siblings}/micro-os-plus-iii-aarch64"
      CACHE PATH "µOS++ III AArch64 port working copy")
-set (UOS_POSIX_ARCH_DIR
-     "${CMAKE_SOURCE_DIR}/../../micro-os-plus-iii-posix-arch.git"
+set (UOS_POSIX_ARCH_DIR "${_uos_siblings}/micro-os-plus-iii-posix-arch"
      CACHE PATH "µOS++ III POSIX-arch port working copy")
-set (UOS_CORTEXM_DIR "${CMAKE_SOURCE_DIR}/../../micro-os-plus-iii-cortexm.git"
+set (UOS_CORTEXM_DIR "${_uos_siblings}/micro-os-plus-iii-cortexm"
      CACHE PATH "µOS++ III Cortex-M port working copy")
+
+foreach (_dep_var IN ITEMS UOS_AARCH32_DIR UOS_AARCH64_DIR UOS_POSIX_ARCH_DIR UOS_CORTEXM_DIR)
+  if (NOT EXISTS "${${_dep_var}}/CMakeLists.txt"
+      AND EXISTS "${${_dep_var}}.git/CMakeLists.txt")
+    set (${_dep_var} "${${_dep_var}}.git" CACHE PATH
+         "µOS++ III sibling working copy" FORCE)
+  endif ()
+endforeach ()
 
 if (PLATFORM_NAME MATCHES "^aarch32")
   message (VERBOSE "Adding the AArch32 port (brings iii + devices)...")

@@ -133,7 +133,7 @@ Where each suite runs:
 |---|---|---|---|---|
 | `aarch32-rpi-zero-2w`, `aarch32-rpi3b`, `aarch64-rpi-zero-2w`, `aarch64-rpi3b` | qemu, hwd | qemu, hwd | qemu, hwd | SMP 4 |
 | `aarch32-luckfox-lyra` | — | hwd (`mutex-stress-test`) | — | SMP 3 |
-| `cortexm-pico2` | qemu, hwd | qemu, hwd | qemu, hwd | SMP 2 on hwd; the `-qemu` image is single-core (below) |
+| `cortexm-pico2` | qemu, hwd, ram | qemu, hwd, ram | qemu, hwd, ram | SMP 2 on hwd; single on qemu & ram (SRAM load) |
 | `cortexm-nucleof411`, `cortexm-weactf411`, `cortexm-weactf412` | hwd | hwd | hwd | SMP ×1 |
 | `native` | host (`rtos-apis`, single; `smp-rtos-apis`, SMP 4) | host (`mutex-stress`, single; `smp-mutex-stress`, SMP 4) | host | see §8 |
 | `2xcortex-m33` | QEMU | QEMU | QEMU | SMP 2 |
@@ -245,8 +245,9 @@ Three boards on the same silicon (2× Cortex-M33): `pico2`, `pico2-pizero` and
 | `smp-test-nested-clock_200` | The same, without `PICO2_ENABLE_250MHZ` (the clock tree at its default). | SMP 2 | — | — | hwd |
 | `smp-test-nested-clock_250` | The same, with 250 MHz enabled. | SMP 2 | — | — | hwd |
 | `rtos-apis`, `mutex-stress`, `cmsis-os-validator`, `fp-switch` | The harness suites (§4). | SMP 2 (hwd); single (qemu) | qemu, hwd | — | — |
+| `cmsis-os-validator-ram`, `mutex-stress-ram`, `rtos-apis-ram` | RAM-resident harness suites executing entirely from internal SRAM (no flash writes). | single | hwd | — | — |
 
-Case counts: `pico2` 22, `pico2-pizero` 14, `pico2-rp2350b-psram` 16.
+Case counts: `pico2` 25, `pico2-pizero` 14, `pico2-rp2350b-psram` 16.
 
 ### 7.2 STM32F4 boards (one CPU)
 

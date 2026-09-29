@@ -718,6 +718,14 @@
           "@xpack-dev-tools/clang": "19.1.7-1.1"
         }
       },
+      "clang-gcc14-properties": {
+        "hidden": true,
+        "$comment": "clang < 19 cannot parse the libstdc++ of a newer host GCC (GCC 16: __builtin_popcountg); build against the xPack GCC 14 (gcc14-dependencies) instead.",
+        "properties": {
+          "clangGccToolchain": "${PWD}/{{ properties.buildFolderRelativePathPosix }}/xpacks/@xpack-dev-tools/gcc/.content",
+          "commandCMakePrepareWithToolchain": "{{ properties.commandCMakePrepare }} -D CMAKE_TOOLCHAIN_FILE=xpacks/@micro-os-plus/build-helper/cmake/toolchains/{{ properties.toolchainFileName }} -D CMAKE_C_FLAGS=--gcc-toolchain={{ properties.clangGccToolchain }} -D CMAKE_CXX_FLAGS=--gcc-toolchain={{ properties.clangGccToolchain }}"
+        }
+      },
       "qemu-arm-dependencies": {
         "hidden": true,
         "$devDependenciesUrl": "https://www.npmjs.com/package/@xpack-dev-tools/qemu-arm",
@@ -1030,7 +1038,9 @@
           "native-actions",
           "cmake-actions",
           "native-dependencies",
-          "clang16-dependencies"
+          "clang16-dependencies",
+          "gcc14-dependencies",
+          "clang-gcc14-properties"
         ],
         "properties": {
           "buildType": "Debug",
@@ -1051,7 +1061,9 @@
           "native-actions",
           "cmake-actions",
           "native-dependencies",
-          "clang17-dependencies"
+          "clang17-dependencies",
+          "gcc14-dependencies",
+          "clang-gcc14-properties"
         ],
         "properties": {
           "buildType": "Debug",
@@ -1072,7 +1084,9 @@
           "native-actions",
           "cmake-actions",
           "native-dependencies",
-          "clang18-dependencies"
+          "clang18-dependencies",
+          "gcc14-dependencies",
+          "clang-gcc14-properties"
         ],
         "properties": {
           "buildType": "Debug",

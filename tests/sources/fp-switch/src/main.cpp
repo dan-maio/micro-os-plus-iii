@@ -143,6 +143,12 @@ int
 os_main (int argc __attribute__ ((unused)),
          char* argv[] __attribute__ ((unused)))
 {
+  // The workers spin for most of each tick and at up to normal + 2 they can
+  // take the whole CPU. On real silicon a round is about a tick long, so at
+  // the default (normal) priority this thread never ran again: it never set
+  // `stop` and the test never ended. Keep the controller above the workers.
+  this_thread::thread ().priority (thread::priority::high);
+
   std::printf ("\nFPU context switch test, %u threads, %u ticks\n",
                threads_count, run_ticks);
 

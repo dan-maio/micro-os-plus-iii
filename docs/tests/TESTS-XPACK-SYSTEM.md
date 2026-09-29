@@ -1,12 +1,10 @@
 # The µOS++ IIIe Tests / xPack System
 
-> **Earlier layout — read as history.** This document describes the harness
-> as it was set up before it moved into `micro-os-plus-iii-smp.git/tests/`
-> (paths such as `micro-os-plus-iii.git/tests`, `aarch32-tests/`,
-> `test_smpl/common/` or `~/Work-smp` no longer exist, and some action names
-> have changed). For the current framework see [`STEPS.md`](STEPS.md); for
-> every test, board and probe see [`TESTS-CATALOG.md`](TESTS-CATALOG.md). The
-> code is the truth where they disagree.
+> **Current layout.** The SMP development and test framework is unified in
+> `micro-os-plus/micro-os-plus-iii` on branch `smp`, alongside sibling
+> architecture repositories `micro-os-plus-iii-{cortexm,aarch32,aarch64,devices,posix-arch}`.
+> For the step-by-step guide see [`STEPS.md`](STEPS.md); for every test, board,
+> and probe see [`TESTS-CATALOG.md`](TESTS-CATALOG.md).
 
 > A structured, reproducible and extensible test harness for
 > `@micro-os-plus/micro-os-plus-iii`, built on top of **xpm**, **xPacks**,
@@ -104,9 +102,9 @@ The key idea: **layer 2 (the test sources) is invariant**; layers 3–5 select
 *Layout*
 
 ```
-micro-os-plus-iii-smp.git/
+micro-os-plus-iii/                 # unified repo (branch smp)
 ├── CMakeLists.txt                 # the library under test: micro-os-plus::iii
-├── package.json                   # xPack metadata (name, version, tooling)
+├── package.json                   # root xPack metadata with test matrix
 └── tests/                         # ← everything test-related lives here
     ├── package.json               # the xPack "tests" package: the matrix
     ├── CMakeLists.txt             # top-level test build entry point

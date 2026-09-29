@@ -21,7 +21,7 @@ The framework has four parts:
   **actions**.
 * **VS Code**, with the xPack plugin, shows those actions as buttons.
 
-All of it lives in one folder: `micro-os-plus-iii-smp.git/tests/`.
+All of it lives in the unified `micro-os-plus-iii/` repository (branch `smp`) and its `tests/` directory.
 
 A test tells the framework its result in one of two ways:
 
@@ -60,16 +60,19 @@ default is `~/Work`, but any folder works (this machine also uses `~/TMP`).
 **How:**
 
 ```sh
-mkdir -p ~/Work && cd ~/Work
-for r in aarch32 aarch64 cortexm devices posix-arch smp; do
+mkdir -p ~/Work/micro-os-plus && cd ~/Work/micro-os-plus
+# The unified kernel & test framework:
+git clone "$HOME/Downloads/GIT/micro-os-plus-iii.git" micro-os-plus-iii
+# The architecture ports and devices:
+for r in aarch32 aarch64 cortexm devices posix-arch; do
   git clone "$HOME/Downloads/GIT/micro-os-plus-iii-$r.git" \
-            "micro-os-plus-iii-$r.git"
+            "micro-os-plus-iii-$r"
 done
 ```
 
-Keep the `.git` at the end of each folder name. The framework looks for the
-ports under exactly those names (`../../micro-os-plus-iii-<port>.git`). No
-symlinks are needed.
+The framework and ports look for siblings under both standard folder names
+(`micro-os-plus-iii-<port>`) and names with a `.git` suffix
+(`micro-os-plus-iii-<port>.git`). No symlinks are needed.
 
 ### 2.2 The tools
 
@@ -79,12 +82,13 @@ build helper and the test libraries.
 **How:**
 
 ```sh
-cd ~/Work/micro-os-plus-iii-smp.git/tests
+cd ~/Work/micro-os-plus/micro-os-plus-iii
 npm install
 xpm install
 ```
 
-All the remaining commands in this guide run from this `tests/` folder.
+All the commands in this guide can be run from the repository root or its
+`tests/` folder.
 
 ---
 

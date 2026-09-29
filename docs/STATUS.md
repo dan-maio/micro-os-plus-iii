@@ -1,8 +1,6 @@
 # Migration status
 
-**Updated:** 2026-09-26 · **Phase:** step 5 — **complete**; the xPack test
-harness now covers every port. Six repositories: the kernel, the devices
-library and four architecture ports.
+**Updated:** 2026-09-29 · **Phase:** Repositories unified under `micro-os-plus/`, xPack test system restored and verified. Six repositories: the kernel (`micro-os-plus-iii`), the devices library (`micro-os-plus-iii-devices`) and four architecture ports (`cortexm`, `aarch32`, `aarch64`, `posix-arch`).
 
 This file is the cold-start entry point. Read it, then
 `docs/specs/2026-09-20-micro-os-plus-iii-smp-unification-design.md` for the
@@ -11,7 +9,53 @@ the migration log, dated where they were measured.
 
 ---
 
-## Today (2026-09-26)
+## Today (2026-09-29)
+
+The SMP repository rebase and xPack test framework restoration have been
+completed and verified across all target architectures:
+
+- **Repository unification.** `micro-os-plus-iii-smp` was rebased on top of
+  `micro-os-plus/micro-os-plus-iii` on branch `smp`. Sibling repositories now
+  live under `/home/dan/Work/micro-os-plus/`: `micro-os-plus-iii`,
+  `micro-os-plus-iii-cortexm`, `micro-os-plus-iii-aarch32`,
+  `micro-os-plus-iii-aarch64`, `micro-os-plus-iii-devices`, and
+  `micro-os-plus-iii-posix-arch`. CMake sibling discovery resolves directories
+  both with and without `.git` suffix (`micro-os-plus-iii-<port>` and
+  `micro-os-plus-iii-<port>.git`).
+- **xPack test matrix restoration.** Restored the complete xPack test system
+  structure in root `package.json` and `tests/package.json` with 35+ configurations.
+  Automated testing (`xpm run test --config C`) runs `ctest -V -LE hwd`, executing
+  emulated and host tests while excluding hardware tests.
+- **Pico 2 RAM targets.** Added pure-RAM resident test targets (`smp-mat-test-ram`,
+  `rtos-apis-ram`, `mutex-stress-ram`, `cmsis-os-validator-ram`) executing
+  directly from internal SRAM via OpenOCD without flash writes (26 tests total
+  on `cortexm-pico2`).
+- **Code bugfix in `hw_result.hpp`.** In
+  `micro-os-plus-iii-cortexm/test/boards/shared/hw_result.hpp`, changed
+  `std::exit(0)` to `std::_Exit(0)`. Normal `std::exit()` invokes `atexit`
+  handlers and static object destructors while RTOS threads are still running,
+  causing `assert(empty())` assertion failures in `double_list::~double_list()`.
+  `std::_Exit(0)` terminates execution cleanly without running static destructors.
+- **Runner extension fallback.** Added `.elf` file extension handling in board
+  runner scripts (`hw.sh`) to support varied toolchain output conventions.
+- **AArch64 Raspberry Pi verification.** 30/30 tests PASS under QEMU
+  `raspi3b -smp 4` across `aarch64-rpi-zero-2w` (15/15) and `aarch64-rpi3b`
+  (15/15).
+- **Pico 2 / Cortex-M33 verification.** 16/16 emulated tests PASS:
+  - `pico2-1cpu-cmake-gcc-debug`: 4/4 PASS on QEMU `mps2-an505`.
+  - `2xcortex-m33-cmake-gcc-debug`: 4/4 PASS on QEMU `mps2-an521`.
+  - `cortexm-pico2-cmake-gcc-debug`: 6/6 PASS on QEMU `mps2-an500`.
+  - `cortexm-pico2-rp2350b-psram-cmake-gcc-debug`: 2/2 PASS on QEMU `mps2-an500`.
+- **STM32F4 (Cortex-M4F) verification on QEMU `netduinoplus2`.**
+  - `cortexm-nucleof411`: 4/4 PASS on QEMU `netduinoplus2 -cpu cortex-m4`
+    (`mos-test1`, `rtos-apis`, `mutex-stress`, `cmsis-os-validator`).
+  - `cortexm-weactf411`: 5/5 PASS on QEMU `netduinoplus2 -cpu cortex-m4`
+    (`mos-test1`, `spi-pipeline`, `rtos-apis`, `mutex-stress`, `cmsis-os-validator`).
+  - `cortexm-weactf412`: Confirmed hardware-only due to 256 KB SRAM requirement
+    (`_estack` at `0x20040000`, exceeding QEMU Netduino's 128 KB memory map) and
+    unsupported `DMA2_Stream7` in `uart-test1`.
+
+## 2026-09-26
 
 A review of the SMP code found ten defects; all ten are fixed, each with a test
 that failed first where one could be written.

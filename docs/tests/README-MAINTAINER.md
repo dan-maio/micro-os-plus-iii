@@ -4,8 +4,8 @@
 # Maintainer info
 
 > **Scope.** This file is the upstream library/packaging guide, kept for
-> reference. The test harness of this repository lives in
-> `micro-os-plus-iii-smp.git/tests`; the current guides are
+> reference. The SMP kernel and test harness are unified in
+> `micro-os-plus-iii` (branch `smp`); the current guides are
 > [`STEPS.md`](STEPS.md) and [`TESTS-CATALOG.md`](TESTS-CATALOG.md).
 
 

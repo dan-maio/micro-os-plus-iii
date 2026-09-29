@@ -33,20 +33,25 @@ micro-os-plus-iii-cortexm/
 
 | board | part | CPUs | tests |
 |---|---|---|---|
-| `nucleof411` | STM32F411RE, Cortex-M4F | 1 | 4 — `mos-test1` + the 3 harness suites |
-| `weactf411` | STM32F411CE, Cortex-M4F | 1 | 5 — `mos-test1`, `spi-pipeline` + the 3 suites |
-| `weactf412` | STM32F412RE, Cortex-M4F | 1 | 5 — `mos-test1`, `uart-test1` + the 3 suites |
-| `pico2` | RP2350, 2× Cortex-M33, 4 MB flash | **2** | 16 — 12 port tests + the 4 suites (the 3 plus `fp-switch`) |
-| `pico2-rp2350b-psram` | RP2350B, 16 MB flash + 8 MB PSRAM | **2** | 14 |
-| `pico2-pizero` | RP2350B, 16 MB flash, Pi-Zero form factor | **2** | 14 |
+| `nucleof411` | STM32F411RE, Cortex-M4F | 1 | 4 — `mos-test1` + the 3 harness suites (QEMU `netduinoplus2`, hwd) |
+| `weactf411` | STM32F411CE, Cortex-M4F | 1 | 5 — `mos-test1`, `spi-pipeline` + the 3 suites (QEMU `netduinoplus2`, hwd) |
+| `weactf412` | STM32F412RE, Cortex-M4F | 1 | 5 — `mos-test1`, `uart-test1` + the 3 suites (hwd only; QEMU Netduino SRAM 128K < 256K) |
+| `pico2` | RP2350, 2× Cortex-M33, 4 MB flash | **2** | 26 — 12 port tests + 4 suites (6 QEMU `mps2-an500`, 16 hwd, 4 ram) |
+| `pico2-rp2350b-psram` | RP2350B, 16 MB flash + 8 MB PSRAM | **2** | 16 — 14 port tests (2 QEMU `mps2-an500`, 14 hwd) |
+| `pico2-pizero` | RP2350B, 16 MB flash, Pi-Zero form factor | **2** | 14 — hwd only |
 
-Four are **hardware-only**: they set no `UOS_BOARD_LINKER_QEMU`, so each
-builds one image per test and `test/qemu.sh` answers by naming `hw.sh`.
-`pico2` and `pico2-rp2350b-psram` set it, and build a `-qemu` image for the
-tests QEMU's generic Cortex-M can run (`pico2`: `smp-test1`, `sc-test-ko` and
-the four suites; `pico2-rp2350b-psram`: `smp-test1`, `sc-test-ko`); every
-other test is listed `BOARD_TEST_HWD_ONLY`. What each test does is in
-[`tests/TESTS-CATALOG.md`](tests/TESTS-CATALOG.md).
+`nucleof411` and `weactf411` execute cleanly under QEMU with machine `netduinoplus2`
+(`-M netduinoplus2 -cpu cortex-m4 -nographic -semihosting`), passing 4/4 and 5/5
+tests respectively. `weactf412` is hardware-only because the Netduino Plus 2
+machine emulates only 128 KB of SRAM while STM32F412 requires 256 KB (`_estack`
+at `0x20040000`), and `uart-test1` uses DMA2 Stream 7 (`DMA2_Stream7`) which is
+not emulated.
+
+On RP2350, `pico2` and `pico2-rp2350b-psram` build `-qemu` images on `mps2-an500 -cpu cortex-m7`
+(`pico2`: `smp-test1`, `sc-test-ko` and the four suites; `pico2-rp2350b-psram`:
+`smp-test1`, `sc-test-ko`). `pico2` also provides pure-RAM resident test targets
+(`smp-mat-test-ram`, `rtos-apis-ram`, `mutex-stress-ram`, `cmsis-os-validator-ram`).
+What each test does is in [`tests/TESTS-CATALOG.md`](tests/TESTS-CATALOG.md).
 
 The port also exports **generic QEMU cores** beside the board ones:
 `micro-os-plus::cortexm-qemu-m0`, `-m3`, `-m4f` and `-m7` (with
@@ -365,6 +370,16 @@ Verified in the linked image:
   .word 0x00020026        <- ADP_Stopped_ApplicationExit
   .word 0x00020023        <- ADP_Stopped_RunTimeError
 ```
+
+In `test/boards/shared/hw_result.hpp`, tests report the verdict and exit using
+`std::_Exit(0)` rather than `std::exit(0)`. In a multi-threaded RTOS environment,
+`std::exit()` invokes `atexit` callbacks and executes C++ static object
+destructors while threads remain active. When static intrusive containers (such
+as `os::utils::double_list`) are destroyed while threads still hold list nodes,
+an assertion failure occurs in `double_list::~double_list()` (`assert(empty())`).
+Using `std::_Exit(0)` cleanly bypasses static destruction and directly invokes
+the semihosting exit breakpoint.
+
 
 ---
 

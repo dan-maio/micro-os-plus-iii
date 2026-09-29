@@ -75,3 +75,20 @@ All builds must use **CMake**, with Micro-OS-Plus-III provided as an **INTERFACE
 All scripts (`build`, `load`, `run`, etc.) must use paths **relative to the repository root folder**. No absolute/full paths should be used.
 
 Analyze, and start implemenetaion put questions, if needed 
+
+---
+
+## Status and Completion (2026-09-29)
+
+The project unification has been achieved:
+- `micro-os-plus-iii-smp` was rebased on top of `micro-os-plus/micro-os-plus-iii` on branch `smp`.
+- All architecture ports are unified as sibling repositories under `micro-os-plus/`:
+  - `micro-os-plus-iii` (unified kernel + test matrix)
+  - `micro-os-plus-iii-cortexm`
+  - `micro-os-plus-iii-aarch32`
+  - `micro-os-plus-iii-aarch64`
+  - `micro-os-plus-iii-devices`
+  - `micro-os-plus-iii-posix-arch`
+- Sibling discovery in CMake supports both canonical names and `.git`-suffixed names.
+- The original xPack test system is restored in `package.json` with 35+ configurations.
+- All tests are migrated, built via CMake as INTERFACE libraries with relative paths, and verified on QEMU and hardware probes.

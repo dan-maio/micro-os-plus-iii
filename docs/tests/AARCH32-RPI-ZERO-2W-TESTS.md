@@ -1,12 +1,12 @@
 # Integrating the µOS++ Test Harness for AArch32 / Raspberry Pi Zero 2 W
 
-> **Earlier layout — read as history.** This document describes the harness
-> as it was set up before it moved into `micro-os-plus-iii-smp.git/tests/`
-> (paths such as `micro-os-plus-iii.git/tests`, `aarch32-tests/`,
-> `test_smpl/common/` or `~/Work-smp` no longer exist, and some action names
-> have changed). For the current framework see [`STEPS.md`](STEPS.md); for
-> every test, board and probe see [`TESTS-CATALOG.md`](TESTS-CATALOG.md). The
-> code is the truth where they disagree.
+> **Earlier layout — read as history.** This document describes an earlier
+> harness layout. The SMP kernel and test harness are now unified in
+> `micro-os-plus-iii` (branch `smp`) alongside sibling repositories
+> `micro-os-plus-iii-{cortexm,aarch32,aarch64,devices,posix-arch}`. For the
+> current framework see [`STEPS.md`](STEPS.md); for every test, board and
+> probe see [`TESTS-CATALOG.md`](TESTS-CATALOG.md). The code is the truth
+> where they disagree.
 
 > How to take the test folder from
 > `/home/dan/Work/micro-os-plus-iii/micro-os-plus-iii.git/tests` (the

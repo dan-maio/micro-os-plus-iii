@@ -130,3 +130,18 @@ The new structure should therefore follow these principles:
    must be used as the basis for the unification.
 8. Existing tests must be migrated together with the implementations into the new `micro-os-plus-iii-smp` structure.
 9. No already-tested functionality should be lost during the restructuring.
+
+---
+
+## Current Status (2026-09-29)
+
+All goals stated above have been completed:
+
+1. **Architecture-specific repositories:** `micro-os-plus-iii-cortexm`, `micro-os-plus-iii-aarch32`, `micro-os-plus-iii-aarch64`, `micro-os-plus-iii-devices`, and `micro-os-plus-iii-posix-arch`.
+2. **Repository Unification:** `micro-os-plus-iii-smp` was rebased onto `micro-os-plus/micro-os-plus-iii` on branch `smp`. Sibling repository discovery works across both standard directory names and `.git`-suffixed directories.
+3. **`cortexm` SMP:** Fully operational on RP2350 (Pico 2, Pico 2 PSRAM, Pico 2 Pi-Zero) using hardware spinlock 0, SIO FIFO IPI, and lazy/extended FPU register stacking.
+4. **`posix-arch` SMP:** Completed using host threads as virtual CPUs, per-CPU monotonic timers, and signal-driven preemption.
+5. **Test migration & verification:** All tests have been migrated into the unified repository and validated via the restored xPack test framework in `package.json` (`ctest -V -LE hwd`):
+   - AArch64 Pi: 30/30 PASS on QEMU `raspi3b -smp 4`.
+   - Pico 2 / Cortex-M33: 16/16 emulated PASS on QEMU (`mps2-an505`, `mps2-an521`, `mps2-an500`) plus 4 RAM-resident hardware targets.
+   - STM32F4: 4/4 PASS on `nucleof411` and 5/5 PASS on `weactf411` under QEMU `netduinoplus2 -cpu cortex-m4`. `weactf412` is hardware-only (requires 256 KB SRAM exceeding QEMU's 128 KB limit).

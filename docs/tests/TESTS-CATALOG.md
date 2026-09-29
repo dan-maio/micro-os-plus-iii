@@ -14,9 +14,10 @@ The sources of truth are the code, not other documents:
 | probe | `<port>/test/boards/<board>/openocd*.cfg` and `hw.sh`; for the upstream platforms, the `openocd` command in `tests/platforms/<platform>/CMakeLists.txt` |
 | xpm actions | `tests/package.json` |
 
-The ports are the sibling repositories `micro-os-plus-iii-aarch32.git`,
-`-aarch64.git`, `-cortexm.git` and `-posix-arch.git`; the harness is
-`micro-os-plus-iii-smp.git/tests/`.
+The ports are the sibling repositories `micro-os-plus-iii-aarch32`,
+`-aarch64`, `-cortexm`, `-devices` and `-posix-arch` (checked with or without
+`.git` suffix); the unified SMP kernel and harness root is `micro-os-plus-iii`
+(branch `smp`), with tests driven from `package.json` at root or under `tests/`.
 
 ## 1. Legend
 
@@ -53,12 +54,12 @@ semihosting and mirrored on the UART.
 | `aarch32-luckfox-lyra` | aarch32 | Luckfox Lyra B (RK3506) | 3× Cortex-A7 (+ a Cortex-M0 not scheduled) | 3 | hwd only | WCH-Link, CMSIS-DAP |
 | `aarch64-rpi-zero-2w` | aarch64 | Raspberry Pi Zero 2 W (BCM2837) | 4× Cortex-A53, ARMv8-A | 4 | qemu, hwd | J-Link (default) or Olimex |
 | `aarch64-rpi3b` | aarch64 | Raspberry Pi 3 B (BCM2837) | 4× Cortex-A53, ARMv8-A | 4 | qemu, hwd | J-Link (default) or Olimex |
-| `cortexm-pico2` | cortexm | Raspberry Pi Pico 2 (RP2350) | 2× Cortex-M33 | 2 | qemu (6 tests), hwd | any CMSIS-DAP |
+| `cortexm-pico2` | cortexm | Raspberry Pi Pico 2 (RP2350) | 2× Cortex-M33 | 2 | qemu (6 tests), hwd, ram (4 tests) | any CMSIS-DAP |
 | `cortexm-pico2-pizero` | cortexm | Pi-Zero RP2350B, 16 MB flash | 2× Cortex-M33 | 2 | hwd only | XV-Link CMSIS-DAP |
-| `cortexm-pico2-rp2350b-psram` | cortexm | WeAct RP2350B, 16 MB flash + 8 MB PSRAM | 2× Cortex-M33 | 2 | qemu (2 tests), hwd | CMSIS-DAP `c251:f001` |
-| `cortexm-nucleof411` | cortexm | ST Nucleo-F411RE | 1× Cortex-M4F | 1 | hwd only | on-board ST-Link v2.1 |
-| `cortexm-weactf411` | cortexm | WeAct Studio F411CE | 1× Cortex-M4F | 1 | hwd only | DAPLink CMSIS-DAP (or WCH-Link) |
-| `cortexm-weactf412` | cortexm | WeAct Studio F412RE | 1× Cortex-M4F | 1 | hwd only | ST-Link |
+| `cortexm-pico2-rp2350b-psram` | cortexm | WeAct RP2350B, 16 MB flash + 8 MB PSRAM | 2× Cortex-M33 | 2 | qemu (3 tests), hwd | CMSIS-DAP `c251:f001` |
+| `cortexm-nucleof411` | cortexm | ST Nucleo-F411RE | 1× Cortex-M4F | 1 | qemu (netduinoplus2, 4 tests), hwd | on-board ST-Link v2.1 |
+| `cortexm-weactf411` | cortexm | WeAct Studio F411CE | 1× Cortex-M4F | 1 | qemu (netduinoplus2, 5 tests), hwd | DAPLink CMSIS-DAP (or WCH-Link) |
+| `cortexm-weactf412` | cortexm | WeAct Studio F412RE | 1× Cortex-M4F | 1 | hwd only (SRAM 256K > QEMU 128K) | ST-Link |
 | `native` | posix-arch | the Linux host | host threads as CPUs | 4 (`-DNCPU`) | host | — |
 | `2xcortex-m33` | cortexm | QEMU `mps2-an521` | 2× Cortex-M33 | 2 | QEMU | — |
 | `pico2-1cpu` | cortexm | QEMU `mps2-an505` | 1× Cortex-M33 | 1 | QEMU | — |
@@ -134,7 +135,8 @@ Where each suite runs:
 | `aarch32-rpi-zero-2w`, `aarch32-rpi3b`, `aarch64-rpi-zero-2w`, `aarch64-rpi3b` | qemu, hwd | qemu, hwd | qemu, hwd | SMP 4 |
 | `aarch32-luckfox-lyra` | — | hwd (`mutex-stress-test`) | — | SMP 3 |
 | `cortexm-pico2` | qemu, hwd, ram | qemu, hwd, ram | qemu, hwd, ram | SMP 2 on hwd; single on qemu & ram (SRAM load) |
-| `cortexm-nucleof411`, `cortexm-weactf411`, `cortexm-weactf412` | hwd | hwd | hwd | SMP ×1 |
+| `cortexm-nucleof411`, `cortexm-weactf411` | qemu, hwd | qemu, hwd | qemu, hwd | SMP ×1 |
+| `cortexm-weactf412` | hwd | hwd | hwd | SMP ×1 |
 | `native` | host (`rtos-apis`, single; `smp-rtos-apis`, SMP 4) | host (`mutex-stress`, single; `smp-mutex-stress`, SMP 4) | host | see §8 |
 | `2xcortex-m33` | QEMU | QEMU | QEMU | SMP 2 |
 | `pico2-1cpu` | QEMU | QEMU | QEMU | single |
@@ -244,28 +246,44 @@ Three boards on the same silicon (2× Cortex-M33): `pico2`, `pico2-pizero` and
 | `smp-test-nested-clock` | `smp-test-nested` plus a clock tree driven from a potentiometer (ADC) and the on-die temperature sensor; data in PSRAM, 250 MHz enabled. **Interactive**: waits for `y` on the UART (a pot position other than the current clock reboots into it first), then the same 20-beat verdict. | SMP 2 | — | — | hwd |
 | `smp-test-nested-clock_200` | The same, without `PICO2_ENABLE_250MHZ` (the clock tree at its default). | SMP 2 | — | — | hwd |
 | `smp-test-nested-clock_250` | The same, with 250 MHz enabled. | SMP 2 | — | — | hwd |
-| `rtos-apis`, `mutex-stress`, `cmsis-os-validator`, `fp-switch` | The harness suites (§4). | SMP 2 (hwd); single (qemu) | qemu, hwd | — | — |
+| `rtos-apis`, `mutex-stress`, `cmsis-os-validator` | The harness suites (§4). | single | qemu, hwd | — | — |
+| `fp-switch` | The harness suite (§4): six unpinned threads at three priorities keep their own s0–s31 and FPSCR flags across preemptive switches. | single | qemu, hwd | — | qemu, hwd |
 | `cmsis-os-validator-ram`, `mutex-stress-ram`, `rtos-apis-ram` | RAM-resident harness suites executing entirely from internal SRAM (no flash writes). | single | hwd | — | — |
 | `smp-mat-test-ram` | Parallel block solver executing entirely from internal SRAM (no flash writes). | SMP 2 | hwd | — | — |
 
-Case counts: `pico2` 26, `pico2-pizero` 14, `pico2-rp2350b-psram` 16.
+Case counts: `pico2` 26, `pico2-pizero` 14, `pico2-rp2350b-psram` 18.
 
 ### 7.2 STM32F4 boards (one CPU)
 
-`cortexm-nucleof411`, `cortexm-weactf411` and `cortexm-weactf412`, all
-hardware only. The harness suites build the SMP scheduler at `OS_NCPU = 1`; the
-board's own test uses the kernel's non-SMP branch.
+`cortexm-nucleof411` and `cortexm-weactf411` run both on hardware and on
+QEMU (`-M netduinoplus2 -cpu cortex-m4`). `cortexm-weactf412` is hardware-only.
+The harness suites build the SMP scheduler at `OS_NCPU = 1`; the board's own
+tests use the kernel's non-SMP branch.
 
 | Test | What it does | Mode | nucleof411 | weactf411 | weactf412 |
 |---|---|---|---|---|---|
-| `mos-test1` | Single-CPU acceptance: producers and consumers over a bounded buffer with plain and recursive mutexes, counting semaphores, sysclock and an LED thread. | single | hwd | hwd | hwd |
-| `spi-pipeline` | SPI filesystem pipeline (ported from a Rust example): five threads, eight semaphores, Base64 encode to partition 1, decode and CRC check to partition 2. | single | — | hwd | — |
+| `mos-test1` | Single-CPU acceptance: producers and consumers over a bounded buffer with plain and recursive mutexes, counting semaphores, sysclock and an LED thread. | single | qemu, hwd | qemu, hwd | hwd |
+| `spi-pipeline` | SPI filesystem pipeline (ported from a Rust example): five threads, eight semaphores, Base64 encode to partition 1, decode and CRC check to partition 2. | single | — | qemu, hwd | — |
 | `uart-test1` | USART1 echo: RX interrupt → bounded buffer → TX via DMA2, with an LED thread. | single | — | — | hwd |
-| `rtos-apis`, `mutex-stress`, `cmsis-os-validator` | The harness suites (§4). | SMP ×1 | hwd | hwd | hwd |
+| `rtos-apis`, `mutex-stress`, `cmsis-os-validator` | The harness suites (§4). | SMP ×1 | qemu, hwd | qemu, hwd | hwd |
+
+**QEMU execution on `netduinoplus2`:**
+- `nucleof411`: 4/4 PASS (`mos-test1`, `rtos-apis`, `mutex-stress`, `cmsis-os-validator`).
+- `weactf411`: 5/5 PASS (`mos-test1`, `spi-pipeline`, `rtos-apis`, `mutex-stress`, `cmsis-os-validator`).
+- `weactf412` **hardware-only rationale:**
+  1. *SRAM limit*: STM32F412RE has 256 KB of SRAM, setting `_estack` at `0x20040000`. QEMU's `netduinoplus2` machine allocates only 128 KB of SRAM (`0x20000000`–`0x20020000`), causing QEMU to fault on startup.
+  2. *Peripheral support*: `uart-test1` uses DMA2 Stream 7 (`DMA2_Stream7`) for USART1 TX, which is not implemented in the QEMU Netduino Plus 2 model.
+
+**Runtime termination fix (`hw_result.hpp`):**
+In `micro-os-plus-iii-cortexm/test/boards/shared/hw_result.hpp`, tests terminate
+using `std::_Exit(0)` instead of `std::exit(0)`. Normal `std::exit()` invokes
+`atexit` handlers and static object destructors while RTOS threads are still
+alive, causing `assert(empty())` assertion failures in `double_list::~double_list()`.
+`std::_Exit(0)` performs a clean termination and semihosting exit immediately.
 
 ## 8. POSIX — native host
 
-`micro-os-plus-iii-posix-arch.git/test/native/`. Host threads stand in for
+`micro-os-plus-iii-posix-arch/test/native/`. Host threads stand in for
 CPUs: `NCPU` defaults to 4 (`-DNCPU=1` builds everything single-core). All
 cases are `-host`.
 
@@ -285,12 +303,12 @@ cases are `-host`.
 
 ## 9. How to run
 
-From `micro-os-plus-iii-smp.git/tests`, for a configuration `C` such as
+From repository root `micro-os-plus-iii` (or `tests/`), for a configuration `C` such as
 `aarch64-rpi3b-cmake-gcc-debug`:
 
 ```sh
 xpm run install --config C && xpm run prepare --config C && xpm run build --config C
-xpm run test --config C                               # every qemu/host case, no hwd
+xpm run test --config C                               # every qemu/host case (-LE hwd)
 xpm run test-<app>-<variant> --config C               # one case, builds first
 PATH="$PWD/build/C/xpacks/.bin:$PATH" ctest --test-dir build/C -N   # list the cases
 ```

@@ -90,17 +90,28 @@ cd ~/Work/micro-os-plus/micro-os-plus-iii-cortexm    && git switch step/NN && xp
 # in the kernel's tests: use the linked ports instead of the downloaded ones
 cd ~/Work/micro-os-plus/micro-os-plus-iii/tests
 xpm run install-all
-xpm run link-deps-all     # every configuration now uses the local ports
+for c in native-cmake-gcc11 native-cmake-gcc12 native-cmake-gcc13 native-cmake-gcc14 \
+         native-cmake-clang16 native-cmake-clang17 native-cmake-clang18 native-cmake-clang19 \
+         qemu-cortex-m0-cmake-gcc qemu-cortex-m3-cmake-gcc \
+         qemu-cortex-m4f-cmake-gcc qemu-cortex-m7f-cmake-gcc; do
+  for t in debug release; do xpm run link-deps --config $c-$t; done
+done
 xpm run test-all          # 72 / 72
 ```
 
-**Check this once, before step 1.** In `tests/package.json` the PC builds
-depend on the name `@micro-os-plus/posix-arch`, but the `link-deps` action
-links `@micro-os-plus/micro-os-plus-iii-posix-arch`, which is the name in the
-port's own `package.json`. Make sure `link-deps` really replaces the
-downloaded port. If it does not, the PC builds silently keep using v1.0.1.
-Look at where `tests/build/native-cmake-gcc14-debug/xpacks/@micro-os-plus/`
-points after `link-deps`.
+**Do not use `xpm run link-deps-all` for this.** Its list in
+`tests/package.json` of `xpack-development` names `native-cmake-gcc13-debug`
+twice and **leaves out `native-cmake-gcc14-debug`**, so that build would keep
+testing the downloaded posix-arch v1.0.1. The loop above names exactly the 24
+builds of `test-all`.
+
+To be sure a build really uses the local port, look where its folder points
+after the loop:
+
+```sh
+ls -l tests/build/native-cmake-gcc14-debug/xpacks/@micro-os-plus/
+# micro-os-plus-iii-posix-arch -> ~/Work/micro-os-plus/micro-os-plus-iii-posix-arch
+```
 
 ## 4. What happens if we copy all the kernel code at once
 
@@ -222,8 +233,8 @@ The existing tests run this code, so these steps are really tested.
 |---|---|---|---|---|
 | 1 | build fixes | `posix/dirent.h`: empty `struct DIR` gets a member. `timegm.c`: declare `timegm()` unless glibc declares it (**reason 2**, see below). `c-syscalls-aliases-standard.h`: `read()`/`write()` return type from newlib. `utils/lists.h`: iterator calls `next()`/`prev()`. `os-thread.cpp`: `this_thread::suspend()` not `inline`. `os-decls.h`: `#include <cmsis-plus/rtos/os-c-decls.h>`. | — | — |
 | 2 | memory | `os-memory.h`: `align_size()` overflow; new `usable_size()` / `do_usable_size()`. `os-memory.cpp`: default `do_usable_size()` returns 0. `first-fit-top.cpp`: size checks in `do_allocate()`; `do_usable_size()` with the warnings silenced (**reason 3**). `lifo.cpp`: size checks; a too-small head chunk. `block-pool.cpp`: the inverted `if`. `malloc.cpp`: `calloc()` overflow; `realloc()` copies min(old, new). | — | — |
-| 3 | C++ library | `new.cpp`: the 8 `align_val_t` operators. `system-error.cpp`: static categories, warning silenced (**reason 4**). `estd/memory_resource`: `select_on_container_copy_construction()` returns `*this`. `chrono.cpp`: seconds + remainder. | — | — |
-| 4 | C / CMSIS API | `os-c-wrapper.cpp`: `os_timer_create()` / `os_timer_new()` default to one-shot; `os_mutex_delete()` / `os_semaphore_delete()` delete the concrete type; `(uint64_t) millisec * 1000u` (9 places). | — | — |
+| 3 | C++ library | `new.cpp`: the 10 `align_val_t` operators (4 `new`, 6 `delete`). `system-error.cpp`: static categories, warning silenced (**reason 4**). `estd/memory_resource`: `select_on_container_copy_construction()` returns `*this`. `chrono.cpp`: seconds + remainder. | — | — |
+| 4 | C / CMSIS API | `os-c-wrapper.cpp`: `os_timer_create()` / `os_timer_new()` default to one-shot; `os_mutex_delete()` / `os_semaphore_delete()` delete the concrete type; `(uint64_t) millisec * 1000u` (10 places). | — | — |
 | 5 | files | `file-system.h`, `net-stack.h`: deferred lists under `interrupts::critical_section`. `file-descriptors-manager.cpp`: every function under the lock, null checks, warning silenced (**reason 5**). `block-device.cpp`: the three `!= 0` → `== 0`. | — | — |
 | 6 | semihosting, ARMv8-M | `arm/semihosting.h`: ARMv8-M uses `bkpt`; `SEMIHOST_TRAP_HLT`. `c-syscalls-semihosting.cpp`: `fstat()` keeps the type; weak `os_board_console_mirror()`. `cortexm/exception-handlers.h`, `startup/exception-handlers.c`: `__ARM_ARCH_8M_MAIN__` next to 7M/7EM. | — | — |
 | 7 | timers | `os-lists.cpp` `check_timestamp()`: unlink under the lock, call `action()` after. `os-timer.cpp` `internal_interrupt_service_routine()`: no burst; link under the lock. `os-thread.h` `__errno()`: a scratch `int` in handler mode. | — | — |
@@ -240,9 +251,17 @@ functions **in the same step**.
 The snippet for step 1, `timegm.c`, which is **different from `smp`**:
 
 ```c
-// newlib has no timegm(); glibc declares it only under __USE_MISC
-// (_DEFAULT_SOURCE / _GNU_SOURCE); Apple's libc always does.
-#if !(defined(__GLIBC__) && defined(__USE_MISC)) && !defined(__APPLE__)
+// newlib has no timegm(). glibc's <time.h> declares it only under
+// `__USE_MISC || __GLIBC_USE (ISOC23)`; the official PC builds use
+// _POSIX_C_SOURCE / _XOPEN_SOURCE and C11, so there it is NOT declared.
+// Apple's libc always declares it. __GLIBC_USE is a glibc macro, so it is
+// tested only inside the glibc branch.
+#if defined(__GLIBC__)
+#if !(defined(__USE_MISC) || __GLIBC_USE (ISOC23))
+time_t
+timegm (struct tm* tim_p);
+#endif
+#elif !defined(__APPLE__)
 time_t
 timegm (struct tm* tim_p);
 #endif
@@ -275,11 +294,16 @@ posix-arch, with the `#else` keeping the v1.0.1 code, see section 5). The
 official builds do not define it, so the 72 tests must stay green, and they
 prove that **nothing changed for one core**.
 
-That also means the official tests **do not compile** these snippets. So
-every step in Part B adds one more check, which is not part of the gate:
-**build the step once with `OS_USE_SMP_SCHEDULER` defined**, with our own
-`smp` harness (the native SMP build and `2xcortex-m33`), to be sure the
-snippets compile together.
+That also means the official tests **do not compile** these snippets. The
+multi-core pieces only work together: for example, cortexm's
+`switch_stacks()` multi-core branch needs the kernel lock (step 16), the
+per-CPU current thread (step 18) and the saved-context rule (step 21) at the
+same time. So a multi-core build is not expected to compile in the middle of
+Part B. Instead there is **one extra check at the end of Part B** (after step
+23), outside the gate: build and run our own `smp` multi-core tests (the
+native multi-core build and `2xcortex-m33`) against the three step branches.
+If it fails, the missing snippet is found and added to its step before the
+PRs are merged.
 
 **The single-core proof for every Part B step:**
 
@@ -293,16 +317,16 @@ done
 
 | step | idea | K (kernel snippets) | C (cortexm snippets) | P (posix-arch snippets) |
 |---|---|---|---|---|
-| 14 | **how many CPUs, and which one am I** | `os-core.cpp`: `extern "C" unsigned port_cpu_id (void);` | `os-inlines.h`: `port_cpu_id()` returns 0. `os-core.cpp`: the `extern "C" port_cpu_id()` wrapper; `static_assert (OS_NCPU == 1)`. | `os-decls.h`: `OS_NCPU` defaults to 1. `os-core.cpp`: `thread_local _this_cpu`; `extern "C" port_cpu_id()`, `noinline`, with the compiler barrier (the clang 16–18 fix, smp commit `3159a57`). |
-| 15 | **one scheduler lock state per CPU** | — | `os-decls.h`: `lock_state[OS_NCPU]`. `os-inlines.h`: `locked()` reads `lock_state[port_cpu_id()]`. `os-core.cpp`: the array; `scheduler::locked (state_t)` and `start()` index it. | `os-decls.h`: `volatile lock_state[OS_NCPU]`. `os-core.cpp`: `locked (state_t)` blocks the tick before reading the CPU id (smp commit `191f89d`). |
-| 16 | **the kernel lock** | — | `os-c-decls.h`: `SMP_NO_OWNER`. `os-decls.h`: `struct smp_klock_t`, `_smp_klock`. `os-inlines.h`: `_smp_klock_enter()` / `_smp_klock_exit()`; called from `critical_section::enter()` / `exit()`. `os-core.cpp`: the definition. | `os-decls.h`: the same struct and names. `os-core.cpp` / `os-inlines.h`: the recursive lock and its enter/exit in the critical section. |
-| 17 | **interrupts are per CPU** | — | — (one CPU) | `os-decls.h`: `irq_set` next to `clock_set`, `_in_isr[OS_NCPU]`, `signal_nesting`. `os-inlines.h`: `in_handler_mode()` reads `_in_isr[port_cpu_id()]`; the critical section blocks `irq_set`. |
-| 18 | **one current thread per CPU** | `os-sched.h`, `os-core.cpp`: `current_thread_[OS_NCPU]`; the two statistics lines use `[port_cpu_id()]`. `os-thread.h`: `this_thread::thread()` reads it with interrupts masked (smp commit `3008ed64`). | `os-core.cpp` `start()`: `current_thread_[0] = pth`; `switch_stacks()` uses `[cpu]`. | `os-core.cpp` `start()` and the switch use `current_thread_[cpu]`. |
-| 19 | **one idle thread per CPU** | `os-core.cpp`: `os_idle_thread_core[OS_NCPU]`. `os-main.cpp`: main's `th_cpu_affinity = 1` and `cpu_affinity (1u << 0)`. | `os-core.cpp` `start()`: `os_idle_thread_core[0] = ::os_idle_thread`. | `os-core.cpp` `start()`: the same for CPU 0. |
-| 20 | **which CPUs a thread may run on** | `os-c-decls.h`: `th_cpu_affinity`, `cpu_affinity`. `os-thread.h`, `os-thread.cpp`: the attribute, `cpu_affinity()` get/set, default `0xFFFFFFFF`. `os-core.cpp`: `is_thread_allowed_on_cpu()`. | — | — |
-| 21 | **"this context is saved, another CPU may take it"** | `os-idle.cpp`: the reaper skips a thread that is still live (`stack_ptr == nullptr` or current on a CPU). | `os-core.cpp` `switch_stacks()`: store the old SP, clear the new one's `stack_ptr` (the whole SMP branch of the function). | `os-c-decls.h`: `stack_ptr` first in `os_port_thread_context_t`. `os-core.cpp` `switch_stacks()`: the deferred publish. |
-| 22 | **the multi-core picker** | `os-core.cpp` `internal_switch_threads()`: the affinity-aware pick from the ready list, falling back to the CPU's idle thread. | — | — |
-| 23 | **more than one CPU on the PC** | `os-thread.cpp` `resume()`: the wake-up IPI to another CPU (the `OS_INTEGER_RTOS_PORT_NCPU > 1` block). | — (one CPU on the generic Cortex-M) | `src/host_cpu.cpp`, `include/host_cpu.hpp`: a host thread per CPU, its tick timer, the IPI signal, starting the other CPUs, `port_smp_ipi()`. These are **new files**; their whole content is inside `#if defined(OS_USE_SMP_SCHEDULER)`, and they are added to the port's `CMakeLists.txt` source list. |
+| 14 | **how many CPUs, and which one am I** | `os-core.cpp` and `os-thread.cpp`: `extern "C" unsigned port_cpu_id (void);` | `os-inlines.h`: `port_cpu_id()` returns 0. `os-core.cpp`: the `extern "C" port_cpu_id()` wrapper; `static_assert (OS_NCPU == 1)`. | `os-decls.h`: `OS_NCPU` defaults to 1. `os-core.cpp`: `thread_local _this_cpu`; `extern "C" port_cpu_id()`, `noinline`, with the compiler barrier (the clang 16–18 fix, smp commit `3159a57`). |
+| 15 | **one scheduler lock state per CPU** | — | `os-decls.h`: `lock_state[OS_NCPU]`, `lock_primask[OS_NCPU]`. `os-inlines.h`: `locked()` reads `lock_state[port_cpu_id()]`. `os-core.cpp`: the array; `scheduler::locked (state_t)` and `start()` index it. | `os-decls.h`: `volatile lock_state[OS_NCPU]`. `os-core.cpp`: `locked (state_t)` blocks the tick before reading the CPU id (smp commit `191f89d`). |
+| 16 | **the kernel lock** | — | `os-c-decls.h`: `SMP_NO_OWNER`. `os-decls.h`: `struct smp_klock_t`, `_smp_klock`. `os-inlines.h`: `_smp_klock_enter()` / `_smp_klock_exit()`; called from `critical_section::enter()` / `exit()`. `os-core.cpp`: the definition. | `os-decls.h`: `SMP_NO_OWNER`, the same struct and names. `os-core.cpp` / `os-inlines.h`: the recursive lock and its enter/exit in the critical section. |
+| 17 | **interrupts are per CPU** | — | — (one CPU) | `os-decls.h`: `#if` multi-core `irq_set`, `_in_isr[OS_NCPU]`, `signal_nesting`; `#else` the v1.0.1 `clock_set` (on `smp`, `irq_set` **replaced** `clock_set`). `os-inlines.h`: `in_handler_mode()` reads `_in_isr[port_cpu_id()]` or `signal_nesting` (smp commit `cd1a728`); the critical section blocks `irq_set`. |
+| 18 | **one current thread per CPU** | `os-sched.h`, `os-core.cpp`: `current_thread_[OS_NCPU]`; the two statistics lines use `[port_cpu_id()]`. `os-thread.cpp`: `current_thread_[port_cpu_id()] = this`. `os-thread.h`: `this_thread::thread()` reads it with interrupts masked (smp commit `3008ed64`). | `os-core.cpp` `start()`: `current_thread_[0] = pth`. | `os-core.cpp` `start()`: `current_thread_[cpu]`. |
+| 19 | **one idle thread per CPU** | `os-core.cpp`: `os_idle_thread_core[OS_NCPU]`. | `os-core.cpp` `start()`: `os_idle_thread_core[0] = ::os_idle_thread`. | `os-core.cpp` `start()`: the same for CPU 0. |
+| 20 | **which CPUs a thread may run on** | `os-c-decls.h`: `th_cpu_affinity`, `cpu_affinity`. `os-thread.h`: the attribute, `cpu_affinity()` get/set, the member (default `0xFFFFFFFF`). `os-thread.cpp`: the three initialisations and the get/set. `os-core.cpp`: `is_thread_allowed_on_cpu()`. `os-main.cpp`: main pinned to CPU 0. `os-c-wrapper.cpp`: CMSIS-RTOS v1 threads pinned to CPU 0 (2 places). | — | — |
+| 21 | **"this context is saved, another CPU may take it"** | `os-thread.h`: `os_rtos_idle_actions()` becomes a `friend`. `os-idle.cpp`: the reaper skips a thread that is still live (`stack_ptr == nullptr` or current on a CPU). `os-thread.cpp`: `join()` and `kill()` wait until the thread is off every CPU. | `os-core.cpp` `switch_stacks()`: its whole multi-core branch (kernel lock, `current_thread_[cpu]`, store the old SP, clear the new one's `stack_ptr`). | `os-c-decls.h`: `stack_ptr` first in `os_port_thread_context_t`. `os-core.cpp` `switch_stacks()`: the deferred publish. |
+| 22 | **the multi-core picker** | `os-thread.h`: `internal_switch_threads()` becomes a `friend`. `os-core.cpp` `internal_switch_threads()`: the affinity-aware pick from the ready list, falling back to the CPU's idle thread. | — | — |
+| 23 | **more than one CPU on the PC** | `os-thread.cpp`: the weak, empty `port_smp_ipi()`. | — (one CPU on the generic Cortex-M) | `src/host_cpu.cpp`, `include/host_cpu.hpp`: a host thread per CPU, its tick timer, the IPI signal, starting the other CPUs, and the strong `port_smp_ipi()`. These are **new files**; their whole content is inside `#if defined(OS_USE_SMP_SCHEDULER)`, and one line adds `src/host_cpu.cpp` to the `target_sources` list in the port's `CMakeLists.txt`. |
 
 After step 23, `include/` and `src/` of the kernel are **the same** on both
 branches, and so are the generic `cortexm` files and `posix-arch`, apart from
@@ -317,7 +341,7 @@ pass**, and the new tests of the step pass too.
 | step | what | how it stays add-only |
 |---|---|---|
 | 24 | **release the ports** | Tag `posix-arch` v1.1.0 and `cortexm` v1.2.0. Create `micro-os-plus-iii-devices` upstream (it does not exist in `micro-os-plus` yet) and tag v1.0.0. Bring `aarch32` and `aarch64` in the same way (Liviu has 6 and 7 newer commits there; take them first). The old configurations keep asking for posix-arch v1.0.1 and cortexm v1.1.0. |
-| 25 | **new Cortex-M cores** | cortexm: `include-m33/`, `include-rp2350/`, `src/rtos/os-core-m33.cpp`, `src/rtos/os-core-rp2350.cpp`, `src/libc/getentropy.c`, `src/semihosting-exit.cpp`. New files, and new targets in the port's `CMakeLists.txt`; the existing target is not changed. |
+| 25 | **new cores and board support** | cortexm: `include-m33/`, `include-rp2350/`, `src/rtos/os-core-m33.cpp`, `src/rtos/os-core-rp2350.cpp`, `src/libc/getentropy.c`, `src/semihosting-exit.cpp`. posix-arch: `board-contract.cpp`, `exception_handler.{hpp,cpp}`, `free-store.cpp`, `hw_result.hpp` (used only by the new test harness). New files, and new targets in the ports' `CMakeLists.txt`; the existing targets are not changed. Kernel: the wake-up IPI in `thread::resume()` (the `OS_INTEGER_RTOS_PORT_NCPU > 1` block). Only the RP2350 defines `OS_INTEGER_RTOS_PORT_NCPU`, so this snippet comes with it. |
 | 26 | **build files** | Kernel: `cmake/toolchains/`, `cmake/uos-app.cmake`, `port/smp-common/`, `tools/`: new files. The smaller kernel targets (`micro-os-plus::iii-posix-io`, `micro-os-plus::iii-drivers`, ...) as **new** names; `micro-os-plus::iii` keeps meaning "all kernel files". |
 | 27 | **new test sources and runners** | `tests/sources/fp-switch/`, `test_smpl/`, `tests/device-qemu-cortexm/linker-scripts/mem-mps2-an505.ld` and `mem-mps2-an521.ld`: new files. |
 | 28 | **new test platforms** | New folders `tests/platforms/<name>/`, one platform per commit: `pico2-1cpu`, `2xcortex-m33`, `aarch32-rpi3b`, `aarch32-rpi-zero-2w`, `aarch64-rpi3b`, `aarch64-rpi-zero-2w`, `cortexm-pico2`, a native multi-core platform; and the hardware ones (marked `hwd`, never run by `xpm run test`). `tests/cmake/tests-main.cmake`: **add** one `elseif` per new name; the last `else` stays the old code, so `native` and `qemu-cortex-*` build exactly as before. `tests/package.json`: **add** the new configurations and new actions (for example `test-smp-all`); `test-all` does not change. |
@@ -398,8 +422,8 @@ Our repositories (`dan-maio/...`) are **not forks** of Liviu's
 | A step fails a test because it contains a snippet of another step. | Compare with `git diff` (and `unifdef` in Part B) and move the snippet. |
 | A kernel fix needs a test change to pass. | Not allowed. The fix is wrong for one core, or it belongs behind `#if defined(OS_USE_SMP_SCHEDULER)`; change the fix, not the test. |
 | The kernel PR of a step is merged but a port PR is not. | Never merge them apart: ports first, then the kernel, in the same session. |
-| `link-deps` does not replace the downloaded port (section 3). | Fix that first; otherwise the PC builds test posix-arch v1.0.1, not the step. |
-| A Part B snippet does not compile with `OS_USE_SMP_SCHEDULER` defined. | The official tests cannot see it; the extra SMP build of each Part B step is there to catch it. |
+| A build still uses the downloaded port (section 3). | Use the explicit `link-deps` loop, not `link-deps-all` (which skips `native-cmake-gcc14-debug`), and check the `xpacks/@micro-os-plus/` link. |
+| A Part B snippet is missing, so the multi-core build fails at the end of Part B. | The official tests cannot see it; the extra multi-core check after step 23 finds it. Add it to its step before the PRs are merged. |
 | Liviu changes `xpack-development` while steps are open. | Update each open branch with his version (`git merge origin/xpack-development`). |
 | A QEMU test takes too long on a slow computer (timeout). | Run that one test alone before calling it a failure. Never run several QEMU tests at the same time. |
 

@@ -1545,6 +1545,8 @@
         "actions": {
           "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE hwd",
           "test-exc-test-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R cortexm-pico2-rp2350b-psram-exc-test-hwd",
+          "test-fp-switch-qemu": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R cortexm-pico2-rp2350b-psram-fp-switch-qemu",
+          "test-fp-switch-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R cortexm-pico2-rp2350b-psram-fp-switch-hwd",
           "test-sc-test-ko-qemu": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R cortexm-pico2-rp2350b-psram-sc-test-ko-qemu",
           "test-sc-test-ko-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R cortexm-pico2-rp2350b-psram-sc-test-ko-hwd",
           "test-smp-mat-test-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R cortexm-pico2-rp2350b-psram-smp-mat-test-hwd",

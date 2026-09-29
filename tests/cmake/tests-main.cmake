@@ -61,6 +61,8 @@ xpack_add_dependencies_subdirectories (
 message (VERBOSE "Selecting the library under test for ${PLATFORM_NAME}...")
 get_filename_component (_uos_siblings "${CMAKE_SOURCE_DIR}/../.." ABSOLUTE)
 
+set (UOS_SMP_DIR "${CMAKE_SOURCE_DIR}/.."
+     CACHE PATH "µOS++ III SMP kernel working copy" FORCE)
 set (UOS_AARCH32_DIR "${_uos_siblings}/micro-os-plus-iii-aarch32"
      CACHE PATH "µOS++ III AArch32 port working copy")
 set (UOS_AARCH64_DIR "${_uos_siblings}/micro-os-plus-iii-aarch64"

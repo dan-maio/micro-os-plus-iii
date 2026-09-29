@@ -115,13 +115,17 @@ for img in "${BUILD_DIR}"/*-qemu.bin; do
     echo
     timeout "$tmo" "$QEMU" "${MACHINE[@]}" -nographic -serial none \
         -semihosting-config enable=on,target=native "${drive[@]}" "${boot[@]}" \
-        < /dev/null > >(tee "$log") 2>&1
+        < /dev/null 2>&1 | tee "$log"
+    # A pipeline, not `> >(tee ...)`: a process substitution runs
+    # asynchronously, so a short test's RESULT line could still be on its way
+    # to the log when it is read below (NO RESULT).
+    rc=${PIPESTATUS[0]}
   else
     timeout "$tmo" "$QEMU" "${MACHINE[@]}" -nographic -serial none \
         -semihosting-config enable=on,target=native "${drive[@]}" "${boot[@]}" \
         < /dev/null > "$log" 2>&1
+    rc=$?
   fi
-  rc=$?
   [[ -n "$sd" ]] && rm -f "$sd"   # the card image lives for one run only
 
   if grep -q 'RESULT: PASS' "$log"; then

@@ -593,26 +593,39 @@ namespace os
       // list and guaranteed to be removed before this function returns.
       internal::waiting_thread_node node{ crt_thread };
 
+      result_t res;
       {
         // ----- Enter critical section ---------------------------------------
-        interrupts::critical_section ics;
+        // The link and the unlock must be one step for this CPU's scheduler.
+        // Once linked, the thread is `suspended`; a tick or an IPI taken
+        // before `mutex.unlock()` would switch it out still OWNING the mutex,
+        // and the thread that could signal it would block on that mutex
+        // forever (smp-pro-cons-test stalled this way on 4 cores, 1 run in
+        // about 20). Other CPUs are not held back: they can still take the
+        // mutex, and signal(), as soon as it is released.
+        scheduler::critical_section scs;
 
-        // Add this thread to the condition variable waiting list.
-        scheduler::internal_link_node (
-            list_, node, OS_INTEGER_INSTRUMENTATION_SUSPEND_CAUSE_CONDVAR);
-        // state::suspended set in above link().
+        {
+          // ----- Enter critical section -------------------------------------
+          interrupts::critical_section ics;
+
+          // Add this thread to the condition variable waiting list.
+          scheduler::internal_link_node (
+              list_, node, OS_INTEGER_INSTRUMENTATION_SUSPEND_CAUSE_CONDVAR);
+          // state::suspended set in above link().
+          // ----- Exit critical section --------------------------------------
+        }
+
+        res = mutex.unlock ();
+
+        if (res != result::ok)
+          {
+            scheduler::internal_unlink_node (node);
+            instrumentation::condition_variable::wait_retval (this, res);
+            return res;
+          }
         // ----- Exit critical section ----------------------------------------
       }
-
-      result_t res;
-      res = mutex.unlock ();
-
-      if (res != result::ok)
-        {
-          scheduler::internal_unlink_node (node);
-          instrumentation::condition_variable::wait_retval (this, res);
-          return res;
-        }
 
       port::scheduler::reschedule ();
 
@@ -776,28 +789,35 @@ namespace os
       internal::timeout_thread_node timeout_node{ timeout_timestamp,
                                                   crt_thread };
 
+      result_t res;
       {
         // ----- Enter critical section ---------------------------------------
-        interrupts::critical_section ics;
+        // Link and unlock as one step for this CPU's scheduler; see wait().
+        scheduler::critical_section scs;
 
-        // Add this thread to the condition variable waiting list,
-        // and the clock timeout list.
-        scheduler::internal_link_node (
-            list_, node, clock_list, timeout_node,
-            OS_INTEGER_INSTRUMENTATION_SUSPEND_CAUSE_CONDVAR);
-        // state::suspended set in above link().
+        {
+          // ----- Enter critical section -------------------------------------
+          interrupts::critical_section ics;
+
+          // Add this thread to the condition variable waiting list,
+          // and the clock timeout list.
+          scheduler::internal_link_node (
+              list_, node, clock_list, timeout_node,
+              OS_INTEGER_INSTRUMENTATION_SUSPEND_CAUSE_CONDVAR);
+          // state::suspended set in above link().
+          // ----- Exit critical section --------------------------------------
+        }
+
+        res = mutex.unlock ();
+
+        if (res != result::ok)
+          {
+            scheduler::internal_unlink_node (node, timeout_node);
+            instrumentation::condition_variable::timed_wait_retval (this, res);
+            return res;
+          }
         // ----- Exit critical section ----------------------------------------
       }
-
-      result_t res;
-      res = mutex.unlock ();
-
-      if (res != result::ok)
-        {
-          scheduler::internal_unlink_node (node, timeout_node);
-          instrumentation::condition_variable::timed_wait_retval (this, res);
-          return res;
-        }
 
       port::scheduler::reschedule ();
 

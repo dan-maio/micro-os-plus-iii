@@ -6,6 +6,9 @@ The µOS++ testing strategy is to compile the sources with as many
 toolchains as possible, and run them on as many platforms as possible.
 
 The harness is driven by **xpm** and **CTest**. The authoritative guides are
+[`docs/tests/TESTS-DEVELOPER-GUIDE.md`](../docs/tests/TESTS-DEVELOPER-GUIDE.md)
+(how the framework is built — `package.json`, the CMake harness, the port
+builders, the runners — and how to configure, run and write tests),
 [`docs/tests/STEPS.md`](../docs/tests/STEPS.md) (how to install, build, run
 and add tests) and
 [`docs/tests/TESTS-CATALOG.md`](../docs/tests/TESTS-CATALOG.md) (every

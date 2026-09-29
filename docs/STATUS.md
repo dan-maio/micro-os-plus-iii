@@ -54,6 +54,17 @@ completed and verified across all target architectures:
   - `cortexm-weactf412`: Confirmed hardware-only due to 256 KB SRAM requirement
     (`_estack` at `0x20040000`, exceeding QEMU Netduino's 128 KB memory map) and
     unsupported `DMA2_Stream7` in `uart-test1`.
+- **posix-arch: the CPU id is never read through a cached thread pointer.**
+  clang 16–18 at `-O2` computed `&_this_cpu` once per function and kept it in a
+  register across `reschedule()`; a thread that resumed on another host thread
+  then took the kernel lock as the CPU it had left, two CPUs ran inside it, and
+  the lock was stranded held (`owner 0, depth 1`, every other CPU spinning).
+  `smp_test3` and `smp-pipeline-test` hung on every run under
+  `native-cmake-clang{16,17}-release`; clang 18 had the same code in 62 kernel
+  functions and passed by timing. `port_cpu_id_inline()` now calls the
+  out-of-line `port_cpu_id()`, which is `noinline` with an `asm volatile`
+  barrier. GCC and clang 19 were never affected. See
+  [`posix-arch-port.md`](posix-arch-port.md) §2, "Native TLS and migration".
 
 ## 2026-09-26
 

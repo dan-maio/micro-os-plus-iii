@@ -221,16 +221,50 @@ construction*: a host thread **is** a CPU, so storage private to a host thread
 is storage private to a CPU. It answers "where am I", never "what was I doing",
 and it is re-read after every switch rather than cached across one.
 
-This was verified rather than assumed. The built image contains no
-`__tls_get_addr` — no general-dynamic TLS — and the accessor compiles to a
-single local-exec load with nothing held in a register:
+**Re-reading the value is not enough; the address must be re-read too.** To a
+compiler the thread pointer is constant for the life of a thread, so `&_this_cpu`
+is a common subexpression it may compute once per function and keep in a
+callee-saved register. A µOS++ thread that blocks inside that function resumes
+on another host thread, and every later "re-read" goes through the old pointer
+to the CPU id of the host thread it left. GCC (11–14) and clang 19 reload
+`%fs` at each access and never did this. clang 16, 17 and 18 at `-O2` did, in
+62 kernel functions each:
 
 ```
-000000000001d200 <port_cpu_id>:
-   1d200:	64 8b 04 25 fc ff ff 	mov    %fs:0xfffffffffffffffc,%eax
-   1d207:	ff
-   1d208:	c3                   	ret
+<os::rtos::semaphore::wait()>:              (clang 16, -O2, before the fix)
+   153da:  mov    %fs:0x0,%rbp              ; &_this_cpu, computed once
+   ...
+   15640:  call   <port::scheduler::reschedule()>   ; may resume elsewhere
+   ...     (loop back)
+   15570:  mov    0x0(%rbp),%eax            ; the CPU id of the host thread
+                                            ; this thread was on before
 ```
+
+The wrong id takes the kernel lock as the CPU it names. When that CPU already
+owns the lock, `critical_section::enter()` sees `owner == cpu`, skips the
+acquire and only bumps the depth, so two CPUs run inside the lock at once. The
+depth count then leaves it held with nobody to release it: `_smp_klock =
+{1, owner 0, depth 1}` with CPU 0 idle in `sigsuspend()` and the other three
+spinning in `xchg`. It showed as `smp_test3` and `smp-pipeline-test` hanging on
+every run under `native-cmake-clang{16,17}-release`. clang 18 compiled the
+same 62 functions and passed by timing alone.
+
+So nothing inlines the read. `port_cpu_id_inline()` calls the out-of-line
+`port_cpu_id()`, which is `noinline` and carries an empty `asm volatile` with a
+`"memory"` clobber: each call computes the address afresh, and no call can be
+merged with another or hoisted past a switch point, LTO included. The built
+image still contains no `__tls_get_addr` — no general-dynamic TLS — and the
+accessor is a single local-exec load:
+
+```
+0000000000017f30 <port_cpu_id>:
+   17f30:	64 8b 04 25 fc ff ff 	mov    %fs:0xfffffffffffffffc,%eax
+   17f37:	ff
+   17f38:	c3                   	ret
+```
+
+Check it with `objdump -d` on any host image: no function outside
+`port_cpu_id` should load `%fs:0x0` into `%rbx`, `%rbp` or `%r12`–`%r15`.
 
 One consequence of the same ban, in a place it is easy to miss: **the
 application free store is µOS++'s own `first_fit_top`, not glibc `malloc`.** A
@@ -332,13 +366,15 @@ and the stack sizes:
 ### 3.3 `os-inlines.h` — the hot path
 
 Everything here is `always_inline`, because it is on the path of every critical
-section. The file's header comment carries the AArch64 mapping table so the two
-can be read side by side.
+section — except the CPU-id read, which is deliberately a call (§2, "Native TLS
+and migration"). The file's header comment carries the AArch64 mapping table so
+the two can be read side by side.
 
 ```cpp
+extern "C" unsigned port_cpu_id (void);   // noinline, in os-core.cpp
 extern thread_local unsigned _this_cpu;
 
-inline unsigned port_cpu_id_inline (void) { return _this_cpu; }
+inline unsigned port_cpu_id_inline (void) { return ::port_cpu_id (); }
 
 inline bool locked (void)
 { return lock_state[port_cpu_id_inline ()] != state::unlocked; }
@@ -423,7 +459,7 @@ critical section therefore leaves the mask blocked on exit, which is correct.
 
 | symbol | file | note |
 |---|---|---|
-| `extern "C" unsigned port_cpu_id (void)` | `os-core.cpp` | the kernel calls this by name |
+| `extern "C" unsigned port_cpu_id (void)` | `os-core.cpp` | the kernel calls this by name; `noinline` + `asm volatile` so the thread pointer is never cached (§2) |
 | `port::scheduler::greeting()` | `os-core.cpp` | printed by the kernel's `main()` |
 | `port::scheduler::initialize()` | `os-core.cpp` | |
 | `port::scheduler::locked(state_t)` | `os-core.cpp` | scheduler lock/unlock |
@@ -2311,6 +2347,11 @@ in the loop report core 0 every time. Both are correct.
 **Never cache a CPU index across a switch point.** After `swapcontext()`,
 `sigsuspend()`, or anything that can block, re-read `port_cpu_id()`. The same
 goes for `errno` and for anything `thread_local`.
+
+**Never read `_this_cpu` directly.** Only through `port_cpu_id()`. An inlined
+read lets clang keep `&_this_cpu` in a register across a switch, and the
+"re-read" then returns the CPU the thread left (§2). It passes under GCC and
+clang 19 and hangs under clang 16–18, so a GCC-only run proves nothing here.
 
 **Never hold the kernel lock across a switch.** `reschedule()` checks and
 defers; if you add a new path into `switch_stacks()`, it must check too.

@@ -1,0 +1,201 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 560" width="100%" height="100%">
+  <defs>
+    <style>
+      .hdr { font-family: 'Source Sans 3', 'Segoe UI', sans-serif; font-weight: 700; font-size: 15px; fill: #0f172a; }
+      .title { font-family: 'Source Sans 3', 'Segoe UI', sans-serif; font-weight: 700; font-size: 13px; fill: #0f172a; }
+      .subtitle { font-family: 'Source Sans 3', 'Segoe UI', sans-serif; font-size: 11px; fill: #475569; }
+      .code { font-family: 'DejaVu Sans Mono', monospace; font-size: 10px; fill: #0369a1; }
+      .code-dark { font-family: 'DejaVu Sans Mono', monospace; font-size: 9.5px; fill: #1e293b; }
+      .tag { font-family: 'DejaVu Sans Mono', monospace; font-size: 9px; font-weight: 600; fill: #0284c7; }
+      .box { rx: 6; stroke-width: 1.5; }
+      .arrow { stroke: #0284c7; stroke-width: 1.6; fill: none; }
+      .arrow-dash { stroke: #e11d48; stroke-width: 1.6; fill: none; stroke-dasharray: 4 3; }
+      .arrow-green { stroke: #059669; stroke-width: 1.6; fill: none; }
+      .arrow-purple { stroke: #7c3aed; stroke-width: 1.6; fill: none; }
+      .core-box { rx: 8; stroke-width: 1.5; fill: #ffffff; }
+    </style>
+    <marker id="arr-blue" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#0284c7" />
+    </marker>
+    <marker id="arr-red" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#e11d48" />
+    </marker>
+    <marker id="arr-green" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#059669" />
+    </marker>
+    <marker id="arr-purple" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#7c3aed" />
+    </marker>
+  </defs>
+
+  <!-- Canvas Background -->
+  <rect width="100%" height="100%" fill="#f8fafc" />
+
+  <!-- Top Title Banner -->
+  <rect x="20" y="15" width="860" height="40" rx="6" fill="#0f172a" />
+  <text x="450" y="39" text-anchor="middle" font-family="'Source Sans 3', sans-serif" font-weight="700" font-size="14.5px" fill="#ffffff">µOS++ III Multi-Core SMP Execution Model: Concurrency, Synchronization &amp; Context Pipeline</text>
+
+  <!-- 4 Symmetrical CPU Cores (Horizontal Grid) -->
+  
+  <!-- CORE 0: ISR & Producer -->
+  <g transform="translate(20, 70)">
+    <rect width="200" height="280" class="core-box" stroke="#0284c7" fill="#f0f9ff" />
+    <rect x="0" y="0" width="200" height="28" rx="6" fill="#0284c7" />
+    <text x="100" y="19" text-anchor="middle" font-family="'Source Sans 3', sans-serif" font-weight="700" font-size="12px" fill="#ffffff">CPU CORE 0 (ISR &amp; Producer)</text>
+    
+    <!-- State Items -->
+    <rect x="10" y="38" width="180" height="52" rx="4" fill="#ffffff" stroke="#bae6fd" />
+    <text x="18" y="54" class="title" font-size="11">Hardware DMA / UART ISR</text>
+    <text x="18" y="70" class="subtitle">Handler Mode (Privileged)</text>
+    <text x="18" y="83" class="code">errno -> scratchpad int</text>
+
+    <rect x="10" y="98" width="180" height="55" rx="4" fill="#ffffff" stroke="#bae6fd" />
+    <text x="18" y="114" class="title" font-size="11">interrupts::critical_section</text>
+    <text x="18" y="129" class="subtitle">Disables local IRQs + takes</text>
+    <text x="18" y="143" class="code">_smp_klock (acquire order)</text>
+
+    <rect x="10" y="160" width="180" height="50" rx="4" fill="#ffffff" stroke="#bae6fd" />
+    <text x="18" y="176" class="title" font-size="11">Signal Semaphore</text>
+    <text x="18" y="192" class="code">data_ready_sem.post()</text>
+    <text x="18" y="204" class="subtitle">Unblocks Sensor Worker</text>
+
+    <rect x="10" y="218" width="180" height="50" rx="4" fill="#ffffff" stroke="#bae6fd" />
+    <text x="18" y="234" class="title" font-size="11">Inter-Processor Interrupt</text>
+    <text x="18" y="250" class="code">port_smp_ipi(CPU_1)</text>
+    <text x="18" y="262" class="subtitle">Triggers Core 1 Reschedule</text>
+  </g>
+
+  <!-- CORE 1: Real-Time Consumer -->
+  <g transform="translate(240, 70)">
+    <rect width="200" height="280" class="core-box" stroke="#059669" fill="#f0fdf4" />
+    <rect x="0" y="0" width="200" height="28" rx="6" fill="#059669" />
+    <text x="100" y="19" text-anchor="middle" font-family="'Source Sans 3', sans-serif" font-weight="700" font-size="12px" fill="#ffffff">CPU CORE 1 (Real-Time Worker)</text>
+    
+    <rect x="10" y="38" width="180" height="55" rx="4" fill="#ffffff" stroke="#bbf7d0" />
+    <text x="18" y="54" class="title" font-size="11">5-Stage Context Switch</text>
+    <text x="18" y="69" class="code">to->stack_ptr = nullptr</text>
+    <text x="18" y="83" class="subtitle">Atomic Claim from Ready List</text>
+
+    <rect x="10" y="100" width="180" height="52" rx="4" fill="#ffffff" stroke="#bbf7d0" />
+    <text x="18" y="116" class="title" font-size="11">SensorProcessingThread</text>
+    <text x="18" y="131" class="subtitle">Affinity Mask: 0x02 (Core 1)</text>
+    <text x="18" y="144" class="code">data_ready_sem.wait()</text>
+
+    <rect x="10" y="160" width="180" height="52" rx="4" fill="#ffffff" stroke="#bbf7d0" />
+    <text x="18" y="176" class="title" font-size="11">Mutex Critical Section</text>
+    <text x="18" y="192" class="code">std::lock_guard&lt;mutex&gt;</text>
+    <text x="18" y="204" class="subtitle">Priority Inheritance Protected</text>
+
+    <rect x="10" y="218" width="180" height="50" rx="4" fill="#ffffff" stroke="#bbf7d0" />
+    <text x="18" y="234" class="title" font-size="11">Deferred Publish</text>
+    <text x="18" y="250" class="code">from->stack_ptr = saved_sp</text>
+    <text x="18" y="262" class="subtitle">Safe for other CPUs to take</text>
+  </g>
+
+  <!-- CORE 2: List Auditor & Telemetry -->
+  <g transform="translate(460, 70)">
+    <rect width="200" height="280" class="core-box" stroke="#7c3aed" fill="#faf5ff" />
+    <rect x="0" y="0" width="200" height="28" rx="6" fill="#7c3aed" />
+    <text x="100" y="19" text-anchor="middle" font-family="'Source Sans 3', sans-serif" font-weight="700" font-size="12px" fill="#ffffff">CPU CORE 2 (Telemetry &amp; Audit)</text>
+    
+    <rect x="10" y="38" width="180" height="55" rx="4" fill="#ffffff" stroke="#e9d5ff" />
+    <text x="18" y="54" class="title" font-size="11">scheduler::critical_section</text>
+    <text x="18" y="69" class="code">lock_state[2] = locked</text>
+    <text x="18" y="83" class="subtitle">Local preemption disabled</text>
+
+    <rect x="10" y="100" width="180" height="52" rx="4" fill="#ffffff" stroke="#e9d5ff" />
+    <text x="18" y="116" class="title" font-size="11">Zero Interrupt Jitter</text>
+    <text x="18" y="131" class="subtitle">Core 2 HW IRQs stay active!</text>
+    <text x="18" y="144" class="code">PRIMASK/CPSID untouched</text>
+
+    <rect x="10" y="160" width="180" height="52" rx="4" fill="#ffffff" stroke="#e9d5ff" />
+    <text x="18" y="176" class="title" font-size="11">Intrusive List Traversal</text>
+    <text x="18" y="192" class="code">for (auto&amp; node : list)</text>
+    <text x="18" y="204" class="subtitle">No heap allocations / frees</text>
+
+    <rect x="10" y="218" width="180" height="50" rx="4" fill="#ffffff" stroke="#e9d5ff" />
+    <text x="18" y="234" class="title" font-size="11">Scheduler Unlock</text>
+    <text x="18" y="250" class="code">lock_state[2] = unlocked</text>
+    <text x="18" y="262" class="subtitle">Preemption re-enabled</text>
+  </g>
+
+  <!-- CORE 3: Idle & Low Power -->
+  <g transform="translate(680, 70)">
+    <rect width="200" height="280" class="core-box" stroke="#64748b" fill="#f1f5f9" />
+    <rect x="0" y="0" width="200" height="28" rx="6" fill="#64748b" />
+    <text x="100" y="19" text-anchor="middle" font-family="'Source Sans 3', sans-serif" font-weight="700" font-size="12px" fill="#ffffff">CPU CORE 3 (Idle &amp; Low-Power)</text>
+    
+    <rect x="10" y="38" width="180" height="55" rx="4" fill="#ffffff" stroke="#cbd5e1" />
+    <text x="18" y="54" class="title" font-size="11">os_idle_thread_core[3]</text>
+    <text x="18" y="69" class="subtitle">Per-Core Private Idle Context</text>
+    <text x="18" y="83" class="code">priority = 0 (Lowest)</text>
+
+    <rect x="10" y="100" width="180" height="52" rx="4" fill="#ffffff" stroke="#cbd5e1" />
+    <text x="18" y="116" class="title" font-size="11">Low-Power Standby</text>
+    <text x="18" y="131" class="code">__asm volatile ("wfi")</text>
+    <text x="18" y="144" class="subtitle">Hardware Clock Gating</text>
+
+    <rect x="10" y="160" width="180" height="52" rx="4" fill="#ffffff" stroke="#cbd5e1" />
+    <text x="18" y="176" class="title" font-size="11">Idle Reaper Thread</text>
+    <text x="18" y="192" class="code">state == destroying (7)</text>
+    <text x="18" y="204" class="subtitle">Safely frees terminated stacks</text>
+
+    <rect x="10" y="218" width="180" height="50" rx="4" fill="#ffffff" stroke="#cbd5e1" />
+    <text x="18" y="234" class="title" font-size="11">IPI Wakeup Wake</text>
+    <text x="18" y="250" class="subtitle">Woken when new task ready</text>
+    <text x="18" y="262" class="code">switch_stacks() called</text>
+  </g>
+
+  <!-- Bottom Shared Resources & Kernel Architecture Layer -->
+  <g transform="translate(20, 370)">
+    <rect width="860" height="170" rx="8" fill="#ffffff" stroke="#0f172a" stroke-width="1.5" />
+    <rect x="0" y="0" width="860" height="28" rx="6" fill="#0f172a" />
+    <text x="430" y="19" text-anchor="middle" font-family="'Source Sans 3', sans-serif" font-weight="700" font-size="12px" fill="#ffffff">SHARED RTOS KERNEL OBJECTS &amp; SYNCHRONIZATION PRIMITIVES (Symmetrical Multi-Processing Memory)</text>
+
+    <!-- Primitive 1: smp_klock -->
+    <rect x="15" y="38" width="195" height="115" rx="5" fill="#f8fafc" stroke="#cbd5e1" />
+    <text x="25" y="55" class="title" font-size="11.5">1. Multi-Core Kernel Lock</text>
+    <text x="25" y="72" class="code">struct smp_klock_t {</text>
+    <text x="35" y="87" class="code">std::atomic&lt;uint32_t&gt; lock;</text>
+    <text x="35" y="102" class="code">uint32_t owner; uint32_t cnt;</text>
+    <text x="25" y="117" class="code">}; // Acquire/Release Order</text>
+    <text x="25" y="137" class="subtitle">Guards Scheduler &amp; Ready List</text>
+
+    <!-- Primitive 2: Mutex with Priority Inheritance -->
+    <rect x="225" y="38" width="200" height="115" rx="5" fill="#f8fafc" stroke="#cbd5e1" />
+    <text x="235" y="55" class="title" font-size="11.5">2. os::rtos::mutex</text>
+    <text x="235" y="72" class="subtitle">Protocol: Priority Inheritance</text>
+    <text x="235" y="88" class="code">owner_->priority(boost_prio);</text>
+    <text x="235" y="104" class="subtitle">Prevents Inversion across Cores</text>
+    <text x="235" y="122" class="code">boost = max(waiters_prio);</text>
+    <text x="235" y="139" class="subtitle">Owner de-boosts on unlock</text>
+
+    <!-- Primitive 3: Counting Semaphore -->
+    <rect x="440" y="38" width="200" height="115" rx="5" fill="#f8fafc" stroke="#cbd5e1" />
+    <text x="450" y="55" class="title" font-size="11.5">3. os::rtos::semaphore</text>
+    <text x="450" y="72" class="subtitle">Type: Counting / Binary</text>
+    <text x="450" y="88" class="code">sem.post(); // From Core 0 ISR</text>
+    <text x="450" y="104" class="code">sem.wait(); // Blocks Core 1</text>
+    <text x="450" y="122" class="subtitle">Handler-mode safe signaling</text>
+    <text x="450" y="139" class="subtitle">Zero heap allocation runtime</text>
+
+    <!-- Primitive 4: Intrusive Double List -->
+    <rect x="655" y="38" width="190" height="115" rx="5" fill="#f8fafc" stroke="#cbd5e1" />
+    <text x="665" y="55" class="title" font-size="11.5">4. os::utils::double_list</text>
+    <text x="665" y="72" class="subtitle">Intrusive Pointers (Embedded)</text>
+    <text x="665" y="88" class="code">node.next() / node.prev()</text>
+    <text x="665" y="104" class="subtitle">O(1) Enqueue &amp; Dequeue</text>
+    <text x="665" y="122" class="code">ready_list_, waiting_list_</text>
+    <text x="665" y="139" class="subtitle">Deterministic latency (0 jitter)</text>
+  </g>
+
+  <!-- Cross-Cutting Interaction Arrows -->
+  <path d="M 120 268 L 120 320 L 320 320 L 320 270" class="arrow" marker-end="url(#arr-blue)" />
+  <text x="220" y="314" text-anchor="middle" font-family="'DejaVu Sans Mono', monospace" font-size="9px" fill="#0284c7" font-weight="600">IPI / Wakeup Signal</text>
+
+  <path d="M 200 185 L 440 405" class="arrow-dash" marker-end="url(#arr-red)" />
+  <text x="310" y="295" text-anchor="middle" font-family="'DejaVu Sans Mono', monospace" font-size="9px" fill="#e11d48" font-weight="600">sem.post()</text>
+
+  <path d="M 340 212 L 325 370" class="arrow-green" marker-end="url(#arr-green)" />
+  <path d="M 560 212 L 750 370" class="arrow-purple" marker-end="url(#arr-purple)" />
+</svg>

@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 300" width="100%" height="100%">
+  <defs>
+    <style>
+      .t-header { font-family: 'Source Sans 3', sans-serif; font-weight: 700; font-size: 13.5px; fill: #0f172a; }
+      .t-body { font-family: 'Hack Nerd Font', monospace; font-size: 11px; fill: #1e293b; }
+      .t-desc { font-family: 'Source Sans 3', sans-serif; font-size: 10.5px; fill: #64748b; }
+      .core-box { fill: #f8fafc; stroke: #0284c7; rx: 6; stroke-width: 1.5; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.03)); }
+      .queue-box { fill: #f0f9ff; stroke: #0369a1; rx: 8; stroke-width: 1.5; }
+    </style>
+    <marker id="s-arrow" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto">
+      <polygon points="0 0, 7 2.5, 0 5" fill="#0284c7" />
+    </marker>
+  </defs>
+
+  <rect width="100%" height="100%" fill="#ffffff" />
+
+  <!-- Global Ready List -->
+  <g transform="translate(100, 20)">
+    <rect width="600" height="70" class="queue-box" />
+    <text x="300" y="24" text-anchor="middle" class="t-header" fill="#0369a1">Global Multi-Core Priority Ready List (os::rtos::scheduler::ready_list_)</text>
+    <!-- Nodes -->
+    <rect x="30" y="36" width="120" height="24" rx="4" fill="#e0f2fe" stroke="#0284c7" />
+    <text x="90" y="52" text-anchor="middle" class="t-body" font-weight="bold">Prio 10: Th_A</text>
+
+    <text x="165" y="52" text-anchor="middle" font-size="14" fill="#0284c7">→</text>
+
+    <rect x="180" y="36" width="120" height="24" rx="4" fill="#e0f2fe" stroke="#0284c7" />
+    <text x="240" y="52" text-anchor="middle" class="t-body" font-weight="bold">Prio 7: Th_B</text>
+
+    <text x="315" y="52" text-anchor="middle" font-size="14" fill="#0284c7">→</text>
+
+    <rect x="330" y="36" width="120" height="24" rx="4" fill="#e0f2fe" stroke="#0284c7" />
+    <text x="390" y="52" text-anchor="middle" class="t-body" font-weight="bold">Prio 5: Th_C</text>
+
+    <text x="465" y="52" text-anchor="middle" font-size="14" fill="#0284c7">→</text>
+
+    <rect x="480" y="36" width="90" height="24" rx="4" fill="#f1f5f9" stroke="#94a3b8" />
+    <text x="525" y="52" text-anchor="middle" class="t-body" fill="#64748b">nullptr</text>
+  </g>
+
+  <!-- Distribution Lines -->
+  <path d="M 400 90 L 400 130 M 400 130 L 105 130 L 105 160" stroke="#0284c7" stroke-width="1.8" marker-end="url(#s-arrow)" />
+  <path d="M 400 90 L 400 130 M 400 130 L 305 130 L 305 160" stroke="#0284c7" stroke-width="1.8" marker-end="url(#s-arrow)" />
+  <path d="M 400 90 L 400 130 M 400 130 L 495 130 L 495 160" stroke="#0284c7" stroke-width="1.8" marker-end="url(#s-arrow)" />
+  <path d="M 400 90 L 400 130 M 400 130 L 695 130 L 695 160" stroke="#0284c7" stroke-width="1.8" marker-end="url(#s-arrow)" />
+
+  <!-- 4 Cores -->
+  <!-- Core 0 -->
+  <g transform="translate(25, 160)">
+    <rect width="160" height="115" class="core-box" />
+    <rect width="160" height="26" fill="#e0f2fe" rx="6" />
+    <text x="80" y="18" text-anchor="middle" class="t-header" font-size="12">CPU Core 0</text>
+    <text x="15" y="48" class="t-desc">current_thread_[0]:</text>
+    <rect x="15" y="56" width="130" height="22" rx="3" fill="#ecfdf5" stroke="#10b981" />
+    <text x="80" y="71" text-anchor="middle" class="t-body" font-weight="bold" fill="#047857">Th_A (Prio 10)</text>
+    <text x="80" y="98" text-anchor="middle" class="t-desc">idle: idle_core[0]</text>
+  </g>
+
+  <!-- Core 1 -->
+  <g transform="translate(225, 160)">
+    <rect width="160" height="115" class="core-box" />
+    <rect width="160" height="26" fill="#e0f2fe" rx="6" />
+    <text x="80" y="18" text-anchor="middle" class="t-header" font-size="12">CPU Core 1</text>
+    <text x="15" y="48" class="t-desc">current_thread_[1]:</text>
+    <rect x="15" y="56" width="130" height="22" rx="3" fill="#ecfdf5" stroke="#10b981" />
+    <text x="80" y="71" text-anchor="middle" class="t-body" font-weight="bold" fill="#047857">Th_B (Prio 7)</text>
+    <text x="80" y="98" text-anchor="middle" class="t-desc">idle: idle_core[1]</text>
+  </g>
+
+  <!-- Core 2 -->
+  <g transform="translate(415, 160)">
+    <rect width="160" height="115" class="core-box" />
+    <rect width="160" height="26" fill="#e0f2fe" rx="6" />
+    <text x="80" y="18" text-anchor="middle" class="t-header" font-size="12">CPU Core 2</text>
+    <text x="15" y="48" class="t-desc">current_thread_[2]:</text>
+    <rect x="15" y="56" width="130" height="22" rx="3" fill="#ecfdf5" stroke="#10b981" />
+    <text x="80" y="71" text-anchor="middle" class="t-body" font-weight="bold" fill="#047857">Th_C (Prio 5)</text>
+    <text x="80" y="98" text-anchor="middle" class="t-desc">idle: idle_core[2]</text>
+  </g>
+
+  <!-- Core 3 -->
+  <g transform="translate(615, 160)">
+    <rect width="160" height="115" class="core-box" />
+    <rect width="160" height="26" fill="#f1f5f9" rx="6" />
+    <text x="80" y="18" text-anchor="middle" class="t-header" font-size="12" fill="#64748b">CPU Core 3</text>
+    <text x="15" y="48" class="t-desc">current_thread_[3]:</text>
+    <rect x="15" y="56" width="130" height="22" rx="3" fill="#f8fafc" stroke="#94a3b8" />
+    <text x="80" y="71" text-anchor="middle" class="t-body" fill="#64748b">idle_core[3]</text>
+    <text x="80" y="98" text-anchor="middle" class="t-desc" fill="#d97706">WFI / Sigsuspend</text>
+  </g>
+</svg>

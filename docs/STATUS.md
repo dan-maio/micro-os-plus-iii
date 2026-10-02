@@ -1,11 +1,106 @@
 # Migration status
 
-**Updated:** 2026-09-29 · **Phase:** Repositories unified under `micro-os-plus/`, xPack test system restored and verified. Six repositories: the kernel (`micro-os-plus-iii`), the devices library (`micro-os-plus-iii-devices`) and four architecture ports (`cortexm`, `aarch32`, `aarch64`, `posix-arch`).
+**Updated:** 2026-10-01 · **Phase:** Upstream-integration runbook written and
+**dry-run end-to-end** (all 30 steps, locally, no push). Repositories unified under
+`micro-os-plus/`, xPack test system restored and verified. Six repositories: the
+kernel (`micro-os-plus-iii`), the devices library (`micro-os-plus-iii-devices`) and
+four architecture ports (`cortexm`, `aarch32`, `aarch64`, `posix-arch`).
 
 This file is the cold-start entry point. Read it, then
 `docs/specs/2026-09-20-micro-os-plus-iii-smp-unification-design.md` for the
 full design and the measurements behind it. The sections after *Today* are
 the migration log, dated where they were measured.
+
+---
+
+## Today (2026-10-01)
+
+The concrete, executable **SMP upstream-integration runbook** is written and has
+been **dry-run from end to end — all 30 steps — entirely on local branches, with
+nothing pushed to any remote.** See `docs/Implementation-SMP-Integration.md`
+(`.pdf`); its new §11 is the plain-English playbook and the repeatability contract.
+
+- **Tooling** lives in `scripts/smp/` (bootstrap, new-step, verify-step,
+  check-pristine, advance-step, link-ports, release-port, finalize, plus the
+  per-step recipes in `chunks/` and the shared asserting-editor `chunks/_edit.py`).
+  Every chunk reproduces its change byte-for-byte from `origin/smp`; every surgical
+  edit asserts its anchor, so a moved source fails loudly instead of silently.
+- **What ran green (FAST gate, xPack-pinned toolchains):** Part A 1–13; Part B
+  collapsed (single-core invariant holds; native gcc14 debug+release 100%); Part C
+  — port releases `posix-arch v1.1.0` / `cortexm v1.2.0` (local tags only), the
+  **integrated** modular CMake bringing **dual-core Cortex-M33 SMP on QEMU
+  mps2-an521** (3/3, then 4/4 with the new `fp-switch` FPU-switch test), and a
+  `native-smp` platform running **genuine dual-core host SMP** (3/3); Part D — the
+  final merge reconciles with baseline with no conflicts and the frozen metadata
+  (`.github`, `README`, `LICENSE`) stays byte-identical.
+- **Corrections captured during the dry run (all folded back into the recipes):**
+  (1) the `devices` repo is dissolved into the arch ports (Part 0) — the integrated
+  cortexm links the fat `micro-os-plus::iii` and takes **no** `devices` sibling;
+  (2) `OS_USE_SMP_SCHEDULER` must be set via a platform's
+  `target_compile_definitions`, not a `cmake -D` **cache variable** — the latter
+  secretly builds single-core and was masking a real kernel `port_cpu_id`
+  redundant-decls defect (now fixed); (3) `npm version` runs a `postversion` push
+  hook, so `release-port.sh` edits the version in-place instead; (4) the per-step
+  `perl` edits were replaced with an asserting Python editor.
+- **Mandatory full-matrix gate — 16/16.** `scripts/smp/full-verify.sh` drives the
+  real VS-Code-equivalent xpm flow (`install → link-deps → prepare → build →
+  test`) for every platform with one gcc + one clang: `native` (gcc14+clang19),
+  `native-smp`, `qemu-cortex-m0/m3/m4f/m7f`, `2xcortex-m33`, debug+release — all
+  green. This replaced the earlier FAST-only "green", which had left ~58 of ~60
+  configs unbuilt and hid two real failures: a released-vs-integrated **port**
+  mismatch (`qemu-cortex-m7f`) and **clang `-Weverything`** breakages — both now
+  fixed in the recipes (`part-b.sh` fixes I/J, `step03.sh`, `step05.sh`).
+- **Newer host toolchains.** The tests also build + run on compilers newer than
+  the pinned ones — verified system **gcc 16.2.1** and **clang 22.1.8** (native,
+  single- and dual-core SMP, 100%). clang 22 needed three baseline/upstream compat
+  fixes (`estd/chrono` libc++-internal rename, two new clang-20+ diagnostics, and a
+  portable unwinder choice) — captured in `scripts/smp/newer-toolchains.sh`,
+  separate from the SMP lift (see runbook §3.2).
+- **cortexm-pico2 (RP2350) added — harness verified on QEMU.** New add-only
+  platform `tests/platforms/cortexm-pico2` + build configs. Following the smp
+  branch's own design, the *emulated* pico2 image uses the generic Cortex-M port
+  + `device-qemu-cortexm` (QEMU `mps2-an500`, cortex-m7), on which the portable
+  harness suites run: **rtos-apis + mutex-stress + cmsis-os-validator (60/60) =
+  3/3, 100%** (`step-31-green`). The RP2350-specific `smp-test0..5` are **not**
+  added yet: they need the real RP2350 board BSP (SIO hardware spinlocks at
+  `0xD0000100`, 2-core boot, PL011/multicore glue), which is hardware-only — there
+  is no QEMU machine for RP2350, so those tests can be build-verified at best and
+  never emulated here. aarch32/aarch64 (rpi3b / rpi-zero-2w) are the same shape
+  (standalone board BSPs) and remain to be re-hosted.
+- **aarch64-rpi3b SMP integrated from scratch — all 5 smp tests PASS on QEMU
+  (4-core).** The aarch64 port existed only on `smp` as a 100-file standalone-model
+  port (its `xpack-development` branch is an empty stub). It was integrated into the
+  xpack topology on local `step/32`: the port (context_switch, exception_handler,
+  handlers, smp_secondary, os-core), the A53 BSP (startup.S, MMU, GIC, PL011,
+  ARM generic timer, **spin-table secondary release**, linker-rpi3b.ld), the
+  **BCM2837 SoC dissolved out of `devices`** (Part 0), the 37-file **thin** kernel
+  (fat `::iii` doesn't apply — the port owns trace/startup; kernel `trace::write`
+  is `weak`), plus a port-supplied `free-store.cpp` (the kernel's is
+  `__ARM_EABI__`-only) and a `_sbrk` syscall stub. Result on `qemu-system-aarch64
+  -M raspi3b -smp 4` (aarch64-none-elf 15.2.1, semihosting, `-DQEMU_BUILD`):
+  **smp_test0 (core-0 bring-up), smp_test1 (4-core semaphore ping-pong,
+  `join: c1=3 c2=3 c3=3`), smp_test2, smp_test3, smp_test4 — all RESULT: PASS.**
+  **aarch64-rpi-zero-2w passes identically** (same BCM2837/A53 BSP, `linker.ld`,
+  `LED_PIN=29`): smp_test0-4 all PASS on QEMU raspi3b 4-core. Both aarch64 boards
+  are captured in the reproducible `scripts/smp/build-aarch64-rpi.sh`
+  (`BOARD=rpi3b|rpi-zero-2w`), which compiles the thin kernel + port + BSP + SoC +
+  free-store/syscalls, links, and runs each test on QEMU — 5/5 PASS each. The
+  kernel also gained three additive CMake targets (`micro-os-plus::iii-core` thin,
+  `::port-smp-decls`, `::test-support`) for the silicon ports.
+- **aarch32 (ARMv7-A) done too — all four aarch boards green.** The aarch32 port
+  (ARMv7-A, arm-none-eabi, `-marm -mcpu=cortex-a53 -mfpu=neon-fp-armv8`) was
+  integrated the same way; being `__ARM_EABI__` it reuses the kernel's own
+  free-store + `_sbrk` (no port copies needed), and it reaches the A53s through a
+  tiny AArch64→AArch32 `shim8.img` (built from `qemu-raspi3-shim/shim.S`) +
+  `-device loader,addr=0x10000`, because raspi3b starts its cores in AArch64.
+  Reproducible via `scripts/smp/build-aarch32-rpi.sh` (`BOARD=rpi3b|rpi-zero-2w`).
+  **Full matrix — each 5/5 smp_test0-4 PASS on QEMU raspi3b, 4-core SMP:**
+  aarch64-rpi3b, aarch64-rpi-zero-2w, aarch32-rpi3b, aarch32-rpi-zero-2w.
+  Remaining polish: fold these builds into harness CMake platforms+configs and add
+  the per-board harness suites (rtos-apis/mutex-stress/cmsis-os-validator).
+- **Not pushed. Not published.** The whole series is local `step/NN` branches +
+  `step-NN-green` tags; `git ls-remote` shows zero of them on any origin.
+  Publishing is a deliberate manual `git push` that no script performs.
 
 ---
 
@@ -438,7 +533,7 @@ removal below was made on its own and measured on its own:
 |---|---|---|
 | `dma_pool.cpp`, `usb_env_stateos.cpp` — private copies in `smp_test6` and `smp_test7` | the Lyra board, as `UOS_BOARD_USB_GADGET_SOURCES` | 19/19 Lyra **byte-identical** |
 | `usb1_int3.cpp`, `kbd_forward.c` — a copy each in `smp_test_int3` and `smp_test_int4` | the Lyra board, as `UOS_BOARD_USB_INT_SOURCES` (`usb1_int3.cpp` only since 2026-09-26: `kbd_forward.c` is a host tool again, one copy in each test's `host/`, which the duplicate gate allows) | as above |
-| `hw_result.hpp`, `board-contract.cpp` — one copy per ARM port | the kernel's `test_smpl/` | 96/96 Pi **byte-identical**, 19/19 Lyra |
+| `hw_result.hpp`, `board-contract.cpp` — one copy per ARM port | the kernel's `test_smpl/` (absorbed into `tests/smp-support/` on upstream integration — root `test_smpl/` is not carried into `xpack-development`) | 96/96 Pi **byte-identical**, 19/19 Lyra |
 | `syscalls.c` — one copy per `cortexm` board (4) | `cortexm/test/boards/shared/` | 17/17 `cortexm` **byte-identical** |
 
 Two details made that possible, and both are the point rather than trivia.

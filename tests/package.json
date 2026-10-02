@@ -206,8 +206,16 @@
         "xpm run link-deps --config nucleo-f767zi-cmake-gcc-release",
         "xpm run link-deps --config nucleo-h743zi-cmake-gcc-debug",
         "xpm run link-deps --config nucleo-h743zi-cmake-gcc-release",
-        "xpm run link-deps --config raspberrypi-pico-cmake-gcc-debug",
-        "xpm run link-deps --config raspberrypi-pico-cmake-gcc-release"
+        "xpm run link-deps --config aarch32-rpi-zero-2w-cmake-gcc-debug",
+        "xpm run link-deps --config aarch32-rpi-zero-2w-cmake-gcc-release",
+        "xpm run link-deps --config aarch32-rpi3b-cmake-gcc-debug",
+        "xpm run link-deps --config aarch32-rpi3b-cmake-gcc-release",
+        "xpm run link-deps --config aarch32-luckfox-lyra-cmake-gcc-debug",
+        "xpm run link-deps --config aarch32-luckfox-lyra-cmake-gcc-release",
+        "xpm run link-deps --config aarch64-rpi-zero-2w-cmake-gcc-debug",
+        "xpm run link-deps --config aarch64-rpi-zero-2w-cmake-gcc-release",
+        "xpm run link-deps --config aarch64-rpi3b-cmake-gcc-debug",
+        "xpm run link-deps --config aarch64-rpi3b-cmake-gcc-release"
       ],
       "test-all": [
         "xpm run test-native-cmake",
@@ -744,7 +752,11 @@
         "hidden": true,
         "actions": {
           "install": [
-            "xpm install --config {{ configuration.name }}"
+            "xpm install --config {{ configuration.name }}",
+            "xpm link @micro-os-plus/micro-os-plus-iii-aarch32 --config {{ configuration.name }}"
+          ],
+          "link-deps": [
+            "xpm link @micro-os-plus/micro-os-plus-iii-aarch32 --config {{ configuration.name }}"
           ]
         }
       },
@@ -768,7 +780,11 @@
         "hidden": true,
         "actions": {
           "install": [
-            "xpm install --config {{ configuration.name }}"
+            "xpm install --config {{ configuration.name }}",
+            "xpm link @micro-os-plus/micro-os-plus-iii-aarch64 --config {{ configuration.name }}"
+          ],
+          "link-deps": [
+            "xpm link @micro-os-plus/micro-os-plus-iii-aarch64 --config {{ configuration.name }}"
           ]
         }
       },

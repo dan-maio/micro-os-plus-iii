@@ -46,6 +46,12 @@ set (UOS_TOOLCHAINS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/cmake/toolchains" CACHE INT
 include ("${CMAKE_CURRENT_SOURCE_DIR}/cmake/uos-app.cmake")
 
 # -----------------------------------------------------------------------------
+# Return early if micro-os-plus::iii has already been defined by a parent or sibling.
+if (TARGET micro-os-plus::iii)
+  return ()
+endif ()
+
+# -----------------------------------------------------------------------------
 # The kernel — an INTERFACE library, compiled by whichever application links it
 # against that application's architecture port.
 #
@@ -103,6 +109,7 @@ target_sources (
 )
 
 add_library (micro-os-plus::iii ALIAS micro-os-plus-iii-interface)
+add_library (micro-os-plus::iii-core ALIAS micro-os-plus-iii-interface)
 
 # -----------------------------------------------------------------------------
 # Optional groups. Upstream ships these beside the core, but a bare-metal port

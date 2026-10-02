@@ -13,6 +13,9 @@ WORK="${WORK:-$HOME/Documents/Work/micro-os-plus}"
 K="$WORK/micro-os-plus-iii"
 P="$WORK/micro-os-plus-iii-posix-arch"
 C="$WORK/micro-os-plus-iii-cortexm"
+A32="$WORK/micro-os-plus-iii-aarch32"
+A64="$WORK/micro-os-plus-iii-aarch64"
+D="$WORK/micro-os-plus-iii-devices"
 
 # Branch references (same repo, two branches).
 BASE_BRANCH="xpack-development"     # single-core baseline
@@ -49,7 +52,8 @@ step_repos() {
     17|23)                echo "$K $P" ;;
     24|25)                echo "$K $P $C" ;;
     26)                   echo "$K $C" ;;   # modular CMake: kernel harness + cortexm m33 target
-    30)                   echo "$K $P $C" ;;
+    28)                   echo "$K $P $C $A32 $A64" ;; # add-only platforms (AArch32/64 + native-smp)
+    30)                   echo "$K $P $C $A32 $A64" ;; # final SMP integration
     31)                   echo "$K $C" ;;   # integrated cortexm-pico2 (RP2350)
     *)                    echo "$K" ;;
   esac

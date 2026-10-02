@@ -240,6 +240,16 @@ for a in ("aarch64","aarch32"):
           "%s-rpi-zero-2w-cmake-gcc-debug"%a,"%s-rpi-zero-2w-cmake-gcc-release"%a]
 for k in add:
     if k in sbc and k not in ibc: ibc[k]=sbc[k]
+# Ensure link-deps and automatic linking are configured for actions.
+for a in ("aarch64","aarch32"):
+    act=ibc.setdefault("%s-actions"%a,{}).setdefault("actions",{})
+    act["install"]=[
+        "xpm install --config {{ configuration.name }}",
+        "xpm link @micro-os-plus/micro-os-plus-iii-%s --config {{ configuration.name }}"%a
+    ]
+    act["link-deps"]=[
+        "xpm link @micro-os-plus/micro-os-plus-iii-%s --config {{ configuration.name }}"%a
+    ]
 # the port is dev-linked via `xpm link --config`, not fetched: drop its devDep.
 for a in ("aarch64","aarch32"):
     dd=ibc.get("%s-dependencies"%a,{}).get("devDependencies",{})
@@ -247,6 +257,14 @@ for a in ("aarch64","aarch32"):
 sa=smp["xpack"].get("actions",{}); ia=d["xpack"].setdefault("actions",{})
 for k in sa:
     if ("aarch32" in k or "aarch64" in k) and k not in ia: ia[k]=sa[k]
+# Add aarch configs to link-deps-all if not present
+lda=ia.get("link-deps-all",[])
+for a in ("aarch32","aarch64"):
+    for b in ("rpi-zero-2w","rpi3b"):
+        for t in ("debug","release"):
+            cmd="xpm run link-deps --config %s-%s-cmake-gcc-%s"%(a,b,t)
+            if cmd not in lda: lda.append(cmd)
+ia["link-deps-all"]=lda
 json.dump(d,open(p,"w"),indent=2); open(p,"a").write("\n")
 print("[aarch-harness] package.json configs injected")
 PY

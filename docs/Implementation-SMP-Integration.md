@@ -1835,6 +1835,19 @@ Automation reproduces decisions; it does not *make* them. Budget real time for:
   package folder; the fix was to link the pinned toolchain folder by hand and put
   its `bin` on `PATH`. Your environment will have its own; note them so the next
   run is faster.
+- **VS Code xPack Extension & `link-deps`**: When preparing or building targets
+  via VS Code's xPack extension tree, `package.json` must specify `link-deps` and
+  include `xpm link @micro-os-plus/micro-os-plus-iii-<port> --config {{ configuration.name }}`
+  inside `actions.install`. Without this, running `install` in VS Code only downloads
+  toolchains without creating the dev-linked port symlinks in `build/<config>/xpacks/`,
+  causing `prepare` to fail with `Missing .../CMakeLists.txt`.
+- **CMake Symlink REALPATH Resolution & Target Guards**: When ports are dev-linked
+  via `xpm link`, `${CMAKE_CURRENT_SOURCE_DIR}` is a symlink inside the build
+  directory. Using `get_filename_component(_uos_real_source "${CMAKE_CURRENT_SOURCE_DIR}" REALPATH)`
+  ensures child ports locate true sibling repositories (`micro-os-plus-iii-devices`,
+  `micro-os-plus-iii`). The kernel `CMakeLists.txt` guards against duplicate aliases
+  with `if (TARGET micro-os-plus::iii) return() endif()` and provides the
+  `micro-os-plus::iii-core` interface target alias.
 - **Treat every new finding as a recipe change.** If you fix something in a file,
   put the fix in the chunk script and re-verify it reproduces from pristine
   `origin/smp`. A fix that lives only in your working tree is a fix you will lose

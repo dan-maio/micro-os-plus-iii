@@ -120,6 +120,21 @@ This playbook enforces a **pure single-subject / single-theme architecture**: ev
 +----------------------------------------------------------------------------+
 ```
 
+### 1.1 Mapping the 7 Progressive Macro PRs to the Granular PR Catalog
+
+Depending on maintainer review preferences, the migration series can be submitted either as **7 Progressive Macro PRs** (as defined in [`pull-request.md`](pull-request.md) and [`files-modif-by-step.md`](files-modif-by-step.md)) or as **32 Pure Single-Theme PRs** (detailed below in §2):
+
+| Progressive Macro PR | Granular Single-Theme PRs | Underlying Steps | Repositories | Core Domain & Focus | Target Base $\leftarrow$ Head |
+|---|---|---|---|---|---|
+| **Macro PR #1: Single-Core Defect Corrections & Hardening** | PR #1 – PR #22 | Steps 1–13 (Part A) | **K**, +**C**+**P** at Step 13 | ISO C/C++, Allocators, POSIX I/O, Condvars, Mutexes, Clocks | `xpack-development` $\leftarrow$ `step/13` |
+| **Macro PR #2: Core SMP Architecture & Native Host Platform** | PR #23 | Steps 14–23 (Part B collapsed) | **K**, **C**, **P** | SMP scheduler, `_smp_klock`, ready lists, stack switch, IPI, `native-smp` 2-core test | `step/13` $\leftarrow$ `step/14` |
+| **Macro PR #3: Multi-Architecture Port Releases** | PR #24 | Step 24 (Part C1) | **P**, **C** | Semantic version bumps: `posix-arch v1.1.0`, `cortexm v1.2.0` | `step/14` $\leftarrow$ `step/24` |
+| **Macro PR #4: Dissolution & Subtree Ingestion of `devices`** | PR #25 | Part 0 | **P**, **C**, **A32**, **A64** | Subtree ingestion of `soc/*`, `drivers/*`, CMake ALIAS shims | `part0-devices` (out-of-band) |
+| **Macro PR #5: ARMv8-M Silicon Ports & Modular CMake** | PR #26 & PR #27 | Steps 25–26 (Part C2) | **K**, **C**, **P**, **Arch** | Cortex-M33, RP2350, modular toolchains, AN521 platform | `step/24` $\leftarrow$ `step/26` |
+| **Macro PR #6: SMP Validation Testbed & Multi-Arch Harness** | PR #28 & PR #29 | Steps 27–28 (Part C3) | **K**, **C**, **P**, **Arch** | `fp-switch`, `tests/smp-support/`, 4-core RPi3B QEMU targets, `test-smp-all` | `step/26` $\leftarrow$ `step/28` |
+| **Macro PR #7: Documentation Suite & Master Reconciliation** | PR #30 & PR #31 | Steps 29–30 (Part D) | **All Repos** | PDF suite build, `.github/**` pristine restoration, `scripts/smp/` purge | `step/28` $\leftarrow$ `step/30` |
+| **Appendix Step 31: Dedicated Pico 2 Hardware Platform** | PR #32 | Step 31 | **C**, **K** | Physical RP2350 silicon SWD flashing & SIO boot mailbox | `cortexm-pico2` |
+
 ---
 
 ## 2. Catalog of Pure Single-Theme Pull Requests

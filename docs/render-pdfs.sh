@@ -46,6 +46,11 @@ render pool-request \
     --subtitle "What, why, file and code, from the corrections to the SMP integration" \
     --footer   "$FOOT" \
     --toc
+render GITHUB-PROGRESSIVE-PR-GUIDE \
+    --title    "GitHub Progressive Pull Request Playbook" \
+    --subtitle "How to write, push, review, and merge the 7 PRs on GitHub" \
+    --footer   "$FOOT" \
+    --toc
 
 # The harness documents. These came from pandoc --toc --toc-depth=2, so they
 # keep their contents list and the display titles pandoc was given.

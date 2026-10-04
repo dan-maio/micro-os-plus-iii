@@ -314,7 +314,7 @@ they unblock the tests in PR #6.
 | Step | What | Why | File / path | How |
 |---|---|---|---|---|
 | **25** | New cores/boards | M33 and RP2350 support | C `include-m33/`, `include-rp2350/`, `os-core-m33.cpp`, `os-core-rp2350.cpp`; P `board-contract.cpp`, `free-store.cpp`, `exception_handler.*`; K IPI in `thread::resume()` | add-only from `origin/smp` |
-| **26** | Modular CMake (integrated, add-only) | build the new M33 target without breaking the fat `::iii` | C `CMakeLists.txt` (additive `micro-os-plus::cortexm-qemu-m33`); K `CMakeLists.txt` (additive harness sub-targets); `tests/platforms/2xcortex-m33/`; `tests/device-qemu-cortexm-m33/`; `tests/package.json` config + action | append the port target; new platform links the **fat** `::iii`; self-contained device; `mps2-an521 --cpu cortex-m33 --smp 2` |
+| **26** | Modular CMake (integrated, add-only) | build the new M33 target without breaking the fat `::iii` | C `CMakeLists.txt` (additive `micro-os-plus::cortexm-qemu-m33`); K `CMakeLists.txt` (additive harness sub-targets `micro-os-plus::iii-core`, `::iii-posix-io`, `::port-smp-decls`, `::test-support` + re-inclusion guard); `tests/platforms/2xcortex-m33/`; `tests/device-qemu-cortexm-m33/`; `tests/package.json` config + action | append the port target; new platform links the **fat** `::iii`; self-contained device; `mps2-an521 --cpu cortex-m33 --smp 2` |
 
 **Gate for PR #5:** the original `xpm run test-all` (72) still green; the new M33
 platform configures and builds.
@@ -329,7 +329,7 @@ add-only, plus the AArch platforms. They need the cores/boards from PR #5.
 | Step | What | Why | File / path | How |
 |---|---|---|---|---|
 | **27** | New test sources | prove SMP on the new architectures | `tests/sources/fp-switch/`; `tests/smp-support/` (dissolved `test_smpl/`); smp tests 0–5; AN505/AN521 linker scripts | `absorb-test-smpl.sh`; append `set(ENABLE_FP_SWITCH_TEST true)` to `global-definitions.cmake` |
-| **28** | Add-only platforms and harness wiring | run the suites on new targets | `tests/platforms/2xcortex-m33`, `cortexm-pico2`, `aarch32-rpi3b`, `aarch64-rpi3b` (the `native-smp` leg already landed in PR #2); `tests/cmake/tests-main.cmake` (additive); K `CMakeLists.txt` | `integrate-aarch-harness.sh` adds `iii-posix-io` / `iii-semihosting` / `iii-newlib-reent` / `test-support` sub-targets; extend `test-smp-all` with the M33/aarch legs |
+| **28** | Add-only platforms and harness wiring | run the suites on new targets | `tests/platforms/2xcortex-m33`, `cortexm-pico2`, `aarch32-rpi3b`, `aarch64-rpi3b` (the `native-smp` leg already landed in PR #2); `tests/cmake/tests-main.cmake` (additive); `tests/package.json` | `integrate-aarch-harness.sh` wires AArch32/64 platforms and dev-linked `aarch*-actions` in `package.json` (auto `xpm link` in `install`, `link-deps`, `link-deps-all`); extend `test-smp-all` with M33/aarch legs |
 
 **Gate for PR #6:** the original `xpm run test-all` (72) still green **and**
 `xpm run test-smp-all` green.
@@ -427,8 +427,19 @@ out of band, so #5's port side is rebased on it before review.
 | Part C | New targets and tests | add-only coverage for M33/RP2350/AArch | `tests/platforms/**`, `tests/sources/**` | append `test-smp-all`; `target_compile_definitions(... OS_USE_SMP_SCHEDULER=1)` |
 | Part D | Docs + final merge | land the series cleanly | `docs/**`, `.github/**` | `finalize.sh`; open PR by hand |
 
+---
+
+## 13. Appendix — Step 31: Dedicated Raspberry Pi Pico 2 (`cortexm-pico2`) Hardware Platform Wiring
+
+**Why:** Configures complete standalone hardware testing infrastructure for physical Raspberry Pi Pico 2 silicon (RP2350 dual ARM Cortex-M33).
+
+| Step | What | Why | File / path | How |
+|---|---|---|---|---|
+| **31** | Dedicated Pico 2 hardware platform | Hardware testing on physical RP2350 silicon; secondary core SIO boot mailbox handshake | C `src/rtos/os-core-rp2350.cpp`, `test/boards/pico2/`, `test/pico2/`; K `tests/platforms/cortexm-pico2/` | standalone hardware SWD / OpenOCD configuration; SIO FIFO wake-up sequence |
+
 > **The one rule that keeps the series trustworthy:** never define
 > `OS_USE_SMP_SCHEDULER` on the `cmake`/`xpm` command line (a cache variable does
 > not become a compile flag). It must come from a platform's
 > `target_compile_definitions`, and you must see it on the real compile line
 > (`cmake --build <dir> -v`). Otherwise the "SMP" build is silently single-core.
+

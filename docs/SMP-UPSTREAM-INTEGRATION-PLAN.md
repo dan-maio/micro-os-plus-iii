@@ -36,36 +36,39 @@
 
 The µOS++ IIIe Real-Time Operating System is structured as a modular, multi-repository architecture where a portable core library communicates with target-specific hardware ports:
 
-```mermaid
-flowchart TD
-    subgraph Upstream_Repo ["Official Baseline: github.com/micro-os-plus/ (xpack-development)"]
-        K_UP["micro-os-plus-iii<br/>(Uniprocessor Kernel Core)"]
-        P_UP["micro-os-plus-iii-posix-arch<br/>(v1.0.1 Released)"]
-        C_UP["micro-os-plus-iii-cortexm<br/>(v1.1.0 Released)"]
-        K_UP --> P_UP
-        K_UP --> C_UP
-    end
-
-    subgraph SMP_Repo ["SMP Multi-Core Fork: github.com/dan-maio/ (smp branch)"]
-        K_SMP["micro-os-plus-iii<br/>(Multi-Core SMP Kernel)"]
-        P_SMP["posix-arch<br/>(+18 commits: Host CPU Threads)"]
-        C_SMP["cortexm<br/>(+53 commits: M33/RP2350 Spinlocks)"]
-        A32_SMP["aarch32<br/>(ARMv7-A Cortex-A7/A53)"]
-        A64_SMP["aarch64<br/>(ARMv8-A Cortex-A53)"]
-        DEV_SMP["devices<br/>(Board Peripheral Abstraction)"]
-        RISCV_SMP["riscv<br/>(RISC-V 32/64-bit Port)"]
-
-        K_SMP --> P_SMP
-        K_SMP --> C_SMP
-        K_SMP --> A32_SMP
-        K_SMP --> A64_SMP
-        K_SMP --> DEV_SMP
-        K_SMP --> RISCV_SMP
-    end
-
-    K_SMP -. "30 Granular Bisectable Steps" .-> K_UP
-    P_SMP -. "Synchronized Step PRs" .-> P_UP
-    C_SMP -. "Synchronized Step PRs" .-> C_UP
+```text
++---------------------------------------------------------------------------------------------------+
+|               Official Upstream Baseline: github.com/micro-os-plus/ (xpack-development)           |
+|                                                                                                   |
+|                               +----------------------------+                                      |
+|                               |     micro-os-plus-iii      |                                      |
+|                               | (Uniprocessor Kernel Core) |                                      |
+|                               +----------------------------+                                      |
+|                                       |              |                                            |
+|                                       v              v                                            |
+|                 +----------------------------+  +----------------------------+                    |
+|                 | micro-os-plus-iii-posix-arch |  | micro-os-plus-iii-cortexm  |                    |
+|                 |     (v1.0.1 Released)      |  |     (v1.1.0 Released)      |                    |
+|                 +----------------------------+  +----------------------------+                    |
++---------------------------------------------------------------------------------------------------+
+                                                ^
+                                                :  (30 Granular Bisectable Integration Steps)
+                                                :
++---------------------------------------------------------------------------------------------------+
+|                     SMP Multi-Core Fork: github.com/dan-maio/ (smp branch)                         |
+|                                                                                                   |
+|                               +----------------------------+                                      |
+|                               |     micro-os-plus-iii      |                                      |
+|                               |  (Multi-Core SMP Kernel)   |                                      |
+|                               +----------------------------+                                      |
+|                                 |    |     |      |    |                                          |
+|         +-----------------------+    |     |      |    +------------------------+                 |
+|         v                            v     v      v                             v                 |
+|  +--------------+  +--------------+  +----+  +----+  +---------------+  +---------------+         |
+|  |  posix-arch  |  |   cortexm    |  |aarch32 | aarch64| |    devices    |  |     riscv     |         |
+|  | (+18 commits)|  | (+53 commits)|  |ARMv7-A | ARMv8-A| |(SoC / Drivers)|  | (RISC-V Port) |         |
+|  +--------------+  +--------------+  +----+  +----+  +---------------+  +---------------+         |
++---------------------------------------------------------------------------------------------------+
 ```
 
 ### 1.2 Divergence Profile & Summary
@@ -242,20 +245,20 @@ echo "======================================================================"
 
 Part A code changes modify single-core execution paths and are directly compiled, exercised, and verified by the official 72-test matrix.
 
-```mermaid
-flowchart LR
-    S1["Step 1: ISO C / Syscalls / Lists"] --> S2["Step 2: Memory Safety & Usable Size"]
-    S2 --> S3["Step 3: C++17 Overloads & Chrono"]
-    S3 --> S4["Step 4: C Wrapper & Deletion Safety"]
-    S4 --> S5["Step 5: File Descriptors Mutexing"]
-    S5 --> S6["Step 6: ARMv8-M & Semihosting"]
-    S6 --> S7["Step 7: Timer ISR Decoupling"]
-    S7 --> S8["Step 8: Mutex Priority Inheritance"]
-    S8 --> S9["Step 9: Thread Lifecycle & Destroying"]
-    S9 --> S10["Step 10: CondVar Atomic Sleep"]
-    S10 --> S11["Step 11: std::thread Functor Lifetime"]
-    S11 --> S12["Step 12: MQueue Yield Trigger"]
-    S12 --> S13["Step 13: Highres Clock Port Sync"]
+```text
+[Step 1: ISO C / Lists] ----------> [Step 2: Allocator Overflow] -----> [Step 3: C++17 Aligned New]
+         |                                                                      |
+         v                                                                      v
+[Step 6: ARMv8-M Security] <------- [Step 5: POSIX I/O Mutex] <-------- [Step 4: C Wrapper Cleanups]
+         |
+         v
+[Step 7: Timer ISR Decouple] -----> [Step 8: Mutex Priority Ceiling] -> [Step 9: Thread Lifecycle (7)]
+                                                                                |
+                                                                                v
+[Step 13: Clock Port Sync] <------- [Step 12: MQueue Preemption] <----- [Step 10: CondVar Atomic Wait]
+                                                                                |
+                                                                                v
+                                                                        [Step 11: std::thread Lifetime]
 ```
 
 ---
@@ -585,17 +588,39 @@ clock_highres::cycles_since_tick (void)
 
 All code in Part B is enclosed in `#if defined(OS_USE_SMP_SCHEDULER)` blocks, guaranteeing identical uniprocessor binary output when the macro is undefined.
 
-```mermaid
-flowchart TD
-    S14["Step 14: Per-CPU Topology (port_cpu_id)"] --> S15["Step 15: Per-CPU Scheduler Lock State"]
-    S15 --> S16["Step 16: Multi-Core Kernel Lock (_smp_klock)"]
-    S16 --> S17["Step 17: Per-CPU Interrupt State Tracking"]
-    S17 --> S18["Step 18: Per-CPU Current Thread Pointers"]
-    S18 --> S19["Step 19: Per-CPU Idle Threads"]
-    S19 --> S20["Step 20: Thread CPU Affinity Masking"]
-    S20 --> S21["Step 21: 5-Stage Deferred Publish/Claim"]
-    S21 --> S22["Step 22: SMP Ready List Thread Picker"]
-    S22 --> S23["Step 23: POSIX Multi-Core Host Emulation (IPI)"]
+```text
++---------------------------------------------------------------------------------------------------+
+|               Part B: Multi-Core SMP Kernel Infrastructure Subsystems (Steps 14–23)                |
++---------------------------------------------------------------------------------------------------+
+  [Step 14: Per-CPU Topology (port_cpu_id)]
+         |
+         v
+  [Step 15: Per-CPU Scheduler Lock State (lock_state[OS_NCPU])]
+         |
+         v
+  [Step 16: Multi-Core Recursive Kernel Lock (_smp_klock)]
+         |
+         v
+  [Step 17: Per-CPU Interrupt State Tracking (_in_isr[OS_NCPU])]
+         |
+         v
+  [Step 18: Per-CPU Current Thread Pointers (current_thread_[OS_NCPU])]
+         |
+         v
+  [Step 19: Per-CPU Idle Threads (os_idle_thread_core[OS_NCPU])]
+         |
+         v
+  [Step 20: Thread CPU Affinity Masking (th_cpu_affinity)]
+         |
+         v
+  [Step 21: 5-Stage Deferred Publish/Claim Handshake (stack_ptr)]
+         |
+         v
+  [Step 22: SMP Ready List Thread Picker (internal_switch_threads)]
+         |
+         v
+  [Step 23: POSIX Multi-Core Host Emulation & Signal IPI (host_cpu.cpp)]
++---------------------------------------------------------------------------------------------------+
 ```
 
 ---

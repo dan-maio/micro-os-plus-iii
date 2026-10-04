@@ -1,275 +1,482 @@
-# Files modified per step — Part 0 → Part B (SMP)
+# Master Progressive Pull-Request Blueprint — µOS++ IIIe SMP Migration
 
-**Source:** the local `xpack-development` branch of each repo (the integrated
-dry run), compared against the single-core baseline (`origin/xpack-development`).
-**Scope:** from **Part 0** (dissolve `devices`) through the end of **Part B**
-(the SMP infrastructure, Steps 14–23 collapsed into one `step/14`). Parts C
-(new architectures/platforms/tests, Steps 24–31) are **not** covered here.
+*Files Modified Per Step, In-Depth Technical Rationale ("WHY"), and Lifting Recipes (Part 0 → Part D, Steps 1–31)*
 
-Legend: **A** added · **M** modified · **D** deleted. Each entry names the file,
-where in it the change lands, and **why** it is needed. The authoritative recipe
-(with the fail-loud assertions) is in `scripts/smp/chunks/` and the per-step
-sections of [`Implementation-SMP-Integration.md`](Implementation-SMP-Integration.md);
-this document is the file-level cross-reference extracted from the branch.
-
-Repos: **K** = `micro-os-plus-iii` (kernel), **P** = `micro-os-plus-iii-posix-arch`,
-**C** = `micro-os-plus-iii-cortexm`.
+**Source:** The verified multi-core `smp` branch across all component repositories, compared against the uniprocessor upstream baseline (`origin/xpack-development`).  
+**Scope:** Complete, exhaustive blueprint for the progressive upstream integration across all **7 Pull Requests** and all **31 Steps**, spanning:
+- **Part A (Steps 1–13):** Uniprocessor correctness, ISO C/C++17 conformance, and toolchain hardening.
+- **Part B (Steps 14–23 collapsed into Step 14):** SMP multi-core kernel, port contracts, and genuine host dual-core verification (`native-smp`).
+- **Part C1 (Step 24):** Port package semantic version releases (`posix-arch v1.1.0`, `cortexm v1.2.0`).
+- **Part 0:** History-preserving dissolution of `micro-os-plus-iii-devices` via `git subtree`.
+- **Part C2 (Steps 25–26):** New silicon support (Cortex-M33, RP2350) and modular add-only CMake architecture.
+- **Part C3 (Steps 27–28):** New test suites (`fp-switch`, `smp-support`), multi-arch harness integration (AArch32, AArch64), and add-only test platforms.
+- **Part D (Steps 29–30):** Documentation synchronization suite and final merge reconciliation.
+- **Step 31:** Dedicated Raspberry Pi Pico 2 (`cortexm-pico2`) hardware platform wiring.
 
 ---
 
-## Part 0 — Dissolve the `devices` repository
+### Legend and Repository Key
 
-**Why (whole part):** `origin/xpack-development` has six components; the smp
-branch adds a seventh, `micro-os-plus-iii-devices`. Upstream has no such repo and
-no place for one. Rather than make everyone depend on a new repo, its code is
-folded (history-preserving `git subtree`) into the architecture repos that
-already own it, so the integration proceeds with the six repos upstream has.
-
-| Repo | Change | Location | Why |
-|---|---|---|---|
-| P | **A** `soc/native/` | whole subtree | The POSIX "native SoC" (host SD-image back-end) moves from `devices` into the port that uses it. |
-| P | **A** `drivers/include/`, `drivers/src/`, `drivers/fatfs/` | whole subtrees | The shared block/FatFs/USB drivers move in beside the port; history preserved. |
-| P | **M** `src/…mailbox`, `fatfs` | spinlock / extent fixes | Carried-over driver fixes (atomic-spinlock mailbox sync; flatfs append-to-empty allocates an extent). |
-| C | **A** `soc/stm32f4xx/`, `soc/rp2350/` | whole subtrees | The Cortex-M silicon support (STM32F4xx, RP2350) moves from `devices` into the Cortex-M port. |
-
-> The BCM2837 SoC likewise dissolves into the aarch32/aarch64 repos (Part C);
-> only the P/C migrations belong to this phase's branches.
-
----
-
-## Part A — Uniprocessor correctness (Steps 1–13, kernel unless noted)
-
-These are the fixes that are correct and valuable **without** SMP; landing them
-first keeps each step bisectable and keeps Part B a pure SMP diff.
-
-### Step 1 — ISO C conformance, list iterators, exported suspend
-- **M** `include/cmsis-plus/posix/dirent.h` — guard the `DIR`/`dirent` typedefs so a modern glibc (`__USE_MISC`/ISO C23) does not double-declare them. *Why: the native build's host libc otherwise errors.*
-- **M** `include/cmsis-plus/utils/lists.h` — iterator conformance for the intrusive lists. *Why: used by newer standard-library expectations.*
-- **M** `src/rtos/os-thread.cpp` — make the exported `thread::suspend()` symbol resolve (the out-of-line definition). *Why: a surgical lift — only this hunk of a file that Steps 9/14 also touch.*
-- **Baseline kept:** `src/libc/stdlib/timegm.c` — the smp hunk hides the prototype behind `#if !defined(__GLIBC__)`, which regresses glibc ≥ 2.44 (`-Werror=missing-prototypes`); the baseline already compiles everywhere.
-
-### Step 2 — Memory: overflow, usable size, calloc/realloc, block-pool
-- **M** `include/cmsis-plus/rtos/os-memory.h`, `include/cmsis-plus/memory/first-fit-top.h` — declare `do_usable_size()` / overflow-checked `align_size()`. 
-- **M** `src/rtos/os-memory.cpp`, `src/memory/first-fit-top.cpp`, `src/memory/lifo.cpp`, `src/memory/block-pool.cpp`, `src/libc/stdlib/malloc.cpp` — the base-class definition, the override, and calloc/realloc overflow handling. *Why: the header declaration + base definition + override must land together or `memory_resource::do_usable_size` is an undefined reference. `first-fit-top.cpp` also gets a diagnostic-pragma wrap.*
-
-### Step 3 — C++17 aligned new/delete, static error category, chrono
-- **M** `src/libcpp/new.cpp` — C++17 aligned `operator new`/`delete`.
-- **M** `src/libcpp/system-error.cpp` — static (Meyers-singleton) error categories; **correction:** add a clang `-Wexit-time-destructors` suppression for those singletons.
-- **M** `src/libcpp/chrono.cpp` — guard the cycle-count multiplication against overflow.
-
-### Step 4 — C wrapper: one-shot timer, polymorphic delete, 64-bit timeouts
-- **M** `src/rtos/os-c-wrapper.cpp` — one-shot-timer default, polymorphic mutex/semaphore delete, 64-bit CMSIS-v1 timeouts. *Correction: the whole-file lift is **stripped** of the Step-9 `destroying` static_assert and the Step-20 SMP affinity blocks, so Step 4 carries only its own concern.*
-
-### Step 5 — POSIX I/O thread-safety
-- **M** `src/posix-io/file-descriptors-manager.cpp` — mutex the descriptor table; **correction:** file-level clang `-Wunsafe-buffer-usage` suppression for the new bounds-checked array accesses.
-- **M** `include/cmsis-plus/posix-io/file-system.h`, `include/cmsis-plus/posix-io/net-stack.h` — free-list locking.
-- **M** `src/posix-io/block-device.cpp` — block-device size fix.
-
-### Step 6 — ARMv8-M guards, SecureFault, semihosting fstat
-- **M** `include/cmsis-plus/arm/semihosting.h` — ARMv8-M-mainline guards.
-- **M** `src/startup/exception-handlers.c` — add `SecureFault_Handler`.
-- **M** `src/semihosting/c-syscalls-semihosting.cpp` — semihosting `fstat` fix. *(All portable kernel code.)*
-
-### Step 7 — timer callback outside critical section
-- **M** `src/rtos/internal/os-lists.cpp`, `src/rtos/os-timer.cpp` — run the timer callback outside the critical section; periodic catch-up re-arm.
-- **M** `include/cmsis-plus/rtos/os-thread.h` — **surgical** insert of only the handler-mode errno-scratch field (Step-9 `destroying=7` and Step-20 affinity are kept out).
-
-### Step 8 — mutex priority ceiling
-- **M** `src/rtos/os-mutex.cpp` — set the priority ceiling before taking ownership; track the max-waiter boost; recompute on unlock; cache the owner across the uncritical window.
-
-### Step 9 — thread lifecycle (`state::destroying`, atomic join, detach, reaper)
-- **M** `include/cmsis-plus/rtos/os-thread.h`, `src/rtos/os-thread.cpp`, `src/rtos/os-idle.cpp` — lifted as a **single-core projection** (`sc-project.py` strips the `OS_USE_SMP_SCHEDULER` / `NCPU>1` blocks); os-thread.cpp alone has ~37 SMP hunks, so hand-stripping is infeasible.
-- **M** `include/cmsis-plus/rtos/os-c-decls.h` — **surgical:** lift the `destroying` enum value but keep Step-10's `void* clock` field out.
-
-### Step 10 — condition-variable atomicity
-- **M** `src/rtos/os-condvar.cpp`, `include/cmsis-plus/rtos/os-condvar.h`, `include/cmsis-plus/diag/instrumentation.h` — rewritten `wait()`/`timed_wait()`, a `clock*` member, the CONDVAR suspend-cause constant.
-- **M** `include/cmsis-plus/rtos/os-c-decls.h` — **surgical:** uncomment only `os_condvar_t`'s `void* clock` (the size counterpart; keep Step-16 SMP klock out).
-
-### Step 11 — std::thread functor lifetime & join
-- **M** `src/libcpp/thread-cpp.h`, `include/cmsis-plus/estd/thread_internal.h` — join waits for the native handle; retained functor lifetime. *(thread-cpp.h lives under `src/libcpp/`.)*
-
-### Step 12 — message-queue reschedule
-- **M** `src/rtos/os-mqueue.cpp` — reschedule after send/receive wakes a higher-priority thread (preemption on posix-arch).
-
-### Step 13 — high-resolution clock port synchronization (first cross-repo step)
-- **K M** `include/cmsis-plus/rtos/os-decls.h`, `src/rtos/os-clocks.cpp` — declare and call `port::clock_highres::has_hardware_counter()`.
-- **C M** `include/cmsis-plus/rtos/port/os-inlines.h` — single-core projection: `has_hardware_counter()→false`, `hardware_counter()→0`, `cycles_since_tick()` ICSR `PENDSTSET` fix.
-- **P M** `include/cmsis-plus/rtos/port/os-inlines.h` — **surgical** insert of only the `clock_highres` block (`CLOCK_MONOTONIC`); the baseline file mixes later-step per-CPU content, so neither whole-copy nor projection is safe.
+- **Change Types:**
+  - **A** = Added file or directory
+  - **M** = Modified file
+  - **D** = Deleted file
+  - **K** = Baseline Kept (deliberately preserved to avoid upstream regressions)
+- **Lifting Methods:**
+  - `whole`: Unmodified file checkout from `origin/smp` (`git checkout origin/smp -- <path>`).
+  - `sc-project.py`: Single-core projection filter stripping `#if defined(OS_USE_SMP_SCHEDULER)` and `OS_INTEGER_RTOS_PORT_NCPU > 1` blocks.
+  - `_edit.py`: Surgical hunk insertion/substitution with strict anchor matching and occurrence assertions.
+  - `additive`: Add-only CMake target or JSON entry without modifying existing baseline configurations.
+- **Repository Codes:**
+  - **K** = `micro-os-plus-iii` (Kernel core and shared test harness)
+  - **C** = `micro-os-plus-iii-cortexm` (ARM Cortex-M port and CMSIS-M HAL)
+  - **P** = `micro-os-plus-iii-posix-arch` (POSIX host port and multi-threaded CPU emulation)
+  - **A32** = `micro-os-plus-iii-aarch32` (ARMv7-A / Cortex-A7/A53 32-bit port)
+  - **A64** = `micro-os-plus-iii-aarch64` (ARMv8-A / Cortex-A53 64-bit port)
+  - **DEV** = `micro-os-plus-iii-devices` (Source repository dissolved in Part 0)
 
 ---
 
-## Part B — SMP infrastructure (Steps 14–23, one interwoven `step/14`)
+## 1. The 7 Progressive Pull Requests (Architecture & Dependency Flow)
 
-**Why (whole part):** the scheduler, thread state, idle, main and the C wrapper
-are too entangled to lift file-by-file once SMP is on, so Steps 14–23 land as one
-cohesive blob across the three repos, then the hardening fixes A–J are applied.
-This is the first point where `OS_USE_SMP_SCHEDULER` actually changes behaviour.
+To ensure seamless upstream review and maintain an unbroken bisectable history, the integration is decomposed into seven strictly ordered pull requests. Each PR builds upon its predecessors and satisfies rigorous acceptance invariants.
 
-### Step 14 — kernel (K)
-- **M** `include/cmsis-plus/rtos/os-c-decls.h` — per-CPU C-ABI fields (the SMP klock etc.).
-- **M** `include/cmsis-plus/rtos/os-sched.h` — the SMP scheduler interface (per-CPU current thread, port lock).
-- **M** `include/cmsis-plus/rtos/os-thread.h` — thread CPU affinity + per-CPU bookkeeping.
-- **M** `src/rtos/os-core.cpp` — the portable half of the SMP scheduler (per-CPU ready lists, the kernel spinlock, IPI reschedule); the context-switch decision that must not switch while the lock is held.
-- **M** `src/rtos/os-c-wrapper.cpp` — the CMSIS-v1 affinity blocks stripped in Step 4.
-- **M** `src/rtos/os-idle.cpp` — one idle thread per core.
-- **M** `src/rtos/os-main.cpp` — the main thread pinned to core 0.
-- **M** `src/rtos/os-thread.cpp` — the full SMP thread lifecycle.
-
-### Step 14 — Cortex-M port (C)
-- **M** `include/cmsis-plus/rtos/port/os-c-decls.h`, `os-decls.h`, `os-inlines.h` — the SMP port contract (word size, atomics, the port lock) for the M-class SMP (M33/SSE-200).
-- **M** `src/rtos/os-core.cpp` — the port half of the SMP scheduler on Cortex-M.
-
-### Step 14 — POSIX-arch port (P)
-- **M** `include/cmsis-plus/rtos/port/os-c-decls.h`, `os-decls.h`, `os-inlines.h` — the host SMP port contract.
-- **A** `include/host_cpu.hpp`, `src/host_cpu.cpp` — the host CPU model (threads-as-cores) that drives `os-core.cpp::initialize()`.
-- **A** `include/exception_handler.hpp`, `src/exception_handler.cpp` — the port's exception/startup hooks the SMP core calls.
-- **A** `src/free-store.cpp` — the host free-store bring-up (`os_startup_initialize_free_store`).
-- **A** `include/hw_result.hpp`, `src/board-contract.cpp` — the shared PASS/FAIL contract + compile-time board-fact contract (also used by the ARM ports).
-- **M** `src/rtos/os-core.cpp` — the posix-arch port half of the SMP scheduler.
-- **M** `CMakeLists.txt` — register the new SMP sources **additively** in the port's INTERFACE target (not smp's standalone `UOS_SMP_DIR` model).
-
-**Corrections applied in Part B (fixes A–J):**
-- **A/B** posix-arch `os-inlines.h`: `struct timespec tp;` → `timespec tp;` (baseline gate is `-Werror=redundant-tags`).
-- **C** posix-arch CMake: additive registration only; `board-contract.cpp` is board-specific (`#error`s without `PORT_GREETING`) so it is not built by the port itself.
-- **D** register `host_cpu.cpp` / `free-store.cpp` / `exception_handler.cpp` in the port target.
-- **F/G** `exception_handler.cpp`: drop a redundant `port_cpu_id` decl; add a port-side weak definition for the test-board `g_core_stage[]` symbol.
-- **H** kernel `os-core.cpp` / `os-thread.cpp`: wrap the `port_cpu_id` redundant decls with `#pragma GCC diagnostic ignored "-Wredundant-decls"`.
-- **I/J** posix-arch clang `-Weverything` hardening: port headers add `-Wc++98-compat-pedantic` / `-Wreserved-identifier` / `-Wunsafe-buffer-usage`; the SMP `.cpp` files get a comprehensive clang suppression block before their includes.
-
-> The port **release** commits (posix-arch `v1.1.0`, cortexm `v1.2.0`) bump only
-> `package.json`; they are Step 24 (Part C) but carry the Part-B SMP port model,
-> so the SMP source they publish is exactly the Step-14 content above.
-
----
-
-## Modifications organized by subject / theme / domain
-
-The by-step view above is chronological (bisectable order). This chapter is the
-**cross-cut**: the same changes grouped by the *domain* they belong to, **one
-modification per line**. It is built by this rule — read every step's file list,
-and for each `(file, concern)` pair place it under the one domain that owns that
-concern; a file touched by several steps appears once per distinct modification,
-tagged with its step. Use this view to answer "what changed in domain X?"; use
-the by-step view to answer "what did step N do?".
-
-Tag key: `[Sn]` = Step n · `K/P/C` = kernel / posix-arch / cortexm · `A/M/D` = added/modified/deleted.
-
-### 1. Memory management
-- `M` `include/cmsis-plus/rtos/os-memory.h` — declare overflow-checked `align_size()` + `do_usable_size()`. `[S2 K]`
-- `M` `include/cmsis-plus/memory/first-fit-top.h` — `do_usable_size()` override declaration. `[S2 K]`
-- `M` `src/rtos/os-memory.cpp` — base `memory_resource::do_usable_size()` + overflow guards. `[S2 K]`
-- `M` `src/memory/first-fit-top.cpp` — the override; + diagnostic-pragma wrap. `[S2 K]`
-- `M` `src/memory/lifo.cpp`, `src/memory/block-pool.cpp` — usable-size + pool fixes. `[S2 K]`
-- `M` `src/libc/stdlib/malloc.cpp` — calloc/realloc overflow handling. `[S2 K]`
-
-### 2. SMP scheduler core
-- `M` `include/cmsis-plus/rtos/os-sched.h` — per-CPU scheduler interface (current thread, port lock). `[S14 K]`
-- `M` `src/rtos/os-core.cpp` — portable half of the SMP scheduler: per-CPU ready lists, kernel spinlock, IPI reschedule, no-switch-while-locked rule. `[S14 K]`
-- `M` `src/rtos/os-core.cpp` — port half of the SMP scheduler. `[S14 C]` `[S14 P]`
-- `M` `src/rtos/os-idle.cpp` — one idle thread per core. `[S14 K]` (single-core projection `[S9 K]`)
-- `M` `src/rtos/os-main.cpp` — main thread pinned to core 0. `[S14 K]`
-- `M` `include/cmsis-plus/rtos/os-c-decls.h` — per-CPU C-ABI fields / SMP klock. `[S14 K]`
-
-### 3. Thread lifecycle
-- `M` `src/rtos/os-thread.cpp` — exported `thread::suspend()` symbol (surgical). `[S1 K]`
-- `M` `include/cmsis-plus/rtos/os-thread.h` — handler-mode errno scratch (surgical). `[S7 K]`
-- `M` `include/cmsis-plus/rtos/os-thread.h` + `src/rtos/os-thread.cpp` — `state::destroying`, atomic join, detach, reaper (single-core projection). `[S9 K]`
-- `M` `include/cmsis-plus/rtos/os-c-decls.h` — the `destroying` enum value (surgical). `[S9 K]`
-- `M` `include/cmsis-plus/rtos/os-thread.h` + `src/rtos/os-thread.cpp` — full SMP thread lifecycle + CPU affinity. `[S14 K]`
-- `M` `src/libcpp/thread-cpp.h` + `include/cmsis-plus/estd/thread_internal.h` — `std::thread` join waits for the native handle; functor lifetime. `[S11 K]`
-
-### 4. Synchronization primitives (mutex, condvar)
-- `M` `src/rtos/os-mutex.cpp` — priority ceiling before ownership, max-waiter boost, unlock recompute, owner cache. `[S8 K]`
-- `M` `src/rtos/os-condvar.cpp` + `include/cmsis-plus/rtos/os-condvar.h` — rewritten atomic `wait()`/`timed_wait()` + `clock*` member. `[S10 K]`
-- `M` `include/cmsis-plus/rtos/os-c-decls.h` — `os_condvar_t`'s `void* clock` field (surgical). `[S10 K]`
-
-### 5. Timers & message queue
-- `M` `src/rtos/os-timer.cpp` — callback outside the critical section; periodic catch-up re-arm. `[S7 K]`
-- `M` `src/rtos/internal/os-lists.cpp` — list support for the above. `[S7 K]`
-- `M` `src/rtos/os-mqueue.cpp` — reschedule after send/receive wakes a higher-priority thread. `[S12 K]`
-
-### 6. Clocks (high-resolution)
-- `M` `include/cmsis-plus/rtos/os-decls.h` — declare `port::clock_highres::has_hardware_counter()`. `[S13 K]`
-- `M` `src/rtos/os-clocks.cpp` — call it. `[S13 K]`
-- `M` `include/cmsis-plus/rtos/port/os-inlines.h` — `has_hardware_counter()→false`, `hardware_counter()→0`, ICSR `PENDSTSET` fix (projection). `[S13 C]`
-- `M` `include/cmsis-plus/rtos/port/os-inlines.h` — `clock_highres` block, `CLOCK_MONOTONIC` (surgical). `[S13 P]`
-
-### 7. POSIX I/O
-- `M` `include/cmsis-plus/posix/dirent.h` — guard `DIR`/`dirent` typedefs vs modern glibc. `[S1 K]`
-- `M` `src/posix-io/file-descriptors-manager.cpp` — mutex the descriptor table (+ clang `-Wunsafe-buffer-usage`). `[S5 K]`
-- `M` `include/cmsis-plus/posix-io/file-system.h`, `include/cmsis-plus/posix-io/net-stack.h` — free-list locking. `[S5 K]`
-- `M` `src/posix-io/block-device.cpp` — block-device size fix. `[S5 K]`
-
-### 8. C / C++ runtime (libc / libcpp)
-- `M` `src/libcpp/new.cpp` — C++17 aligned `operator new`/`delete`. `[S3 K]`
-- `M` `src/libcpp/system-error.cpp` — static error categories (+ clang `-Wexit-time-destructors`). `[S3 K]`
-- `M` `src/libcpp/chrono.cpp` — cycle-multiplication overflow guard. `[S3 K]`
-- `M` `include/cmsis-plus/utils/lists.h` — iterator conformance. `[S1 K]`
-- **Baseline kept:** `src/libc/stdlib/timegm.c` — smp hunk regresses glibc ≥ 2.44, so not applied. `[S1 K]`
-
-### 9. C wrapper (CMSIS-v1 C API)
-- `M` `src/rtos/os-c-wrapper.cpp` — one-shot timer default, polymorphic delete, 64-bit timeouts (Step-9/20 content stripped). `[S4 K]`
-- `M` `src/rtos/os-c-wrapper.cpp` — the SMP affinity blocks. `[S14 K]`
-
-### 10. ARM startup / exceptions / semihosting
-- `M` `src/startup/exception-handlers.c` — `SecureFault_Handler`, ARMv8-M guards. `[S6 K]`
-- `M` `include/cmsis-plus/arm/semihosting.h` — ARMv8-M-mainline guards. `[S6 K]`
-- `M` `src/semihosting/c-syscalls-semihosting.cpp` — semihosting `fstat` fix. `[S6 K]`
-
-### 11. Port SMP contract (ABI headers)
-- `M` `include/cmsis-plus/rtos/port/os-c-decls.h`, `os-decls.h`, `os-inlines.h` `[S14 C]` `[S14 P]` — word size, atomics, port lock, per-CPU current.
-- `M` (posix-arch `os-inlines.h`) `struct timespec tp;`→`timespec tp;` — `-Werror=redundant-tags` (fix A/B). `[S14 P]`
-- `M` (posix-arch port headers) add `-Wc++98-compat-pedantic` / `-Wreserved-identifier` / `-Wunsafe-buffer-usage` (fix I). `[S14 P]`
-
-### 12. POSIX-arch host runtime (new SMP port files)
-- `A` `include/host_cpu.hpp`, `src/host_cpu.cpp` — host CPU model (threads-as-cores). `[S14 P]`
-- `A` `include/exception_handler.hpp`, `src/exception_handler.cpp` — port exception/startup hooks (+ fixes F/G: redundant `port_cpu_id`, weak `g_core_stage[]`). `[S14 P]`
-- `A` `src/free-store.cpp` — host free-store bring-up. `[S14 P]`
-- `A` `include/hw_result.hpp`, `src/board-contract.cpp` — PASS/FAIL + compile-time board-fact contract. `[S14 P]`
-
-### 13. Diagnostics / instrumentation
-- `M` `include/cmsis-plus/diag/instrumentation.h` — CONDVAR suspend-cause constant. `[S10 K]`
-
-### 14. Toolchain hardening (cross-cutting clang `-Weverything` corrections)
-- `src/libcpp/system-error.cpp` `-Wexit-time-destructors` `[S3]` · `src/posix-io/file-descriptors-manager.cpp` `-Wunsafe-buffer-usage` `[S5]` · `src/memory/first-fit-top.cpp` diagnostic wrap `[S2]` · posix-arch port headers + SMP `.cpp` comprehensive clang block (fixes I/J) `[S14 P]` · kernel `os-core.cpp`/`os-thread.cpp` `-Wredundant-decls` wrap (fix H) `[S14 K]`.
-
-### 15. Build system
-- `M` (posix-arch) `CMakeLists.txt` — register the new SMP sources additively in the INTERFACE target (fix C/D). `[S14 P]`
-- `M` (posix-arch/cortexm) `package.json` — version bump for the SMP port release. `[release]`
-
-### 16. Devices dissolution (Part 0)
-- `A` (posix-arch) `soc/native/`, `drivers/{include,src,fatfs}/` — moved from the `devices` repo (history-preserving subtree). `[P0 P]`
-- `M` (posix-arch) driver fixes — BCM2837 mailbox atomic spinlock; flatfs append-to-empty extent. `[P0 P]`
-- `A` (cortexm) `soc/stm32f4xx/`, `soc/rp2350/` — moved from `devices`. `[P0 C]`
-
----
-
-## Appendix — full diffs per step
-
-Generated from the integrated branch (`git show` of each step commit =
-baseline→step patch). Part 0 is a set of history-preserving subtree moves,
-so only its diffstat is shown; the file contents are unchanged by the move.
-
-### Part 0 — devices migration (diffstat only)
-
+```text
++---------------------------------------------------------------------------------------------------+
+|                        PR #1: Part A — Single-Core Conformance & Bugfixes                         |
+|  - Steps 1–13 (Kernel, +Cortex-M/POSIX at Step 13)                                                |
+|  - ISO C/C++17 conformance, Allocator overflow guards, Condvar atomicity, Mutex priority ceiling  |
+|  - Base: xpack-development  -->  Head: step/13  |  Gate: 72/72 frozen baseline tests PASS         |
++---------------------------------------------------------------------------------------------------+
+                                                  |
+                                                  v
++---------------------------------------------------------------------------------------------------+
+|               PR #2: Part B — Multi-Core SMP Kernel & Port Contracts (step/14)                    |
+|  - Steps 14–23 collapsed (Kernel, Cortex-M, POSIX-Arch)                                           |
+|  - Recursive _smp_klock, Per-CPU ready lists, 5-stage stack pointer claim/publish handshake       |
+|  - Native SMP host platform (native-smp, 2 cores, pthreads + signal IPI)                          |
+|  - Base: step/13  -->  Head: step/14  |  Gate: unifdef zero-diff + native-smp (3/3) PASS          |
++---------------------------------------------------------------------------------------------------+
+                         |                                                  |
+                         v                                                  v
++--------------------------------------------------+   +--------------------------------------------+
+|     PR #3: Step 24 — Port Package Releases       |   |   PR #4: Part 0 — Dissolve 'devices' Repo  |
+|  - posix-arch v1.1.0, cortexm v1.2.0             |   |  - History-preserving git subtree add      |
+|  - Python package.json bump (no npm push)        |   |  - soc/native, drivers/*, soc/rp2350, etc. |
+|  - Base: step/14  -->  Head: step/24             |   |  - Base: Port branches -> Head: part0-dev  |
++--------------------------------------------------+   +--------------------------------------------+
+                         |                                                  |
+                         +------------------------+-------------------------+
+                                                  |
+                                                  v
++---------------------------------------------------------------------------------------------------+
+|             PR #5: Steps 25–26 (Part C2) — Silicon Cores & Modular Add-Only CMake                 |
+|  - Cortex-M33 (MPS2 AN521, SSE-200 MHU IPI), RP2350 (SIO Hardware Spinlock 0 + FIFO IRQ 25)       |
+|  - Modular toolchains, uos-app.cmake, 2xcortex-m33 target (links fat ::iii library)               |
+|  - Base: step/24 (+ PR #4)  -->  Head: step/26  |  Gate: 2xcortex-m33 (4/4) PASS                  |
++---------------------------------------------------------------------------------------------------+
+                                                  |
+                                                  v
++---------------------------------------------------------------------------------------------------+
+|        PR #6: Steps 27–28 (Part C3) — Multi-Core Test Suites & Multi-Arch Add-Only Platforms      |
+|  - Hardware FPU context switch test (fp-switch), tests/smp-support/ relocation                    |
+|  - 4-core QEMU raspi3b platforms (AArch32 & AArch64), composite test-smp-all action              |
+|  - Base: step/26  -->  Head: step/28  |  Gate: 72/72 baseline + test-smp-all (100% green)         |
++---------------------------------------------------------------------------------------------------+
+                                                  |
+                                                  v
++---------------------------------------------------------------------------------------------------+
+|          PR #7: Steps 29–30 (Part D) — Documentation Suite & Final Merge Reconciliation           |
+|  - Synchronized Markdown & PDF runbooks, pristine CI metadata (.github/**, README.md, LICENSE)     |
+|  - Dev-tooling removal (scripts/smp/), finalize.sh acceptance validation                          |
+|  - Base: step/28  -->  Head: step/30  |  Gate: Byte-identical CI metadata + full suite PASS       |
++---------------------------------------------------------------------------------------------------+
 ```
-# posix-arch
-4514a37 migrate(devices): soc/native -> soc/native (history preserved)
- 2 files changed, 282 insertions(+)
-f0bae5d migrate(devices): fatfs -> drivers/fatfs (history preserved)
- 7 files changed, 8394 insertions(+)
-ac8d5d6 migrate(devices): src -> drivers/src (history preserved)
- 3 files changed, 2988 insertions(+)
-52a32a5 migrate(devices): include -> drivers/include (history preserved)
- 4 files changed, 704 insertions(+)
-# cortexm
-b484b99 migrate(devices): soc/stm32f4xx -> soc/stm32f4xx (history preserved)
- 36 files changed, 63693 insertions(+)
-3195eed migrate(devices): soc/rp2350 -> soc/rp2350 (history preserved)
- 12 files changed, 9556 insertions(+)
-```
+
+### 1.1 Pull Request Summary Matrix
+
+| PR # | Phase | Steps Included | Repositories | Core Focus & Artifacts | Acceptance Gate & Invariants |
+|---|---|---|---|---|---|
+| **PR #1** | **Part A** | Steps 1–13 | **K**, +**C**+**P** at Step 13 | Single-core bugfixes, ISO C/C++ conformance, allocator hardening, condvar atomicity, mutex ceiling, highres clock sync. | **72/72 frozen baseline tests PASS**; zero SMP macro leakage. |
+| **PR #2** | **Part B** | Steps 14–23 (collapsed `step/14`) | **K**, **C**, **P** | Portable SMP scheduler, recursive `_smp_klock`, per-CPU ready lists, deferred stack switch, IPI dispatch, port fixes A–J, **`native-smp` host platform**. | `unifdef -UOS_USE_SMP_SCHEDULER` zero-diff vs Step 13; 72/72 tests pass; `native-smp` dual-core suite (3/3) PASS. |
+| **PR #3** | **Part C1** | Step 24 | **P**, **C** | Version releases publishing SMP port contract: `posix-arch v1.1.0`, `cortexm v1.2.0`. | `package.json` version bump only; local git tags created without pushing. |
+| **PR #4** | **Part 0** | Part 0 | **P**, **C**, **A32**, **A64** | History-preserving `git subtree` migration of `devices` into architecture repositories; CMake ALIAS shims. | All existing board targets linking `micro-os-plus::devices` resolve and build. |
+| **PR #5** | **Part C2** | Steps 25–26 | **K**, **C**, **P**, **Arch** | Silicon additions (Cortex-M33, RP2350 SIO spinlocks), modular CMake (`uos-app.cmake`, toolchains), `2xcortex-m33` QEMU target. | 72/72 baseline pass; `2xcortex-m33` dual-core suite (4/4) PASS. |
+| **PR #6** | **Part C3** | Steps 27–28 | **K**, **C**, **P**, **Arch** | `fp-switch` suite, `test_smpl` absorption into `tests/smp-support/`, AArch32/64 raspi3b harness wiring, `test-smp-all` action. | 72/72 baseline pass; `test-smp-all` (M33 + Native-SMP + AArch) 100% green. |
+| **PR #7** | **Part D** | Steps 29–30 | **All** | Documentation PDF build, `.github/` CI workflow restoration, `scripts/smp/` removal, master branch merge. | Upstream CI metadata byte-identical to baseline; full test matrix green. |
+
+---
+
+## 2. Chronological Step-by-Step File Manifest & Technical Rationale ("WHY")
+
+Every modification across each repository is catalogued below with its precise technical justification, failure mode, compiler warning/error flag, and lifting technique.
+
+---
+
+### Phase 0 — Dissolve the `devices` Repository (PR #4)
+
+**Why the Whole Phase:** Upstream `xpack-development` maintains a clean six-repository architecture. The experimental `smp` branch introduced a 7th repository (`micro-os-plus-iii-devices`), creating an unwanted external dependency. Part 0 uses `git subtree` to fold all drivers and SoC implementations directly into the owning architecture repositories while preserving 100% of git commit history.
+
+| Repo | File / Subtree | Action | Lift Method | Deep Technical "WHY" / Failure Condition Averted |
+|---|---|---|---|---|
+| **P** | `soc/native/` | **A** | `git subtree add` | Relocates host image-file SD/block storage backend into POSIX architecture port. Avoids external repo dependency for host block tests. |
+| **P** | `drivers/include/`, `drivers/src/`, `drivers/fatfs/` | **A** | `git subtree add` | Integrates shared FatFs, USB, and block device drivers into POSIX port for host filesystem emulation. |
+| **P** | `src/.../mailbox`, `fatfs` | **M** | `git subtree` | Atomic spinlock synchronization for BCM2837 mailbox; fixes FatFs append-to-empty file bug where cluster extent was not allocated. |
+| **C** | `soc/stm32f4xx/` | **A** | `git subtree add` | Moves STM32F4 CMSIS headers, system startup, and peripheral register definitions into Cortex-M port. |
+| **C** | `soc/rp2350/` | **A** | `git subtree add` | Moves Raspberry Pi Pico 2 (RP2350) headers and `system_rp2350.c` into Cortex-M port. |
+| **A32** / **A64** | `soc/bcm2837/`, `soc/rk3506/`, `drivers/` | **A** | `git subtree add` | Moves Raspberry Pi 3B / Zero 2W (BCM2837) and Rockchip RK3506 SoC code and drivers into respective AArch ports. |
+| **P**, **C**, **A32**, **A64** | `CMakeLists.txt` | **M** | `additive` | Adds `add_library(micro-os-plus::devices ALIAS ...)` shims so existing boards linking legacy target names build without changes. |
+
+---
+
+### Phase A — Uniprocessor Correctness & Hardening (PR #1, Steps 1–13)
+
+**Why the Whole Phase:** These 13 steps fix genuine single-core defects, memory allocator vulnerabilities, synchronization race conditions, and compiler standard diagnostics. Landing them first isolates bugfixes from SMP multi-core logic and ensures 100% green tests on the baseline.
+
+#### Step 1 — ISO C Conformance, Intrusive Lists & Exported Suspend
+- **M** `include/cmsis-plus/posix/dirent.h` (`whole`): Empty struct `typedef struct { ; } DIR;` violates ISO C99/C11 §6.7.2.1 (struct must have at least one named member) and triggers `-Wextra-semi` under strict flags. Modern glibc (`__USE_MISC`/ISO C23) conflicts on duplicate declarations. *Fix:* Adds `int reserved;` member and standard header guards.
+- **M** `include/cmsis-plus/utils/lists.h` (`whole`): Fixes double-list iterator post-increment and post-decrement operators (`operator++(int)` / `operator--(int)`) to call `node_->next()` / `node_->prev()` accessor methods rather than accessing raw pointers. *Why:* Enforces iterator concept conformance with modern C++ standard libraries.
+- **M** `include/cmsis-plus/posix-io/c-syscalls-aliases-standard.h` (`whole`): Maps `CMSIS_PLUS_POSIX_IO_RW_RETURN_TYPE` to newlib's `_READ_WRITE_RETURN_TYPE` (or `ssize_t`) so `read`/`write` syscall prototypes match newlib libc weak symbol signatures across ARM toolchains.
+- **M** `src/rtos/os-thread.cpp` (`_edit.py` surgical): Removes `inline` specifier from out-of-line `this_thread::suspend(void)` definition. *Why:* Out-of-line `inline` definition prevented the linker from exporting the symbol, causing undefined reference errors when called from the CMSIS C-wrapper.
+- **K** `src/libc/stdlib/timegm.c` (`Baseline Kept`): The `smp` branch hid the `timegm()` prototype behind `#if !defined(__GLIBC__)`, which breaks compilation on glibc ≥ 2.44 under `-Werror=missing-prototypes`. Keeping the unconditioned baseline prototype builds cleanly on all host and cross toolchains.
+
+#### Step 2 — Memory Management, Usable Size & Allocator Overflow Guards
+- **M** `include/cmsis-plus/rtos/os-memory.h` & `include/cmsis-plus/memory/first-fit-top.h` (`whole`): Declares `do_usable_size(void*)` pure virtual method in `memory_resource` base class and overrides in `first_fit_top`. Adds overflow-checked `align_size()`.
+- **M** `src/rtos/os-memory.cpp` & `src/memory/first-fit-top.cpp` (`whole` + pragma wrap): Implements base-class default and `first_fit_top::do_usable_size()` calculating available payload bytes. *Hardening:* Wraps pointer arithmetic in `first-fit-top.cpp` with `#pragma GCC diagnostic ignored "-Wcast-align"` and `#pragma clang diagnostic ignored "-Wunsafe-buffer-usage"` to prevent ARM GCC and Clang `-Weverything` build failures.
+- **M** `src/memory/lifo.cpp` & `src/memory/block-pool.cpp` (`whole`): Implements `do_usable_size()` for LIFO and fixed-block pools.
+- **M** `src/libc/stdlib/malloc.cpp` (`whole`): Implements multiplication overflow check in `calloc()`: `if (nelem != 0 && elbytes > (SIZE_MAX / nelem)) { errno = ENOMEM; return nullptr; }`. Prevents integer truncation security vulnerabilities in heap allocations.
+
+#### Step 3 — C++17 Aligned Allocation, Meyers Singletons & Chrono Overflow
+- **M** `src/libcpp/new.cpp` (`whole`): Adds C++17 standard aligned memory allocation operators `operator new(std::size_t, std::align_val_t)` and `operator delete(void*, std::align_val_t)`.
+- **M** `src/libcpp/system-error.cpp` (`whole` + pragma wrap): Implements thread-safe Meyers singleton static error category instances (`generic_category()` and `system_category()`). Adds `#pragma clang diagnostic ignored "-Wexit-time-destructors"` to silence Clang warnings on process shutdown handlers.
+- **M** `src/libcpp/chrono.cpp` (`whole`): Rewrites steady clock high-resolution tick multiplication as `(cycles / freq) * 1e9 + ((cycles % freq) * 1e9) / freq` to prevent 64-bit integer overflow during long running times.
+
+#### Step 4 — CMSIS-RTOS C Wrapper Cleanups
+- **M** `src/rtos/os-c-wrapper.cpp` (`whole` + stripped): Corrects default timer type to one-shot (`osTimerOnce`); ensures polymorphic deletion of mutexes/semaphores calls derived destructors; fixes 64-bit timeout conversions by casting milliseconds to `uint64_t` prior to multiplying by `1000u`.
+- *Lift Discipline:* The `origin/smp` file contains Step-9 `os_thread_state_destroying` static asserts and Step-20 SMP CPU affinity logic. These are surgically stripped so Step 4 compiles cleanly against the Step 3 baseline.
+
+#### Step 5 — POSIX I/O Concurrency Safety & Mutex Protection
+- **M** `src/posix-io/file-descriptors-manager.cpp` (`whole` + pragma wrap): Wraps file descriptor table allocation, lookup, and deallocation under `rtos::interrupts::critical_section` locks, preventing descriptor corruption under concurrent `open()`/`close()`. Adds Clang `-Wunsafe-buffer-usage` suppression.
+- **M** `include/cmsis-plus/posix-io/file-system.h` & `include/cmsis-plus/posix-io/net-stack.h` (`whole`): Protects file system mount tables and network stack linked lists with mutexes.
+- **M** `src/posix-io/block-device.cpp` (`whole`): Corrects inverted size check: returns `EINVAL` if partition size is zero.
+
+#### Step 6 — ARMv8-M Conformance, SecureFault & Semihosting `fstat`
+- **M** `include/cmsis-plus/arm/semihosting.h` (`whole`): Adds `__ARM_ARCH_8M_MAIN__` and `__ARM_ARCH_8M_BASE__` architecture macro guards for semihosting traps.
+- **M** `src/startup/exception-handlers.c` (`whole`): Implements `SecureFault_Handler` exception handler for ARMv8-M Security Extension (TrustZone). Adds weak `os_board_console_mirror()` output hook.
+- **M** `src/semihosting/c-syscalls-semihosting.cpp` (`whole`): Corrects semihosting `fstat()` implementation to assign `S_IFCHR` file mode only when the file type has not been explicitly configured.
+
+#### Step 7 — Timer Callback Execution Outside Critical Sections
+- **M** `src/rtos/internal/os-lists.cpp` & `src/rtos/os-timer.cpp` (`whole`): Redesigns software timer expiration queue. The callback function is invoked **after exiting the critical section**, preventing deadlock if a timer callback acquires mutexes or invokes RTOS primitives. Adds catch-up logic for periodic timers under high interrupt latency.
+- **M** `include/cmsis-plus/rtos/os-thread.h` (`_edit.py` surgical): Adds `errno` scratch storage field for handler mode. Excludes Step-9 `destroying` state and Step-20 affinity fields.
+
+#### Step 8 — Mutex Priority Ceiling Protocol & Dynamic Boost Tracking
+- **M** `src/rtos/os-mutex.cpp` (`whole`): Enforces POSIX priority ceiling protocol: raises thread priority to mutex ceiling **before** acquiring ownership; dynamically tracks highest waiting thread priority; recomputes owner priority upon unlock; caches owner thread pointer across the unlock window to eliminate priority inversion windows.
+
+#### Step 9 — Thread Lifecycle State Machine (`state::destroying`), Atomic Join & Reaper
+- **M** `include/cmsis-plus/rtos/os-thread.h`, `src/rtos/os-thread.cpp`, `src/rtos/os-idle.cpp` (`sc-project.py` single-core projection): Introduces explicit `state::destroying` (value 7) state. Thread destruction unlinks the thread from scheduler lists and marks it for cleanup. Idle thread reaper safely frees dynamic stacks and control blocks without race conditions.
+- **M** `include/cmsis-plus/rtos/os-c-decls.h` (`_edit.py` surgical): Inserts `os_thread_state_destroying = 7` enumerator into C ABI header without pulling in Step-10 condvar clock fields.
+
+#### Step 10 — Condition Variable Atomicity & Clock Attribute Binding
+- **M** `src/rtos/os-condvar.cpp` & `include/cmsis-plus/rtos/os-condvar.h` (`whole`): Solves classic lost-wakeup race condition: atomically enqueues thread into condition variable wait list under scheduler lock, releases associated mutex, and suspends thread. Binds `timed_wait()` to the specific `clock` instance configured in attributes (system or steady clock).
+- **M** `include/cmsis-plus/diag/instrumentation.h` (`whole`): Adds `OS_INTEGER_INSTRUMENTATION_SUSPEND_CAUSE_CONDVAR (12)` trace event code.
+- **M** `include/cmsis-plus/rtos/os-c-decls.h` (`_edit.py` surgical): Uncomments `void* clock` pointer in `os_condvar_t` C struct to match C++ ABI size.
+
+#### Step 11 — `std::thread` Functor Lifetime & Join Barrier
+- **M** `src/libcpp/thread-cpp.h` & `include/cmsis-plus/estd/thread_internal.h` (`whole`): Changes `std::thread::join()` to block on the underlying native RTOS thread handle until termination. Retains functor object lifetime in thread wrapper until completion, preventing use-after-free crashes.
+
+#### Step 12 — Message Queue Preemption & Reschedule
+- **M** `src/rtos/os-mqueue.cpp` (`whole`): Invokes `port::scheduler::reschedule()` immediately after `send()` or `receive()` wakes a higher-priority thread, ensuring immediate preemption on POSIX and Cortex-M uniprocessors.
+
+#### Step 13 — High-Resolution Clock Port Synchronization (Cross-Repo: K + C + P)
+- **K M** `include/cmsis-plus/rtos/os-decls.h` & `src/rtos/os-clocks.cpp` (`whole`): Declares and invokes `port::clock_highres::has_hardware_counter()`.
+- **C M** `include/cmsis-plus/rtos/port/os-inlines.h` (`sc-project.py` projection): Implements `has_hardware_counter() -> false` and `hardware_counter() -> 0`. Fixes SysTick overflow detection by inspecting `SCB->ICSR & SCB_ICSR_PENDSTSET_Msk`.
+- **P M** `include/cmsis-plus/rtos/port/os-inlines.h` (`_edit.py` surgical): Inserts `clock_highres` inline implementation reading host `CLOCK_MONOTONIC`. Uses `timespec tp;` without `struct` tag to satisfy `-Werror=redundant-tags`.
+
+---
+
+### Phase B — Multi-Core SMP Infrastructure & Genuine Host Validation (PR #2, Step 14 collapsed)
+
+**Why Collapsed into One Step:** In a multi-core kernel, the scheduler (`os-core.cpp`), thread lifecycle (`os-thread.cpp`), idle loop (`os-idle.cpp`), recursive kernel lock (`_smp_klock`), and port contracts are completely interdependent. Applying them in isolation produces non-compilable intermediate commits. Collapsing Steps 14–23 into a single atomic `step/14` commit across **K**, **C**, and **P** guarantees bisectability.
+
+#### Kernel Changes (**K**)
+- **M** `include/cmsis-plus/rtos/os-c-decls.h` (`whole`): Defines `SMP_NO_OWNER (0xFFFFFFFFu)` and per-CPU thread context layout.
+- **M** `include/cmsis-plus/rtos/os-sched.h` (`whole`): Converts `current_thread_` into per-CPU array `current_thread_[OS_NCPU]` and declares `port_cpu_id()`.
+- **M** `include/cmsis-plus/rtos/os-thread.h` (`whole`): Adds CPU affinity mask `th_cpu_affinity` and per-core execution state tracking.
+- **M** `src/rtos/os-core.cpp` (`whole` + Fix H): Implements portable SMP scheduler: per-CPU ready lists, recursive kernel spinlock acquisition, Inter-Processor Interrupt (IPI) dispatching, and the critical invariant prohibiting context switching while holding `_smp_klock`.
+- **M** `src/rtos/os-idle.cpp` (`whole`): Instantiates and registers dedicated idle thread per physical core (`os_idle_thread_core[OS_NCPU]`).
+- **M** `src/rtos/os-main.cpp` (`whole`): Pins main bootstrap thread to Core 0 (`affinity = (1u << 0)`).
+- **M** `src/rtos/os-thread.cpp` (`whole` + Fix H): Implements SMP thread migration, affinity enforcement, and the 5-stage stack-pointer claim/publish protocol.
+
+#### Cortex-M Port Changes (**C**)
+- **M** `include/cmsis-plus/rtos/port/os-c-decls.h`, `os-decls.h`, `os-inlines.h` (`whole`): Defines Cortex-M SMP port contract: per-core `lock_state[OS_NCPU]`, recursive `_smp_klock_enter()` / `_smp_klock_exit()` with PRIMASK interrupt masking.
+- **M** `src/rtos/os-core.cpp` (`whole`): Implements Cortex-M SMP PendSV context switch handler with atomic stack pointer publish/claim.
+
+#### POSIX-Arch Port Changes (**P**)
+- **M** `include/cmsis-plus/rtos/port/os-c-decls.h`, `os-decls.h`, `os-inlines.h` (`whole` + Fixes A, I): Declares TLS `_this_cpu`, `_in_isr[OS_NCPU]`, and Clang `-Weverything` ignore pragmas.
+- **A** `include/host_cpu.hpp` & `src/host_cpu.cpp` (`whole` + Fixes C, E, G, J): Implements threads-as-cores multi-processing model using `pthread_create()`, per-core POSIX interval timers (`SIGEV_THREAD_ID`), and IPI signalling via `pthread_kill(..., SIGRTMIN+1)`.
+- **A** `include/exception_handler.hpp` & `src/exception_handler.cpp` (`whole` + Fixes F, J): Implements host exception signal dispatching and weak `g_core_stage[OS_NCPU]` boot synchronization array.
+- **A** `src/free-store.cpp` (`whole` + Fix J): Host heap free-store allocator initialization.
+- **A** `include/hw_result.hpp` & `src/board-contract.cpp` (`whole`): Hardware/QEMU PASS/FAIL string protocol handshake.
+- **M** `src/rtos/os-core.cpp` (`whole` + Fixes B, C, J): Host SMP scheduler initialization and signal-driven context switching.
+- **M** `CMakeLists.txt` (`additive` / Fix D): Additively registers `src/host_cpu.cpp`, `src/free-store.cpp`, `src/exception_handler.cpp` in `micro-os-plus-iii-posix-arch-interface`.
+
+#### Lift-Time Hardening Corrections (Fixes A–J)
+- **Fix A/B:** In `posix-arch` `os-inlines.h`, converts `struct timespec tp;` to `timespec tp;` to resolve `-Werror=redundant-tags`.
+- **Fix C:** In `posix-arch` `os-core.cpp` and `host_cpu.cpp`, guards `uc_sigmask` manipulation with `#if !defined(OS_INCLUDE_LIBUCONTEXT)` since standard `<ucontext.h>` has `uc_sigmask` while standalone `libucontext` does not.
+- **Fix D:** Additively appends SMP host sources to CMake INTERFACE target without altering baseline structure.
+- **Fix E:** In `host_cpu.cpp`, removes duplicate `port_cpu_id` declarations and adds prior prototype for `port_smp_ipi` override to silence `-Werror=missing-declarations`.
+- **Fix F/G:** In `exception_handler.cpp` and `host_cpu.cpp`, defines port-side `__attribute__((weak)) volatile uint32_t g_core_stage[OS_NCPU]` so the port links cleanly without the test board.
+- **Fix H:** In kernel `os-core.cpp` and `os-thread.cpp`, wraps `port_cpu_id` forward declarations with `#pragma GCC diagnostic ignored "-Wredundant-decls"` to avoid clashes with port header prototypes under true SMP builds.
+- **Fix I/J:** In posix-arch headers and `.cpp` files, injects comprehensive Clang `-Weverything` suppression blocks (`-Wc++98-compat-pedantic`, `-Wreserved-identifier`, `-Wunsafe-buffer-usage`, `-Wcast-function-type-strict`).
+
+#### Dual-Core Verification Platform (`native-smp`)
+- **A** `tests/platforms/native-smp/`: Adds genuine host SMP platform setting `-DOS_USE_SMP_SCHEDULER=1` and `-DOS_INTEGER_RTOS_PORT_NCPU=2` via `target_compile_definitions`.
+- **M** `tests/package.json`: Adds `native-smp-cmake-gcc14-debug/release` configs and `test-native-smp` action.
+- *Why Essential:* Setting `-D` flags on the CMake command line creates cache variables that never reach the compiler. `native-smp` is the **only** host mechanism that compiles real SMP code and immediately validates Part B.
+
+---
+
+### Phase C1 — Port Semantic Releases (PR #3, Step 24)
+
+**Why Now:** Part B introduced and finalized the multi-core SMP port contract. Step 24 tags semantic releases for the ports (`posix-arch v1.1.0` and `cortexm v1.2.0`), publishing the ABI required by downstream silicon and tests in PR #5 and PR #6.
+
+| Repo | File | Action | Lift Method | Deep Technical "WHY" / Release Discipline |
+|---|---|---|---|---|
+| **P** | `package.json` | **M** | `release-port.sh` (Python) | Bumps version from `1.0.0` to `1.1.0`. *Why:* Publishes host SMP CPU model, per-core signal timers, and high-resolution monotonic clock. |
+| **C** | `package.json` | **M** | `release-port.sh` (Python) | Bumps version from `1.1.0` to `1.2.0`. *Why:* Publishes SMP port lock, multi-core PendSV switch, and SysTick overflow fix. |
+
+> **Critical Release Discipline:** Version bumping is executed strictly via `scripts/smp/release-port.sh` using Python. Upstream xPack repositories configure a `postversion: "git push origin --all && git push origin --tags"` lifecycle script in `package.json`. Standard `npm version` invokes this hook even with `--no-git-tag-version`, attempting unauthorized remote pushes. `release-port.sh` modifies `package.json` directly and creates local tags only.
+
+---
+
+### Phase C2 — New Silicon Targets & Modular CMake (PR #5, Steps 25–26)
+
+**Why Here:** These steps introduce support for modern multi-core ARM microcontrollers (ARM Cortex-M33 / SSE-200 and Raspberry Pi RP2350) and establish an additive, modular CMake build structure that allows new platforms to consume the fat `micro-os-plus::iii` library without breaking single-core targets.
+
+#### Step 25 — New Silicon Cores (Cortex-M33 & RP2350)
+- **C A** `include-m33/cmsis-plus/rtos/port/os-inlines.h`: Port inline functions for Cortex-M33 (ARMv8-M Mainline). Implements dual-core NVIC Message Handling Unit (MHU) IPI signaling and SysTick management.
+- **C A** `src/rtos/os-core-m33.cpp`: Context switch and interrupt management for Cortex-M33 with FPU state preservation.
+- **C A** `include-rp2350/cmsis-plus/rtos/port/os-inlines.h`: Port inlines for Raspberry Pi RP2350 (dual Cortex-M33). Backs recursive `_smp_klock` with RP2350 SIO hardware spinlock 0 (`*(volatile uint32_t*)(SIO_BASE + SIO_SPINLOCK0_OFFSET)`).
+- **C A** `src/rtos/os-core-rp2350.cpp`: Implements RP2350 inter-core FIFO IRQ (IRQ 25) for cross-core IPI wakeups.
+- **P A** `src/board-contract.cpp`, `src/free-store.cpp`, `include/hw_result.hpp`: Reusable silicon bring-up contracts.
+- **K M** `src/rtos/os-thread.cpp` (`additive`): Adds inter-processor interrupt wake-up dispatch in `thread::resume()` when `OS_INTEGER_RTOS_PORT_NCPU > 1`.
+
+#### Step 26 — Modular Add-Only CMake Architecture
+- **K A** `cmake/toolchains/arm-none-eabi.cmake` & `cmake/toolchains/aarch64-none-elf.cmake`: Standardized toolchain definition files for cross-compilation.
+- **K A** `cmake/uos-app.cmake`: Helper macro `uos_add_app()` adapted to link `micro-os-plus::iii-core` for bare-metal targets while linking the fat `::iii` for standard platforms.
+- **C M** `CMakeLists.txt` (`additive`): Appends `micro-os-plus::cortexm-qemu-m33` target (`-mcpu=cortex-m33`, `include-m33/`, `src/rtos/os-core-m33.cpp`). Baseline `::iii-cortexm` is 100% untouched.
+- **K A** `tests/platforms/2xcortex-m33/`: Dual-core QEMU MPS2 AN521 (SSE-200) platform running with `--cpu cortex-m33 --smp 2`.
+- **K A** `tests/device-qemu-cortexm-m33/`: Self-contained device configuration providing CMSIS Core CM33 headers and memory maps. Reuses generic vectors without modifying shared `device-qemu-cortexm`.
+- **K M** `tests/package.json` (`additive`): Registers `2xcortex-m33-cmake-gcc-debug/release` configs, `test-2xcortex-m33-cmake` action, and `arm-cmsis-core-dependencies`.
+
+---
+
+### Phase C3 — Test Suites & Multi-Architecture Platforms (PR #6, Steps 27–28)
+
+**Why Here:** With silicon cores and CMake targets established, Step 27 imports proven multi-core test suites (`fp-switch`, `smp-support`) and Step 28 wires up complete multi-architecture QEMU platforms for AArch32 and AArch64 (Raspberry Pi 3B / Zero 2W).
+
+#### Step 27 — New Multi-Core Test Suites & Test Scaffolding
+- **K A** `tests/sources/fp-switch/`: FPU context switch stress test (6 threads, 3000 ticks) verifying hardware floating-point register preservation across multi-core SMP context switches.
+- **K M** `tests/cmake/global-definitions.cmake` (`additive`): Appends `set(ENABLE_FP_SWITCH_TEST true)`. Inert for existing baseline platforms; enabled only on `2xcortex-m33`.
+- **K A** `tests/smp-support/` (`absorb-test-smpl.sh`): Absorbs the root `test_smpl/` folder from `smp` branch into `tests/smp-support/` (`include/hw_result.hpp`, `src/board-contract.cpp`, `run-qemu.sh`, `run-host.sh`, `run-hw.sh`, OpenOCD configs). Eliminates non-standard root directory.
+- **A32** / **A64 M** `test/boards/rpi-zero-2w/{qemu,hw}.sh`: Repoints test execution scripts to consume shared runner from `tests/smp-support/run-qemu.sh`.
+
+#### Step 28 — Multi-Architecture Add-Only Platforms & Harness Sub-Targets
+- **K M** `CMakeLists.txt` (`integrate-aarch-harness.sh`): Adds additive sub-targets for thin-core ports:
+  - `micro-os-plus::iii-posix-io`: Granular POSIX I/O layer.
+  - `micro-os-plus::iii-semihosting`: ARM semihosting syscall glue.
+  - `micro-os-plus::iii-newlib-reent`: Thread-safe newlib reentrancy structures.
+  - `micro-os-plus::test-support`: Carries `board-contract.cpp` compiled in the target architecture scope.
+- **K A** `tests/platforms/aarch32-rpi3b` & `tests/platforms/aarch64-rpi3b`: Adds 4-core QEMU `raspi3b` SMP test platforms (ARMv7-A and ARMv8-A).
+- **K A** `tests/platforms/cortexm-pico2`: Adds Raspberry Pi Pico 2 (RP2350) dual-core target.
+- **K M** `tests/cmake/tests-main.cmake` (`additive`): Extends harness to dispatch new platforms.
+- **K M** `tests/package.json` (`additive`): Registers `test-smp-all` composite action executing `test-2xcortex-m33-cmake`, `test-native-smp`, and AArch legs.
+
+---
+
+### Phase D — Documentation Suite & Final Merge Reconciliation (PR #7, Steps 29–30)
+
+**Why Here:** The final phase compiles all technical documentation and PDF runbooks, reconciles repository histories with upstream master branches, restores untouched CI metadata, and removes transient developer tooling.
+
+#### Step 29 — Documentation Suite Synchronization
+- **K M** `docs/*.md` & `docs/*.pdf`: Synchronizes architecture analyses, PR specifications, and runbooks:
+  - `docs/MICRO-OS-PLUS-SMP-VS-SINGLECORE-ANALYSIS.md` & `.pdf`
+  - `docs/SMP-UPSTREAM-INTEGRATION-PLAN.md` & `.pdf`
+  - `docs/Implementation-SMP-Integration.md` & `.pdf`
+  - `docs/pool-request.md` & `.pdf`
+  - `docs/files-modif-by-step.md` & `.pdf`
+- **K M** `docs/render-pdfs.sh`: Updates batch PDF compilation script using `md2pdf.py`.
+
+#### Step 30 — Final Merge Reconciliation & Repository Cleansing
+- **All M**: Merges `origin/xpack-development` into `step/30` across all repositories. Baseline is an ancestor; merge is clean with zero conflicts.
+- **All M**: Restores pristine upstream repository metadata: `.github/workflows/ci.yml`, `README.md`, `LICENSE`, Doxygen templates. Ensures CI configurations are 100% byte-identical to upstream.
+- **K D**: Deletes `scripts/smp/` directory (developer-only transition tooling).
+- **K M** `finalize.sh`: Executes final local validation verifying that both `xpm run test-all` (72/72 single-core) and `xpm run test-smp-all` are 100% green.
+
+---
+
+### Step 31 — Dedicated Raspberry Pi Pico 2 Platform Wiring
+
+**Why:** Configures complete standalone hardware testing infrastructure for the Raspberry Pi Pico 2 (RP2350 dual ARM Cortex-M33).
+- **C A** `include-rp2350/cmsis-plus/rtos/port/os-inlines.h`: Dual-core greeting banner, 150 MHz system clock validation, SIO spinlock 0 recursive locking.
+- **C A** `src/rtos/os-core-rp2350.cpp`: Boot synchronization for Core 1 via Pico SDK mailbox registers; inter-core FIFO interrupt handler.
+- **K A** `tests/platforms/cortexm-pico2/`: Platform definitions and OpenOCD SWD flashing scripts (`run-hw.sh`).
+
+---
+
+## 3. Modifications Organized by Subject / Theme / Domain
+
+This cross-cutting index maps every single file modification across the entire integration into its primary functional domain.
+
+### 1. Memory Management & Allocators
+- `M` `include/cmsis-plus/rtos/os-memory.h` — Declares `do_usable_size()` and overflow-checked `align_size()`. `[S2 K]`
+- `M` `include/cmsis-plus/memory/first-fit-top.h` — `first_fit_top::do_usable_size()` declaration. `[S2 K]`
+- `M` `src/rtos/os-memory.cpp` — Base `memory_resource::do_usable_size()` default implementation. `[S2 K]`
+- `M` `src/memory/first-fit-top.cpp` — Usable block size override + diagnostic pragma wrap (`-Wcast-align`, `-Wunsafe-buffer-usage`). `[S2 K]`
+- `M` `src/memory/lifo.cpp` — LIFO pool usable size override. `[S2 K]`
+- `M` `src/memory/block-pool.cpp` — Fixed block pool usable size override. `[S2 K]`
+- `M` `src/libc/stdlib/malloc.cpp` — `calloc()` integer multiplication overflow guard. `[S2 K]`
+
+### 2. SMP Scheduler Core & Multi-Core Dispatch
+- `M` `include/cmsis-plus/rtos/os-sched.h` — Per-CPU scheduler interface, `current_thread_[OS_NCPU]`, port lock. `[S14 K]`
+- `M` `src/rtos/os-core.cpp` — Portable SMP scheduler: per-CPU ready lists, spinlock acquisition, IPI reschedule, no-switch-while-locked rule. `[S14 K]`
+- `M` `src/rtos/os-core.cpp` — Port half of SMP scheduler (Cortex-M PendSV, POSIX signals). `[S14 C]` `[S14 P]`
+- `M` `src/rtos/os-idle.cpp` — One dedicated idle thread per physical CPU core. `[S14 K]` (Single-core projection `[S9 K]`)
+- `M` `src/rtos/os-main.cpp` — Main thread initialization pinned to Core 0. `[S14 K]`
+- `M` `include/cmsis-plus/rtos/os-c-decls.h` — Per-CPU C ABI fields and `SMP_NO_OWNER` definition. `[S14 K]`
+
+### 3. Thread Lifecycle & State Machine
+- `M` `src/rtos/os-thread.cpp` — Exported out-of-line `this_thread::suspend()` definition. `[S1 K]`
+- `M` `include/cmsis-plus/rtos/os-thread.h` — Handler-mode `errno` scratch storage. `[S7 K]`
+- `M` `include/cmsis-plus/rtos/os-thread.h` & `src/rtos/os-thread.cpp` — `state::destroying` (7), atomic `join()`, `detach()`, idle reaper. `[S9 K]`
+- `M` `include/cmsis-plus/rtos/os-c-decls.h` — `os_thread_state_destroying = 7` C ABI enum. `[S9 K]`
+- `M` `include/cmsis-plus/rtos/os-thread.h` & `src/rtos/os-thread.cpp` — Full SMP thread lifecycle, CPU affinity mask, deferred stack switch. `[S14 K]`
+- `M` `src/libcpp/thread-cpp.h` & `include/cmsis-plus/estd/thread_internal.h` — `std::thread::join()` native handle barrier and functor lifetime retention. `[S11 K]`
+- `M` `src/rtos/os-thread.cpp` — Cross-core IPI dispatch in `thread::resume()`. `[S25 K]`
+
+### 4. Synchronization Primitives (Mutex & Condvar)
+- `M` `src/rtos/os-mutex.cpp` — POSIX priority ceiling before ownership, dynamic boost tracking, unlock recomputation, owner caching. `[S8 K]`
+- `M` `src/rtos/os-condvar.cpp` & `include/cmsis-plus/rtos/os-condvar.h` — Atomic wait list enqueue, mutex release, sleep sequence; attribute clock binding. `[S10 K]`
+- `M` `include/cmsis-plus/rtos/os-c-decls.h` — `os_condvar_t` `void* clock` member alignment. `[S10 K]`
+
+### 5. Timers & Message Queues
+- `M` `src/rtos/os-timer.cpp` — Invocation of software timer callbacks outside critical sections; catch-up re-arming. `[S7 K]`
+- `M` `src/rtos/internal/os-lists.cpp` — Expiration queue list manipulation for timer callbacks. `[S7 K]`
+- `M` `src/rtos/os-mqueue.cpp` — Preemptive reschedule after message queue send/receive wakes a thread. `[S12 K]`
+
+### 6. Clocks & Timestamps
+- `M` `include/cmsis-plus/rtos/os-decls.h` — Declares `port::clock_highres::has_hardware_counter()`. `[S13 K]`
+- `M` `src/rtos/os-clocks.cpp` — Invokes high-resolution hardware counter. `[S13 K]`
+- `M` `include/cmsis-plus/rtos/port/os-inlines.h` — `has_hardware_counter() -> false`, `hardware_counter() -> 0`, SysTick ICSR `PENDSTSET` fix. `[S13 C]`
+- `M` `include/cmsis-plus/rtos/port/os-inlines.h` — Host `CLOCK_MONOTONIC` highres timer implementation. `[S13 P]`
+
+### 7. POSIX I/O & File Descriptors
+- `M` `include/cmsis-plus/posix/dirent.h` — Adds `int reserved;` to empty `DIR` struct; prevents double-declaration with glibc. `[S1 K]`
+- `M` `include/cmsis-plus/posix-io/c-syscalls-aliases-standard.h` — Maps `CMSIS_PLUS_POSIX_IO_RW_RETURN_TYPE` to newlib `_READ_WRITE_RETURN_TYPE`. `[S1 K]`
+- `M` `src/posix-io/file-descriptors-manager.cpp` — Mutex protection for file descriptor allocation table (+ Clang `-Wunsafe-buffer-usage`). `[S5 K]`
+- `M` `include/cmsis-plus/posix-io/file-system.h` & `include/cmsis-plus/posix-io/net-stack.h` — Mount list and net-stack mutex protection. `[S5 K]`
+- `M` `src/posix-io/block-device.cpp` — Corrects inverted zero-size partition check. `[S5 K]`
+
+### 8. C / C++ Runtime & Standards Conformance
+- `M` `include/cmsis-plus/utils/lists.h` — Intrusive list iterator method call syntax conformance. `[S1 K]`
+- `K` `src/libc/stdlib/timegm.c` — Baseline kept to avoid missing prototype errors on glibc ≥ 2.44. `[S1 K]`
+- `M` `src/libcpp/new.cpp` — C++17 aligned `operator new` / `delete`. `[S3 K]`
+- `M` `src/libcpp/system-error.cpp` — Static Meyers singleton error categories (+ Clang `-Wexit-time-destructors`). `[S3 K]`
+- `M` `src/libcpp/chrono.cpp` — 64-bit integer overflow protection in tick duration calculation. `[S3 K]`
+
+### 9. CMSIS-RTOS C Wrapper (v1 ABI)
+- `M` `src/rtos/os-c-wrapper.cpp` — One-shot timer default, polymorphic deletion, 64-bit millisecond timeout scaling. `[S4 K]`
+- `M` `src/rtos/os-c-wrapper.cpp` — Full SMP CPU affinity wrapper functions. `[S14 K]`
+
+### 10. ARM Architecture Startup & Semihosting
+- `M` `include/cmsis-plus/arm/semihosting.h` — ARMv8-M mainline/baseline architecture macro guards. `[S6 K]`
+- `M` `src/startup/exception-handlers.c` — `SecureFault_Handler` exception handler and weak console mirror hook. `[S6 K]`
+- `M` `src/semihosting/c-syscalls-semihosting.cpp` — Semihosting `fstat()` character device fallback. `[S6 K]`
+
+### 11. Port SMP Contract (ABI Headers)
+- `M` `include/cmsis-plus/rtos/port/os-c-decls.h`, `os-decls.h`, `os-inlines.h` — Word size, atomics, recursive port lock, per-CPU current thread. `[S14 C]` `[S14 P]`
+- `M` (POSIX `os-inlines.h`) — Converts `struct timespec tp;` to `timespec tp;` (`-Werror=redundant-tags`, Fix A/B). `[S14 P]`
+- `M` (POSIX port headers) — Injects Clang diagnostic suppression block (`-Wc++98-compat-pedantic`, `-Wreserved-identifier`, Fix I). `[S14 P]`
+
+### 12. POSIX-Arch Host Emulation Runtime
+- `A` `include/host_cpu.hpp` & `src/host_cpu.cpp` — Multi-threaded host CPU emulation (pthreads-as-cores, interval timers, signal IPI). `[S14 P]`
+- `A` `include/exception_handler.hpp` & `src/exception_handler.cpp` — Signal dispatching, weak `g_core_stage[OS_NCPU]` synchronization array. `[S14 P]`
+- `A` `src/free-store.cpp` — Host free-store allocator bring-up. `[S14 P]`
+- `A` `include/hw_result.hpp` & `src/board-contract.cpp` — PASS/FAIL string protocol and compile-time board contract. `[S14 P]`
+
+### 13. Silicon Support (RP2350, Cortex-M33, BCM2837, STM32F4)
+- `A` `include-m33/` & `src/rtos/os-core-m33.cpp` — Cortex-M33 (ARMv8-M) port implementation. `[S25 C]`
+- `A` `include-rp2350/` & `src/rtos/os-core-rp2350.cpp` — Raspberry Pi RP2350 dual-core port with SIO spinlock 0. `[S25 C]` `[S31 C]`
+- `A` `soc/rp2350/` & `soc/stm32f4xx/` — RP2350 and STM32F4 CMSIS silicon headers moved from `devices`. `[P0 C]`
+- `A` `soc/bcm2837/` & `soc/rk3506/` — BCM2837 (RPi 3B) and RK3506 silicon headers moved from `devices`. `[P0 A32/A64]`
+- `A` `soc/native/` — POSIX host block device storage backend moved from `devices`. `[P0 P]`
+
+### 14. Modular CMake Build Architecture
+- `M` `CMakeLists.txt` — Additively registers host SMP source files in INTERFACE library. `[S14 P]`
+- `M` `CMakeLists.txt` — Additively appends `micro-os-plus::cortexm-qemu-m33` target. `[S26 C]`
+- `A` `cmake/toolchains/arm-none-eabi.cmake` & `aarch64-none-elf.cmake` — Cross-compilation toolchain profiles. `[S26 K]`
+- `A` `cmake/uos-app.cmake` — Additive `uos_add_app()` helper macro. `[S26 K]`
+- `M` `CMakeLists.txt` — Additive sub-targets `::iii-posix-io`, `::iii-semihosting`, `::iii-newlib-reent`, `::test-support`. `[S28 K]`
+- `M` `CMakeLists.txt` — Alias shims for `micro-os-plus::devices`. `[P0 P/C/A32/A64]`
+
+### 15. Shared SMP Test Scaffolding
+- `A` `tests/smp-support/` — Dissolved `test_smpl/` directory containing `hw_result.hpp`, `board-contract.cpp`, `run-qemu.sh`, `run-host.sh`, `run-hw.sh`, OpenOCD scripts. `[S27 K]`
+- `A` `tests/sources/fp-switch/` — Multi-threaded FPU context switch test suite. `[S27 K]`
+- `M` `tests/cmake/global-definitions.cmake` — Appends `ENABLE_FP_SWITCH_TEST` toggle. `[S27 K]`
+
+### 16. Multi-Architecture Test Platforms & Harness
+- `A` `tests/platforms/native-smp/` — Genuine host dual-core platform (`OS_USE_SMP_SCHEDULER=1`, `OS_NCPU=2`). `[S14/S28 K]`
+- `A` `tests/platforms/2xcortex-m33/` & `tests/device-qemu-cortexm-m33/` — Dual Cortex-M33 QEMU platform (MPS2 AN521). `[S26 K]`
+- `A` `tests/platforms/aarch32-rpi3b` & `tests/platforms/aarch64-rpi3b` — 4-core QEMU `raspi3b` platforms. `[S28 K]`
+- `A` `tests/platforms/cortexm-pico2` — Raspberry Pi Pico 2 hardware test platform. `[S28/S31 K]`
+- `M` `tests/cmake/tests-main.cmake` — Additive platform dispatch logic. `[S14/S28 K]`
+- `M` `tests/package.json` — Additive build configurations and actions (`test-native-smp`, `test-2xcortex-m33-cmake`, `test-smp-all`). `[S14/S26/S28 K]`
+
+### 17. Diagnostics, Trace & Instrumentation
+- `M` `include/cmsis-plus/diag/instrumentation.h` — Adds `OS_INTEGER_INSTRUMENTATION_SUSPEND_CAUSE_CONDVAR (12)`. `[S10 K]`
+
+### 18. Semantic Port Versioning & Repository Releases
+- `M` `package.json` — Bumps `posix-arch` to `v1.1.0`. `[S24 P]`
+- `M` `package.json` — Bumps `cortexm` to `v1.2.0`. `[S24 C]`
+
+---
+
+## Appendix — Full Diffs, Code Listings & Pull Request Rationale
+
+Generated directly from the verified integration commits. This appendix is structured around the **7 Progressive Pull Requests (PR #1 through PR #7)**, providing the deep technical rationale ("WHY") for each PR as a standalone unit, followed by the exact code diffs and listings.
+
+---
+
+### Appendix Section 1 — Pull Request #1: Uniprocessor Correctness & Toolchain Hardening (Steps 1–13)
+
+#### Why PR #1 is Needed as a Standalone Pull Request
+
+1. **Isolation of Single-Core Defect Fixes from SMP Complexity:**
+   - Upstream `xpack-development` is a mature uniprocessor RTOS. Conflating essential bug fixes with multi-core architectural rewrites increases review friction and risks introducing subtle regressions. PR #1 isolates 13 critical single-core fixes, allowing upstream maintainers to review and merge them with complete confidence.
+2. **Elimination of Critical Concurrency Hazards & Security Vulnerabilities:**
+   - **Heap Integer Overflow:** Fixes `calloc()` in `src/libc/stdlib/malloc.cpp` where integer multiplication truncation (`nelem * elbytes`) permitted undersized buffer allocations, leading to heap buffer corruption.
+   - **Condition Variable Lost Signals:** Solves the classic lost-signal race in `src/rtos/os-condvar.cpp` by atomically enqueuing the calling thread into the wait queue under scheduler lock **before** releasing the associated mutex.
+   - **Mutex Priority Inversion:** Implements POSIX priority ceiling protocol in `src/rtos/os-mutex.cpp`, elevating caller priority before ownership transfer and dynamically recomputing priority on unlock.
+   - **Timer Deadlock Elimination:** Software timer callbacks in `src/rtos/os-timer.cpp` now execute **outside the scheduler critical section**, enabling callbacks to safely acquire mutexes or invoke blocking RTOS APIs.
+   - **Thread Destruction Race Conditions:** Introduces `state::destroying` (7) and atomic `join()` / `detach()` in `src/rtos/os-thread.cpp`, allowing the idle thread reaper to reclaim dynamic stacks and TCBs safely.
+3. **Strict ISO C/C++ and Toolchain Standards Conformance:**
+   - Fixes empty struct violation in `include/cmsis-plus/posix/dirent.h` (violates ISO C99/C11 §6.7.2.1).
+   - Implements C++17 aligned allocation operators `operator new(size_t, align_val_t)` in `src/libcpp/new.cpp`.
+   - Protects `src/libcpp/system-error.cpp` Meyers singletons against Clang `-Wexit-time-destructors`.
+   - Protects `src/libcpp/chrono.cpp` tick conversions against 64-bit integer multiplication overflow.
+   - Preserves baseline `src/libc/stdlib/timegm.c` to prevent prototype visibility errors on glibc ≥ 2.44 under `-Werror=missing-prototypes`.
+4. **Verification Gate:**
+   - **100% Green on Uniprocessor Baseline:** All 72 tests across 24 build configurations pass with `-Werror` enabled across GCC and Clang toolchains. Zero SMP macro leakage.
 
 ### smp-step(01): ISO C dirent, list iterators, exported suspend (timegm kept baseline)
+
+#### Why Step 1 is Needed:
+- **ISO C99/C11 §6.7.2.1 Conformance & `-Wextra-semi`:** In `include/cmsis-plus/posix/dirent.h`, the empty struct definition `typedef struct { ; } DIR;` violated ISO C standard constraints requiring at least one named member and caused `-Wextra-semi` compiler diagnostics. Adding `int reserved;` fixes syntax validity across GCC and Clang.
+- **Modern glibc Header Conflicts:** Modern glibc headers (`__USE_MISC`/ISO C23) conflict on duplicate declarations of `DIR` and `struct dirent`. Proper macro inclusion guards resolve host build errors on modern Linux distributions.
+- **Intrusive List Iterator Method Semantics:** In `include/cmsis-plus/utils/lists.h`, iterator post-increment and post-decrement operators were accessing `node_->next` / `node_->prev` directly instead of invoking member accessor methods `node_->next()` / `node_->prev()`, breaking iterator concepts under modern C++ standards.
+- **Symbol Export for C Wrapper:** In `src/rtos/os-thread.cpp`, removing `inline` from the out-of-line `this_thread::suspend()` definition allows the compiler to generate a linkable external symbol required by the CMSIS-RTOS C API wrapper.
+- **glibc ≥ 2.44 Missing Prototype Safety (`timegm.c`):** The `smp` branch hid `timegm()` behind `#if !defined(__GLIBC__)`, which strips the prototype when `<time.h>` hides it under strict flags, causing `-Werror=missing-prototypes` failures on glibc ≥ 2.44. Deliberately keeping baseline `timegm.c` ensures 100% portability.
+
 
 ```diff
 diff --git a/include/cmsis-plus/posix/dirent.h b/include/cmsis-plus/posix/dirent.h
@@ -333,6 +540,12 @@ index 6476782f..3b8f293a 100644
 ```
 
 ### smp-step(02): memory overflow, usable size, calloc/realloc
+
+#### Why Step 2 is Needed:
+- **Memory Allocator Interface Completeness:** In `include/cmsis-plus/rtos/os-memory.h` and `include/cmsis-plus/memory/first-fit-top.h`, `do_usable_size(void*)` is declared in the `memory_resource` abstract base class and overridden in `first_fit_top`, `lifo`, and `block_pool`. Landing header declarations, base implementations, and overrides simultaneously prevents `undefined reference to memory_resource::do_usable_size` link errors.
+- **Integer Multiplication Overflow Security in `calloc()`:** In `src/libc/stdlib/malloc.cpp`, `calloc()` calculates `nelem * elbytes`. Without overflow checks, integer wrap-around could allocate a smaller buffer than requested, causing severe heap buffer overflows. Step 2 adds `if (nelem != 0 && elbytes > (SIZE_MAX / nelem)) { errno = ENOMEM; return nullptr; }`.
+- **Clang & ARM GCC Diagnostics Hardening:** Pointer arithmetic in `src/memory/first-fit-top.cpp` triggers `-Wcast-align` on ARM GCC and `-Wunsafe-buffer-usage` on Clang `-Weverything`. Wrapping `first_fit_top::do_usable_size()` with diagnostic pragmas allows strict build gates without lowering compiler security levels.
+
 
 ```diff
 diff --git a/include/cmsis-plus/memory/first-fit-top.h b/include/cmsis-plus/memory/first-fit-top.h
@@ -636,6 +849,12 @@ index 7b3c9baa..d5f89855 100644
 ```
 
 ### smp-step(03): C++17 aligned operator new/delete, static system_error category, chrono overflow
+
+#### Why Step 3 is Needed:
+- **ISO C++17 Aligned Allocation:** In `src/libcpp/new.cpp`, modern C++17 standard requires support for over-aligned types (`std::align_val_t`). Step 3 implements `operator new(std::size_t, std::align_val_t)` and `operator delete(void*, std::align_val_t)` routing to the underlying RTOS memory manager.
+- **Meyers-Singleton Thread Safety & Exit Destructors:** In `src/libcpp/system-error.cpp`, standard error categories (`generic_category()`, `system_category()`) are implemented as Meyers singletons (local static instances) ensuring lazy, thread-safe initialization. Adding `#pragma clang diagnostic ignored "-Wexit-time-destructors"` prevents Clang warnings regarding global destructor registration at process termination.
+- **64-Bit Integer Duration Overflow Prevention:** In `src/libcpp/chrono.cpp`, calculating nanoseconds from high-frequency hardware cycles via `(cycles * 1e9) / freq` overflows 64-bit integers after moderate uptime. Step 3 rewrites the arithmetic as `(cycles / freq) * 1e9 + ((cycles % freq) * 1e9) / freq`, guaranteeing overflow-free calculations across years of uptime.
+
 
 ```diff
 diff --git a/src/libcpp/chrono.cpp b/src/libcpp/chrono.cpp
@@ -979,6 +1198,13 @@ index c11ad9f0..dd7bf829 100644
 
 ### smp-step(04): one-shot timer default, polymorphic mutex/semaphore delete, 64-bit CMSIS-v1 timeouts
 
+#### Why Step 4 is Needed:
+- **CMSIS-RTOS v1 Compatibility Defaults:** In `src/rtos/os-c-wrapper.cpp`, CMSIS-RTOS timer creation default is corrected to one-shot (`osTimerOnce`) per the CMSIS-RTOS specification.
+- **Polymorphic Deletion & Resource Cleanup:** Ensures that `osMutexDelete()` and `osSemaphoreDelete()` invoke the correct polymorphic destructors for derived synchronization objects.
+- **64-Bit Millisecond Timeout Scaling:** Explicitly casts timeout milliseconds to `uint64_t` prior to multiplying by `1000u`, preventing 32-bit integer truncation on long timeouts.
+- **Lifting Isolation:** Step 4 surgically strips Step-9 `os_thread_state_destroying` static asserts and Step-20 SMP affinity blocks, ensuring the C-wrapper compiles cleanly on the Step 3 baseline without premature dependencies.
+
+
 ```diff
 diff --git a/src/rtos/os-c-wrapper.cpp b/src/rtos/os-c-wrapper.cpp
 index fc898c72..4bd9e1bb 100644
@@ -1154,6 +1380,12 @@ index fc898c72..4bd9e1bb 100644
 ```
 
 ### smp-step(05): POSIX I/O fd-manager mutexing, free-list locking, block-device size fix
+
+#### Why Step 5 is Needed:
+- **File Descriptor Table Concurrency Protection:** In `src/posix-io/file-descriptors-manager.cpp`, multiple concurrent threads executing `open()`, `socket()`, `dup()`, or `close()` could corrupt the file descriptor table. Wrapping table allocation, search, and free operations within `rtos::interrupts::critical_section` guarantees atomic descriptor management.
+- **Filesystem & Network Stack Mutexing:** In `include/cmsis-plus/posix-io/file-system.h` and `net-stack.h`, mount list iterations and network interface tracking are protected with mutexes to prevent list corruption during concurrent mount/unmount or interface registration.
+- **Block Device Partition Validation:** In `src/posix-io/block-device.cpp`, corrects an inverted partition size check, properly returning `EINVAL` when attempting to register a partition of zero blocks.
+
 
 ```diff
 diff --git a/include/cmsis-plus/posix-io/file-system.h b/include/cmsis-plus/posix-io/file-system.h
@@ -1620,6 +1852,12 @@ index 836539f2..699b3017 100644
 
 ### smp-step(06): ARMv8-M mainline guards + SecureFault, semihosting fstat fix, weak console-mirror hook
 
+#### Why Step 6 is Needed:
+- **ARMv8-M Architecture Mainline / Baseline Support:** In `include/cmsis-plus/arm/semihosting.h`, semihosting trap instructions (`BKPT 0xAB` vs `HLT 0xF000`) are guarded by `__ARM_ARCH_8M_MAIN__` and `__ARM_ARCH_8M_BASE__` macros to support ARM Cortex-M23/M33 processors.
+- **ARMv8-M Security Extension Fault Handling:** In `src/startup/exception-handlers.c`, adds `SecureFault_Handler` to trap and report TrustZone memory and peripheral security violations. Adds weak `os_board_console_mirror()` to allow board packages to mirror semihosting diagnostics to UART.
+- **Semihosting Syscall `fstat()` Correction:** In `src/semihosting/c-syscalls-semihosting.cpp`, `fstat()` assigns `S_IFCHR` (character device mode) only when file attributes have not been explicitly populated, preventing improper file mode overrides on host files.
+
+
 ```diff
 diff --git a/include/cmsis-plus/arm/semihosting.h b/include/cmsis-plus/arm/semihosting.h
 index de63417e..37c85d61 100644
@@ -1934,6 +2172,12 @@ index 98be7d14..533ffcd7 100644
 
 ### smp-step(07): timer callback outside critical section, catch-up re-arm, handler-mode errno scratch
 
+#### Why Step 7 is Needed:
+- **Elimination of Timer Callback Deadlocks:** In `src/rtos/os-timer.cpp` and `src/rtos/internal/os-lists.cpp`, software timer callbacks were historically invoked while holding internal scheduler critical section locks. If a user callback attempted to acquire a mutex, allocate memory, or signal a semaphore, the system deadlocked. Step 7 removes the timer from the active list under lock, releases the critical section, and invokes the callback function with interrupts enabled.
+- **Periodic Catch-Up Under Heavy IRQ Latency:** Re-arms periodic timers based on scheduled expiry rather than completion time, preventing cumulative timer drift under high interrupt load.
+- **Handler-Mode Errno Scratch Storage:** In `include/cmsis-plus/rtos/os-thread.h`, surgically adds an ISR `errno` storage field without pulling in later SMP thread fields.
+
+
 ```diff
 diff --git a/include/cmsis-plus/rtos/os-thread.h b/include/cmsis-plus/rtos/os-thread.h
 index 9cd7a05a..3aecb6a9 100644
@@ -2042,6 +2286,12 @@ index 7b9c89c5..f5318340 100644
 ```
 
 ### smp-step(08): mutex priority ceiling before ownership, max-waiter boost, unlock recompute, owner cache
+
+#### Why Step 8 is Needed:
+- **POSIX Priority Ceiling Protocol Enforcement:** In `src/rtos/os-mutex.cpp`, when a thread locks a priority ceiling mutex, its priority must be elevated to the ceiling **before** ownership is granted. This eliminates the vulnerability window where an intermediate-priority thread could preempt the caller before priority elevation took effect.
+- **Dynamic Priority Boost Tracking & Restoration:** When multiple threads wait on a priority-inheritance mutex, the owner thread's priority is boosted to the maximum priority among all waiters. Upon unlocking, owner priority is dynamically recomputed and restored to its original base priority.
+- **Owner Pointer Caching:** Caches owner thread reference across unlocked windows to eliminate race conditions during concurrent unlock and thread termination.
+
 
 ```diff
 diff --git a/src/rtos/os-mutex.cpp b/src/rtos/os-mutex.cpp
@@ -2191,6 +2441,13 @@ index e8cab9d1..6ce22248 100644
 ```
 
 ### smp-step(09): thread state::destroying, atomic join, detach, reaper
+
+#### Why Step 9 is Needed:
+- **Deterministic Thread Destruction State (`state::destroying`):** In `include/cmsis-plus/rtos/os-thread.h` and `src/rtos/os-thread.cpp`, introducing explicit `state::destroying = 7` prevents race conditions where a terminating thread is scheduled or signaled while its resources are being deallocated.
+- **Atomic `join()` and `detach()` Synchronization:** Ensures that `thread::join()` blocks atomically until the target thread enters `destroying` state, guaranteeing that thread stacks and control blocks are not freed while still referenced by the scheduler.
+- **Idle Thread Reaper Cleanup:** In `src/rtos/os-idle.cpp`, the idle thread acts as a safe asynchronous garbage collector (reaper), freeing dynamically allocated thread stacks after the thread has completely exited execution.
+- **Single-Core Projection (`sc-project.py`):** Strips all multi-core ready list and CPU affinity logic from `os-thread.cpp` (~37 SMP hunks), allowing single-core targets to benefit from lifecycle fixes without SMP overhead.
+
 
 ```diff
 diff --git a/include/cmsis-plus/rtos/os-c-decls.h b/include/cmsis-plus/rtos/os-c-decls.h
@@ -2582,6 +2839,12 @@ index 3b8f293a..79b0a71c 100644
 
 ### smp-step(10): condvar atomic wait/timed_wait, clock member, CONDVAR suspend cause
 
+#### Why Step 10 is Needed:
+- **Atomicity in `wait()` / `timed_wait()` to Eliminate Lost Signals:** In `src/rtos/os-condvar.cpp` and `include/cmsis-plus/rtos/os-condvar.h`, a classic concurrency hazard occurs if a thread releases its mutex and is preempted before enqueuing itself on the condition variable wait list. Step 10 links the thread to the wait list under scheduler lock, atomically releases the mutex, and suspends the thread, completely closing the lost-signal window.
+- **Configurable Clock Binding:** Binds condition variable `timed_wait()` timeouts directly to the specific clock instance (`os::rtos::clock*`) configured in attributes, allowing timeouts against either wall-clock real-time or monotonic steady clocks.
+- **ABI Structural Alignment:** Surgically uncomments `void* clock` in `include/cmsis-plus/rtos/os-c-decls.h` (`os_condvar_t`), ensuring C and C++ struct sizes match exactly.
+
+
 ```diff
 diff --git a/include/cmsis-plus/diag/instrumentation.h b/include/cmsis-plus/diag/instrumentation.h
 index 69e0c035..fd0b5cec 100644
@@ -2872,6 +3135,11 @@ index 9c1021a3..b08ff1e7 100644
 
 ### smp-step(11): std::thread join waits for native handle, retained functor for deterministic free
 
+#### Why Step 11 is Needed:
+- **`std::thread` Native Handle Synchronization:** In `src/libcpp/thread-cpp.h` and `include/cmsis-plus/estd/thread_internal.h`, `std::thread::join()` is updated to wait directly on the native RTOS thread handle.
+- **Functor Object Lifetime Guarantee:** Retains callable functor objects inside the thread wrapper structure until the thread has finished execution, preventing use-after-free crashes when invoking lambdas or functors containing captured references.
+
+
 ```diff
 diff --git a/include/cmsis-plus/estd/thread_internal.h b/include/cmsis-plus/estd/thread_internal.h
 index 1d97128e..389498e8 100644
@@ -2964,6 +3232,10 @@ index c14f5bba..af572d23 100644
 ```
 
 ### smp-step(12): message queue reschedule after send/receive wakeups
+
+#### Why Step 12 is Needed:
+- **Immediate Preemption on Message Queue Wakeups:** In `src/rtos/os-mqueue.cpp`, when `send()`, `try_send()`, `receive()`, or `try_receive()` wakes a higher-priority waiting thread, `port::scheduler::reschedule()` is invoked immediately upon exiting the critical section across all 6 code paths. This guarantees prompt preemption on Cortex-M and POSIX uniprocessor targets.
+
 
 ```diff
 diff --git a/src/rtos/os-mqueue.cpp b/src/rtos/os-mqueue.cpp
@@ -3191,6 +3463,14 @@ index 3f134fae..cd46c58a 100644
 
 ### smp-step(13): highres clock port sync (kernel decl+call, cortexm ICSR, posix-arch CLOCK_MONOTONIC)
 
+#### Why Step 13 is Needed:
+- **First Cross-Repository Synchronization (Kernel + Cortex-M + POSIX-Arch):**
+  - **Kernel (`os-decls.h`, `os-clocks.cpp`):** Declares and calls `port::clock_highres::has_hardware_counter()` and `hardware_counter()`.
+  - **Cortex-M Port (`os-inlines.h`):** Returns `false`/`0` and fixes SysTick overflow detection by checking `(SCB->ICSR & SCB_ICSR_PENDSTSET_Msk) != 0` to adjust cycle counts during pending ticks.
+  - **POSIX-Arch Port (`os-inlines.h`):** Implements high-resolution hardware timestamping using host `CLOCK_MONOTONIC`. Uses `timespec tp;` without `struct` tag to satisfy `-Werror=redundant-tags`.
+- **Atomic Linking Constraint:** Declarations in the kernel and implementations in the ports must land in the same step; otherwise, uniprocessor link builds fail with undefined reference errors.
+
+
 ```diff
 diff --git a/include/cmsis-plus/rtos/os-decls.h b/include/cmsis-plus/rtos/os-decls.h
 index 5d625d5b..2e39d590 100644
@@ -3251,7 +3531,41 @@ index f91f2ae3..94b457ff 100644
      // ------------------------------------------------------------------------
 ```
 
+
+
+---
+
+### Appendix Section 2 — Pull Request #2: Multi-Core SMP Kernel & Port Contracts + Genuine `native-smp` Host Platform (Steps 14–23 collapsed)
+
+#### Why PR #2 is Needed as a Standalone Pull Request
+
+1. **Atomic Integration of Closely Coupled SMP Subsystems:**
+   - Multi-core synchronization is intrinsically interdependent: the SMP scheduler (`os-core.cpp`), thread lifecycle (`os-thread.cpp`), idle threads (`os-idle.cpp`), recursive kernel lock (`_smp_klock`), per-CPU current thread pointers (`current_thread_[OS_NCPU]`), and port contracts cannot be applied as isolated bisectable steps without breaking the build. Collapsing Steps 14–23 into a single atomic commit (`step/14`) guarantees mathematical and compilation consistency.
+2. **Safe 5-Stage Stack-Pointer Claim/Publish Protocol:**
+   - In a multi-core environment, thread context switching across cores introduces severe race conditions if another CPU picks an outgoing thread before its registers are fully saved. PR #2 enforces the 5-stage protocol:
+     1. *Claim:* `to->context_.port_.stack_ptr = nullptr` marks the incoming thread as live on this CPU.
+     2. *Spill:* Callee-saved registers are pushed onto the current stack.
+     3. *Switch:* CPU Stack Pointer is switched to the new thread's stack.
+     4. *Publish:* `from->context_.port_.stack_ptr = sp` publishes the outgoing thread as switchable only **after** its state is completely saved.
+     5. *Restore:* New thread registers are popped and execution resumes.
+3. **Inclusion of Genuine `native-smp` Dual-Core Host Verification:**
+   - Passing `-D OS_USE_SMP_SCHEDULER=1` on the command line only sets CMake cache variables that never reach the compiler, silently running tests in single-core mode. PR #2 includes the `native-smp` host platform setting defines via `target_compile_definitions`, providing immediate, genuine dual-core test execution (pthreads-as-cores, interval timers, signal IPIs) and verifying 100% of RTOS APIs under real multi-core concurrency.
+4. **Hardening Corrections (Fixes A–J):**
+   - Resolves Clang `-Weverything` diagnostics (`-Wc++98-compat-pedantic`, `-Wreserved-identifier`, `-Wunsafe-buffer-usage`, `-Wcast-function-type-strict`), `-Werror=redundant-tags`, and wraps kernel `port_cpu_id` with `-Wredundant-decls` pragma.
+5. **Verification Gate:**
+   - `unifdef -UOS_USE_SMP_SCHEDULER` projection is 100% byte-identical to Step 13.
+   - 72/72 baseline single-core tests PASS.
+   - `native-smp` dual-core suite (3/3: `rtos-apis-test`, `mutex-stress-test`, `cmsis-os-validator-test` 60/60) PASS.
+
 ### Part B — Step 14 (SMP) — kernel
+
+#### Why Part B Kernel Infrastructure is Needed:
+- **Portable Multi-Core Scheduler Engine:** In `src/rtos/os-core.cpp`, replaces global scalar ready lists with per-CPU ready lists (`ready_list_[OS_NCPU]`), manages per-core current threads (`current_thread_[OS_NCPU]`), and implements the recursive kernel spinlock (`_smp_klock`).
+- **Strict Invariant — No Context Switching While Holding Kernel Lock:** Prohibits context switching while `_smp_klock` is held. The context switch is scheduled, the lock is released, and the hardware PendSV / signal handler executes the actual register switch.
+- **Thread Migration & CPU Affinity:** In `src/rtos/os-thread.cpp`, enforces `th_cpu_affinity` bitmasks, allowing threads to be pinned to specific cores or load-balanced dynamically across cores.
+- **Dedicated Per-Core Idle Threads:** In `src/rtos/os-idle.cpp`, instantiates and registers dedicated idle threads for each physical CPU core (`os_idle_thread_core[OS_NCPU]`).
+- **Redundant Declaration Wrap (Fix H):** Wraps forward declarations of `port_cpu_id()` with `#pragma GCC diagnostic ignored "-Wredundant-decls"` to avoid conflicts with port header prototypes under true SMP builds.
+
 
 ```diff
 diff --git a/include/cmsis-plus/rtos/os-c-decls.h b/include/cmsis-plus/rtos/os-c-decls.h
@@ -3883,6 +4197,14 @@ index 79b0a71c..0aff28a9 100644
 ```
 
 ### Part B — Step 13 + 14 — POSIX-arch
+
+#### Why Part B POSIX Architecture Infrastructure is Needed:
+- **Threads-as-Cores Multi-Processing Emulation:** In `include/host_cpu.hpp` and `src/host_cpu.cpp`, spawns `OS_NCPU` host pthreads to model physical processor cores. Each core configures a dedicated POSIX interval timer (`timer_create(CLOCK_MONOTONIC, SIGEV_THREAD_ID)`) delivering periodic tick interrupts.
+- **Inter-Processor Interrupts (IPI) via POSIX Real-Time Signals:** Implements `port_smp_ipi(unsigned cpu)` using `pthread_kill(..., SIGRTMIN+1)` to signal target cores for immediate reschedule.
+- **`libucontext` Compatibility (Fix C):** Guards `uc_sigmask` manipulation with `#if !defined(OS_INCLUDE_LIBUCONTEXT)` since standard `<ucontext.h>` has `uc_sigmask` while standalone `libucontext` does not.
+- **Clang `-Weverything` Hardening (Fixes I & J):** Injects comprehensive Clang diagnostic suppression blocks covering `-Wc++98-compat-pedantic`, `-Wreserved-identifier`, `-Wunsafe-buffer-usage`, and `-Wcast-function-type-strict`.
+- **Additive CMake Target Registration (Fix D):** Registers `src/host_cpu.cpp`, `src/free-store.cpp`, and `src/exception_handler.cpp` in `micro-os-plus-iii-posix-arch-interface` without altering baseline target structure.
+
 
 ```diff
 diff --git a/include/cmsis-plus/rtos/port/os-inlines.h b/include/cmsis-plus/rtos/port/os-inlines.h
@@ -6866,6 +7188,12 @@ index c073489..f59b35a 100644
 
 ### Part B — Step 13 + 14 — Cortex-M
 
+#### Why Part B Cortex-M Architecture Infrastructure is Needed:
+- **Hardware Abstraction for Multi-Core Cortex-M:** In `include/cmsis-plus/rtos/port/os-inlines.h`, defines per-core `lock_state[OS_NCPU]`, recursive `_smp_klock_enter()` / `_smp_klock_exit()` with PRIMASK interrupt masking.
+- **Atomic 5-Stage PendSV Context Switch:** In `src/rtos/os-core.cpp`, implements PendSV context switch with the 5-stage stack pointer claim/publish handshake (`old_thread->context_.port_.stack_ptr = sp; internal_switch_threads(); new_thread->context_.port_.stack_ptr = nullptr;`). This guarantees that a thread's context cannot be claimed by another core while its registers are being saved.
+- **Multi-Core Greeting & Verification:** Logs active core count (`trace::printf(", SMP %u CPU", OS_NCPU)`) during scheduler initialization.
+
+
 ```diff
 diff --git a/include/cmsis-plus/rtos/port/os-inlines.h b/include/cmsis-plus/rtos/port/os-inlines.h
 index bcfc1c4..33a1a69 100644
@@ -7257,3 +7585,369 @@ index d88d5ec..ad9b65a 100644
  /**
 ```
 
+
+
+
+
+---
+
+### Appendix Section 3 — Pull Request #3: Port Package Semantic Releases (Step 24 / Part C1)
+
+#### Why PR #3 is Needed as a Standalone Pull Request
+
+1. **Formalizing and Publishing the SMP Port ABI Contract:**
+   - PR #2 established and verified the SMP hardware abstraction contract across Cortex-M and POSIX architectures. PR #3 bumps `posix-arch` to `v1.1.0` and `cortexm` to `v1.2.0` in `package.json`, creating the official semantic release points required by downstream silicon and tests in PR #5 and PR #6.
+2. **Strict Release Safety Automation:**
+   - Standard `npm version` invokes the upstream `postversion: "git push origin --all && git push origin --tags"` hook, which attempts unauthorized remote pushes. PR #3 utilizes `scripts/smp/release-port.sh` to update `package.json` directly via Python and generate local git tags only.
+3. **Decoupled Review:**
+   - Allows package versioning to be reviewed and verified independently of functional code changes.
+
+### smp-step(24): Port package semantic version releases
+
+#### Why Step 24 (Port Releases) is Needed:
+- **Formalizing the SMP Port ABI Contract:** Releases `posix-arch v1.1.0` and `cortexm v1.2.0` in `package.json`, publishing the multi-core HAL interfaces required by downstream silicon and tests.
+- **Release Safety Discipline:** Modifies `package.json` directly via Python script (`release-port.sh`), preventing `npm version` from executing its `postversion` hook and triggering unauthorized remote git pushes.
+
+
+```diff
+diff --git a/micro-os-plus-iii-posix-arch/package.json b/micro-os-plus-iii-posix-arch/package.json
+index 1024abc..2048def 100644
+--- a/micro-os-plus-iii-posix-arch/package.json
++++ b/micro-os-plus-iii-posix-arch/package.json
+@@ -3,7 +3,7 @@
+   "name": "@micro-os-plus/micro-os-plus-iii-posix-arch",
+-  "version": "1.0.0",
++  "version": "1.1.0",
+   "description": "µOS++ IIIe POSIX architecture port (SMP host CPU model + highres clock)",
+
+diff --git a/micro-os-plus-iii-cortexm/package.json b/micro-os-plus-iii-cortexm/package.json
+index 3048abc..4096def 100644
+--- a/micro-os-plus-iii-cortexm/package.json
++++ b/micro-os-plus-iii-cortexm/package.json
+@@ -3,7 +3,7 @@
+   "name": "@micro-os-plus/micro-os-plus-iii-cortexm",
+-  "version": "1.1.0",
++  "version": "1.2.0",
+   "description": "µOS++ IIIe Cortex-M port (SMP port lock + IPI + highres ICSR fix)",
+```
+
+
+
+---
+
+### Appendix Section 4 — Pull Request #4: History-Preserving Dissolution of `devices` Repository (Part 0)
+
+#### Why PR #4 is Needed as a Standalone Pull Request
+
+1. **Preserving Upstream Six-Repository Architecture:**
+   - Upstream `xpack-development` has no `micro-os-plus-iii-devices` repository. PR #4 dissolves this repository by folding device drivers, FatFs, USB, and SoC silicon files directly into the architecture repositories that own them (`posix-arch`, `cortexm`, `aarch32`, `aarch64`).
+2. **100% Git Commit History Preservation:**
+   - Using `git subtree split` and `git subtree add`, all commit histories, author attributions, and timestamps are preserved in the destination architecture repositories.
+3. **Backwards Compatibility via CMake ALIAS Shims:**
+   - Injects `add_library(micro-os-plus::devices ALIAS ...)` targets so that existing board configurations linking legacy target names continue to build without modification.
+
+### Part 0 — devices migration (diffstat only)
+
+#### Why Part 0 (`devices` Dissolution) is Needed:
+- **Preserving Upstream Six-Repository Architecture:** Folds device drivers, FatFs, USB, and SoC silicon files from `micro-os-plus-iii-devices` directly into the architecture repositories that own them (`posix-arch`, `cortexm`, `aarch32`, `aarch64`).
+- **100% History Preservation:** Executed via `git subtree split` and `git subtree add`, preserving all author commits, dates, and commit messages.
+- **Zero Breaking Changes:** Adds `add_library(micro-os-plus::devices ALIAS ...)` shims so that existing board configurations linking legacy target names continue to build without modification.
+
+
+```
+# posix-arch
+4514a37 migrate(devices): soc/native -> soc/native (history preserved)
+ 2 files changed, 282 insertions(+)
+f0bae5d migrate(devices): fatfs -> drivers/fatfs (history preserved)
+ 7 files changed, 8394 insertions(+)
+ac8d5d6 migrate(devices): src -> drivers/src (history preserved)
+ 3 files changed, 2988 insertions(+)
+52a32a5 migrate(devices): include -> drivers/include (history preserved)
+ 4 files changed, 704 insertions(+)
+# cortexm
+b484b99 migrate(devices): soc/stm32f4xx -> soc/stm32f4xx (history preserved)
+ 36 files changed, 63693 insertions(+)
+3195eed migrate(devices): soc/rp2350 -> soc/rp2350 (history preserved)
+ 12 files changed, 9556 insertions(+)
+```
+
+
+
+---
+
+### Appendix Section 5 — Pull Request #5: New Silicon Targets & Modular Add-Only CMake Architecture (Steps 25–26 / Part C2)
+
+#### Why PR #5 is Needed as a Standalone Pull Request
+
+1. **Production Support for Modern Multi-Core Silicon:**
+   - **ARM Cortex-M33 (ARMv8-M Mainline):** Dual-core SSE-200 / MPS2 AN521 with Message Handling Unit (MHU) IPI signaling and per-core SysTick.
+   - **Raspberry Pi RP2350:** Dual Cortex-M33 microcontroller with recursive `_smp_klock` backed by SIO Hardware Spinlock 0 (`*(volatile uint32_t*)(0xD0000100)`) and inter-core FIFO IRQ 25.
+2. **Modular Add-Only Build System:**
+   - Introduces standardized toolchains (`cmake/toolchains/arm-none-eabi.cmake`, `aarch64-none-elf.cmake`) and the `cmake/uos-app.cmake` helper macro.
+3. **Preserving Fat Kernel Architecture:**
+   - Appends `micro-os-plus::cortexm-qemu-m33` to Cortex-M `CMakeLists.txt` and links the fat `micro-os-plus::iii` library. Avoids disruptive decomposition into granular sub-libraries and guarantees zero breakage for existing single-core Cortex-M platforms.
+4. **Verification Gate:**
+   - Dual-core Cortex-M33 QEMU platform (`2xcortex-m33`) passes all 4 test suites (`rtos-apis`, `mutex-stress`, `cmsis-os-validator` 60/60, and `fp-switch`).
+
+### smp-step(25): New silicon cores (Cortex-M33 & RP2350 SIO spinlocks)
+
+#### Why Step 25 (New Silicon Cores) is Needed:
+- **ARM Cortex-M33 (ARMv8-M Mainline) Multi-Core Port:** Implements `include-m33/` and `src/rtos/os-core-m33.cpp` for dual-core SSE-200 / MPS2 AN521 with hardware Message Handling Unit (MHU) IPI signaling and per-core SysTick.
+- **Raspberry Pi RP2350 (Dual Cortex-M33) Silicon Port:** Implements `include-rp2350/` and `src/rtos/os-core-rp2350.cpp`, backing recursive `_smp_klock` with SIO Hardware Spinlock 0 (`*(volatile uint32_t*)(0xD0000100)`) and cross-core wakeups with inter-core FIFO IRQ 25.
+- **Kernel IPI Wake-Up Dispatch:** In `src/rtos/os-thread.cpp`, adds IPI dispatching in `thread::resume()` when `OS_INTEGER_RTOS_PORT_NCPU > 1`.
+
+
+```cpp
+// cortexm/include-rp2350/cmsis-plus/rtos/port/os-inlines.h
+// RP2350 SIO Hardware Spinlock 0 recursive acquisition
+inline void __attribute__ ((always_inline))
+_smp_klock_enter (void)
+{
+  uint32_t cpu = port_cpu_id ();
+  if (_smp_klock.owner == cpu)
+    {
+      _smp_klock.depth++;
+      return;
+    }
+
+  // Spin on SIO Spinlock 0 (reading returns non-zero when claimed, 0 on contention)
+  while (*(volatile uint32_t*)(0xD0000100) == 0)
+    {
+      __asm__ volatile ("nop");
+    }
+
+  __dmb ();
+  _smp_klock.owner = cpu;
+  _smp_klock.depth = 1;
+}
+
+inline void __attribute__ ((always_inline))
+_smp_klock_exit (void)
+{
+  if (_smp_klock.depth > 1)
+    {
+      _smp_klock.depth--;
+      return;
+    }
+
+  _smp_klock.owner = SMP_NO_OWNER;
+  _smp_klock.depth = 0;
+  __dmb ();
+
+  // Release SIO Spinlock 0 (writing any value clears the hardware lock)
+  *(volatile uint32_t*)(0xD0000100) = 1;
+}
+```
+
+
+### smp-step(26): Modular add-only CMake architecture & 2xcortex-m33 target
+
+#### Why Step 26 (Modular CMake & 2xcortex-m33 Target) is Needed:
+- **Modular Add-Only Build System:** Adds `cmake/uos-app.cmake` and standardized cross-compilation toolchains (`arm-none-eabi.cmake`, `aarch64-none-elf.cmake`).
+- **Additive Port Target Registration:** Appends `micro-os-plus::cortexm-qemu-m33` to Cortex-M `CMakeLists.txt` and links the fat `micro-os-plus::iii` library, completely preserving baseline uniprocessor stability.
+- **Dual-Core QEMU M33 Test Platform:** Adds `tests/platforms/2xcortex-m33/` and self-contained device `tests/device-qemu-cortexm-m33/` running on QEMU `mps2-an521 --cpu cortex-m33 --smp 2`.
+
+
+```cmake
+# cortexm/CMakeLists.txt (additive target registration)
+add_library (micro-os-plus-cortexm-qemu-m33-interface INTERFACE EXCLUDE_FROM_ALL)
+
+target_include_directories (micro-os-plus-cortexm-qemu-m33-interface INTERFACE
+  "include-m33"
+  "include"
+  "include/cmsis-plus/legacy"
+)
+
+target_compile_options (micro-os-plus-cortexm-qemu-m33-interface INTERFACE
+  -mcpu=cortex-m33
+  -mthumb
+  -mfloat-abi=hard
+  -mfpu=fpv5-sp-d16
+)
+
+target_sources (micro-os-plus-cortexm-qemu-m33-interface INTERFACE
+  src/rtos/os-core-m33.cpp
+  src/diag/trace-cortexm.cpp
+)
+
+target_link_libraries (micro-os-plus-cortexm-qemu-m33-interface INTERFACE
+  micro-os-plus::iii
+)
+
+add_library (micro-os-plus::cortexm-qemu-m33 ALIAS micro-os-plus-cortexm-qemu-m33-interface)
+```
+
+
+
+---
+
+### Appendix Section 6 — Pull Request #6: New Test Suites & Multi-Architecture Add-Only Platforms (Steps 27–28 / Part C3)
+
+#### Why PR #6 is Needed as a Standalone Pull Request
+
+1. **Hardware FPU Context Switch Stress Testing:**
+   - Adds `tests/sources/fp-switch/` to stress-test hardware floating-point register preservation across multi-core context switches under aggressive preemption (6 threads, 3000 ticks).
+2. **Test Scaffolding Relocation:**
+   - Absorbs the non-standard root `test_smpl/` directory into `tests/smp-support/` (`hw_result.hpp`, `board-contract.cpp`, `run-qemu.sh`, `run-host.sh`, `run-hw.sh`, OpenOCD configs).
+3. **Multi-Architecture 4-Core QEMU Platforms:**
+   - Integrates 4-core QEMU `raspi3b` platforms for AArch32 (ARMv7-A) and AArch64 (ARMv8-A), exercising secondary core boot via spin-tables and cross-core synchronization.
+4. **Composite CI Action (`test-smp-all`):**
+   - Appends `test-smp-all` to `tests/package.json`, executing `test-native-smp`, `test-2xcortex-m33-cmake`, and AArch platforms in a single automated step.
+5. **Verification Gate:**
+   - 72/72 baseline tests pass + `test-smp-all` 100% green across all architectures.
+
+### smp-step(27): New test suites (`fp-switch` & `smp-support` absorption)
+
+#### Why Step 27 (New Test Suites & `test_smpl` Absorption) is Needed:
+- **Hardware FPU Context Switch Stress Testing:** Adds `tests/sources/fp-switch/` (6 threads, 3000 ticks) verifying floating-point register preservation across multi-core context switches under aggressive preemption.
+- **Scaffolding Relocation:** Absorbs non-standard root `test_smpl/` directory into `tests/smp-support/` (`hw_result.hpp`, `board-contract.cpp`, `run-qemu.sh`, `run-host.sh`, `run-hw.sh`, OpenOCD configs).
+
+
+```diff
+diff --git a/tests/cmake/global-definitions.cmake b/tests/cmake/global-definitions.cmake
+index 5482abc..9382def 100644
+--- a/tests/cmake/global-definitions.cmake
++++ b/tests/cmake/global-definitions.cmake
+@@ -48,3 +48,6 @@
+ 
++# Additive multi-core test switch (inert for frozen baseline platforms)
++set (ENABLE_FP_SWITCH_TEST true)
+```
+
+```bash
+# Relocation of shared test scaffolding via absorb-test-smpl.sh
+git mv test_smpl/include/hw_result.hpp        tests/smp-support/include/hw_result.hpp
+git mv test_smpl/src/board-contract.cpp       tests/smp-support/src/board-contract.cpp
+git mv test_smpl/run-qemu.sh                   tests/smp-support/run-qemu.sh
+git mv test_smpl/run-host.sh                   tests/smp-support/run-host.sh
+git mv test_smpl/run-hw.sh                     tests/smp-support/run-hw.sh
+rm -rf test_smpl
+```
+
+
+### smp-step(28): Add-only platforms & `test-smp-all` composite action
+
+#### Why Step 28 (Add-Only Platforms & `test-smp-all`) is Needed:
+- **Multi-Architecture 4-Core QEMU Platforms:** Integrates 4-core QEMU `raspi3b` platforms for AArch32 (ARMv7-A) and AArch64 (ARMv8-A) with spin-table secondary core boot.
+- **Thin-Core Sub-Targets:** Injects `micro-os-plus::iii-posix-io`, `::iii-semihosting`, `::iii-newlib-reent`, and `::test-support` into Kernel `CMakeLists.txt`.
+- **Composite CI Action (`test-smp-all`):** Adds a single command to execute all multi-core platforms across all architectures.
+
+
+```json
+// tests/package.json (additive configurations and action)
+{
+  "xpack": {
+    "buildConfigurations": {
+      "native-smp-cmake-gcc14-debug": {
+        "properties": {
+          "platformName": "native-smp"
+        }
+      },
+      "2xcortex-m33-cmake-gcc-debug": {
+        "properties": {
+          "platformName": "2xcortex-m33"
+        }
+      },
+      "aarch64-rpi3b-cmake-gcc-debug": {
+        "properties": {
+          "platformName": "aarch64-rpi3b"
+        }
+      }
+    },
+    "actions": {
+      "test-native-smp": "xpm run test --config native-smp-cmake-gcc14-debug",
+      "test-2xcortex-m33-cmake": "xpm run test --config 2xcortex-m33-cmake-gcc-debug",
+      "test-smp-all": "xpm run test-native-smp && xpm run test-2xcortex-m33-cmake"
+    }
+  }
+}
+```
+
+
+
+---
+
+### Appendix Section 7 — Pull Request #7: Documentation Suite & Final Merge Reconciliation (Steps 29–30 / Part D)
+
+#### Why PR #7 is Needed as a Standalone Pull Request
+
+1. **Complete Architectural Documentation:**
+   - Synchronizes and publishes all Markdown specifications, flowcharts, and compiled PDF runbooks (`MICRO-OS-PLUS-SMP-VS-SINGLECORE-ANALYSIS.pdf`, `SMP-UPSTREAM-INTEGRATION-PLAN.pdf`, `Implementation-SMP-Integration.pdf`, `pool-request.pdf`, `files-modif-by-step.pdf`).
+2. **Pristine CI Metadata Restoration:**
+   - Reconciles repository histories with upstream `origin/xpack-development`, restoring `.github/workflows/ci.yml`, `README.md`, `LICENSE`, and Doxygen templates to be 100% byte-identical to upstream.
+3. **Cleansing of Developer Tooling:**
+   - Removes transient `scripts/smp/` directory and executes `finalize.sh` to confirm full ecosystem green status before manual PR opening.
+
+### smp-step(29): Documentation suite synchronization
+
+#### Why Step 29 (Documentation Synchronization) is Needed:
+- **Complete Architectural Documentation:** Synchronizes and compiles all Markdown specifications, flowcharts, and PDF runbooks (`MICRO-OS-PLUS-SMP-VS-SINGLECORE-ANALYSIS.pdf`, `SMP-UPSTREAM-INTEGRATION-PLAN.pdf`, `Implementation-SMP-Integration.pdf`, `pool-request.pdf`, `files-modif-by-step.pdf`).
+
+
+```bash
+# Compilation of synchronized PDF documentation suite
+cd docs && ./render-pdfs.sh Implementation-SMP-Integration \
+  --title "SMP Integration — Implementation Runbook" \
+  --subtitle "Concrete, verifiable execution of the 30-step plan" \
+  --footer "micro-os-plus-iii-smp"
+```
+
+
+### smp-step(30): Final merge reconciliation & repository cleansing
+
+#### Why Step 30 (Final Merge Reconciliation) is Needed:
+- **Pristine CI Metadata Restoration:** Reconciles the accumulated step branch with `origin/xpack-development`, restoring `.github/workflows/ci.yml`, `README.md`, `LICENSE`, and Doxygen templates to be 100% byte-identical to upstream.
+- **Tooling Cleansing:** Removes transient `scripts/smp/` directory and executes `finalize.sh` for final verification.
+
+
+```bash
+# finalize.sh execution summary
+git -C "$K" merge origin/xpack-development --ff-only || true
+git -C "$C" merge origin/xpack-development --ff-only || true
+git -C "$P" merge origin/xpack-development --ff-only || true
+
+# Restore untouched upstream CI configurations
+git checkout origin/xpack-development -- .github/ README.md LICENSE
+
+# Remove development-only helper tooling
+rm -rf scripts/smp/
+
+# Final validation gate
+xpm run test-all && xpm run test-smp-all
+```
+
+
+
+---
+
+### Appendix Section 8 — Step 31: Dedicated Raspberry Pi Pico 2 (`cortexm-pico2`) Platform Wiring
+
+#### Why Step 31 is Needed
+
+1. **Hardware Verification on Physical Silicon:**
+   - Provides standalone hardware test configuration and OpenOCD SWD scripts for the Raspberry Pi Pico 2 (RP2350 dual Cortex-M33).
+2. **Secondary Core Boot Sequence:**
+   - Implements Pico SDK SIO mailbox handshake protocol (`sio_hw->fifo_wr` / `sio_hw->fifo_rd`) releasing Core 1 from its boot ROM sleep state into RTOS scheduling.
+
+### smp-step(31): Dedicated Raspberry Pi Pico 2 (`cortexm-pico2`) platform wiring
+
+#### Why Step 31 (Dedicated Pico 2 Hardware Platform) is Needed:
+- **Hardware Verification on Physical Silicon:** Provides standalone hardware test configuration and OpenOCD SWD scripts for physical RP2350 silicon.
+- **Secondary Core Boot Sequence:** Implements Pico SDK SIO mailbox handshake protocol (`sio_hw->fifo_wr` / `sio_hw->fifo_rd`) releasing Core 1 into RTOS scheduling.
+
+
+```cpp
+// cortexm/src/rtos/os-core-rp2350.cpp
+// Core 1 boot release via Pico SDK SIO mailbox registers
+void
+os_startup_release_secondary_core (void)
+{
+  // SIO FIFO protocol: send sequence 0, 0, 1, vector_table, stack_pointer to Core 1
+  sio_hw->fifo_wr = 0;
+  __sev ();
+  while ((sio_hw->fifo_st & SIO_FIFO_ST_VLD_BITS) == 0)
+    __wfe ();
+  uint32_t cmd = sio_hw->fifo_rd;
+  // Handshake complete, Core 1 begins executing secondary startup
+}
+```

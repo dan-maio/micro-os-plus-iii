@@ -17,7 +17,7 @@ the migration log, dated where they were measured.
 
 The concrete, executable **SMP upstream-integration runbook** is written and has
 been **dry-run from end to end — all 30 steps — entirely on local branches, with
-nothing pushed to any remote.** See `docs/Implementation-SMP-Integration.md`
+nothing pushed to any remote.** See `docs/smp-integration/Implementation-SMP-Integration.md`
 (`.pdf`); its new §11 is the plain-English playbook and the repeatability contract.
 
 - **Tooling** lives in `scripts/smp/` (bootstrap, new-step, verify-step,

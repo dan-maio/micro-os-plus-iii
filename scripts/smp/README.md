@@ -1,7 +1,7 @@
 # `scripts/smp/` — SMP integration helper tooling
 
 Dev-only automation for executing the 30-step SMP → single-core integration.
-See [`../../docs/Implementation-SMP-Integration.md`](../../docs/Implementation-SMP-Integration.md)
+See [`../../docs/smp-integration/Implementation-SMP-Integration.md`](../../docs/smp-integration/Implementation-SMP-Integration.md)
 for the full runbook. **Removed at Step 30** by `finalize.sh`.
 
 **Fully local.** No script here ever pushes, opens a PR, or writes to a remote —

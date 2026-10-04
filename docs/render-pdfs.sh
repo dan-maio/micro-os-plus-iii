@@ -21,18 +21,13 @@ render() {
     python3 md2pdf.py "$out.md" "$out.pdf" "$@"
 }
 
-# The reference documents. Five carry no title page: their own H1 opens page 1.
+# The reference documents. Four carry no title page: their own H1 opens page 1.
 render STATUS
 render aarch32-second-board
 render building-aarch32-aarch64
 render cortexm-port
 render posix-arch-port
-render agy-review
 
-render smp-construction \
-    --title    "SMP Construction" \
-    --subtitle "How the kernel, the ports and the boards fit together" \
-    --footer   "$FOOT"
 render test-smpl \
     --title    "test_smpl/" \
     --subtitle "The two shared test runners" \
@@ -41,32 +36,40 @@ render tests-in-aarch32-aarch64 \
     --title    "How the tests are organised and run" \
     --subtitle "Every board owns its tests" \
     --footer   "$FOOT"
-render MICRO-OS-PLUS-SMP-VS-SINGLECORE-ANALYSIS \
+
+# SMP Integration Runbooks & Playbooks
+render smp-integration/agy-review
+render smp-integration/DeepSeek-review
+render smp-integration/smp-construction \
+    --title    "SMP Construction" \
+    --subtitle "How the kernel, the ports and the boards fit together" \
+    --footer   "$FOOT"
+render smp-integration/MICRO-OS-PLUS-SMP-VS-SINGLECORE-ANALYSIS \
     --title    "µOS++ SMP vs Single-Core Analysis" \
     --subtitle "Architectural differences, data structures and state machines" \
     --footer   "$FOOT" \
     --toc
-render SMP-UPSTREAM-INTEGRATION-PLAN \
+render smp-integration/SMP-UPSTREAM-INTEGRATION-PLAN \
     --title    "SMP Upstream Integration Plan" \
     --subtitle "Master strategy for upstreaming multi-core capabilities" \
     --footer   "$FOOT" \
     --toc
-render Implementation-SMP-Integration \
+render smp-integration/Implementation-SMP-Integration \
     --title    "SMP Integration — Implementation Runbook" \
     --subtitle "Step-by-step lifting procedures and invariants" \
     --footer   "$FOOT" \
     --toc
-render files-modif-by-step \
+render smp-integration/files-modif-by-step \
     --title    "Files Modified by Step — SMP Integration" \
     --subtitle "Exhaustive Manifest & Lifting Recipes" \
     --footer   "$FOOT" \
     --toc
-render pull-request \
+render smp-integration/pull-request \
     --title    "Progressive Pull Request — SMP integration" \
     --subtitle "What, why, file and code, from the corrections to the SMP integration" \
     --footer   "$FOOT" \
     --toc
-render GITHUB-PROGRESSIVE-PR-GUIDE \
+render smp-integration/GITHUB-PROGRESSIVE-PR-GUIDE \
     --title    "GitHub Progressive Pull Request Playbook" \
     --subtitle "How to write, push, review, and merge the 7 PRs on GitHub" \
     --footer   "$FOOT" \

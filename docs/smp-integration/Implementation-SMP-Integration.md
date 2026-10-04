@@ -1676,7 +1676,7 @@ scripts/smp/finalize.sh
 #   gh pr create --repo dan-maio/micro-os-plus-iii \
 #     --base xpack-development --head step/30 \
 #     --title "SMP multi-core integration (30-step bisectable series)" \
-#     --body-file docs/Implementation-SMP-Integration.md
+#     --body-file docs/smp-integration/Implementation-SMP-Integration.md
 ```
 
 ### 10.6 One-glance flow

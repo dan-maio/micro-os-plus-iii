@@ -368,12 +368,12 @@ Every modification across each repository is catalogued below with its precise t
 **Why Here:** The final phase compiles all technical documentation and PDF runbooks, reconciles repository histories with upstream master branches, restores untouched CI metadata, and removes transient developer tooling.
 
 #### Step 29 — Documentation Suite Synchronization
-- **K M** `docs/*.md` & `docs/*.pdf`: Synchronizes architecture analyses, PR specifications, and runbooks:
-  - `docs/MICRO-OS-PLUS-SMP-VS-SINGLECORE-ANALYSIS.md` & `.pdf`
-  - `docs/SMP-UPSTREAM-INTEGRATION-PLAN.md` & `.pdf`
-  - `docs/Implementation-SMP-Integration.md` & `.pdf`
-  - `docs/pull-request.md` & `.pdf`
-  - `docs/files-modif-by-step.md` & `.pdf`
+- **K M** `docs/smp-integration/*.md` & `docs/smp-integration/*.pdf`: Synchronizes architecture analyses, PR specifications, and runbooks:
+  - `docs/smp-integration/MICRO-OS-PLUS-SMP-VS-SINGLECORE-ANALYSIS.md` & `.pdf`
+  - `docs/smp-integration/SMP-UPSTREAM-INTEGRATION-PLAN.md` & `.pdf`
+  - `docs/smp-integration/Implementation-SMP-Integration.md` & `.pdf`
+  - `docs/smp-integration/pull-request.md` & `.pdf`
+  - `docs/smp-integration/files-modif-by-step.md` & `.pdf`
 - **K M** `docs/render-pdfs.sh`: Updates batch PDF compilation script using `md2pdf.py`.
 
 #### Step 30 — Final Merge Reconciliation & Repository Cleansing

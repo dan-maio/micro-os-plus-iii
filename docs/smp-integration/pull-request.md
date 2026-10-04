@@ -376,7 +376,7 @@ git -C "$WORK/micro-os-plus-iii" push origin step/30
 gh pr create --repo micro-os-plus/micro-os-plus-iii \
   --base xpack-development --head step/30 \
   --title "SMP multi-core integration (progressive, bisectable series)" \
-  --body-file docs/pull-request.md
+  --body-file docs/smp-integration/pull-request.md
 ```
 
 For the stacked variant, open each against the previous head: #2

@@ -105,6 +105,75 @@ To ensure seamless upstream review and maintain an unbroken bisectable history, 
 | **PR #6** | **Part C3** | Steps 27–28 | **K**, **C**, **P**, **Arch** | `fp-switch` suite, `test_smpl` absorption into `tests/smp-support/`, AArch32/64 raspi3b harness wiring, `test-smp-all` action. | 72/72 baseline pass; `test-smp-all` (M33 + Native-SMP + AArch) 100% green. |
 | **PR #7** | **Part D** | Steps 29–30 | **All** | Documentation PDF build, `.github/` CI workflow restoration, `scripts/smp/` removal, master branch merge. | Upstream CI metadata byte-identical to baseline; full test matrix green. |
 
+### 1.2 Executive Resume of All Pull Request Actions across Repositories
+
+This resume summarizes every major action and deliverable performed in the progressive pull-request series, providing an exhaustive cross-reference between the PR sequence and the multi-repository codebase:
+
+| PR Action & Scope | Repositories Touched | Primary Target Files & Artifacts | Rationale & Failure Mode Averted | Gate Verification |
+|---|---|---|---|---|
+| **PR #1: Single-Core Conformance & Hardening** (Steps 1–13) | **K** (Kernel), +**C**+**P** at Step 13 | • `include/cmsis-plus/posix/dirent.h`<br>• `include/cmsis-plus/utils/lists.h`<br>• `include/cmsis-plus/rtos/os-memory.h`<br>• `src/libc/stdlib/malloc.cpp`<br>• `src/libcpp/new.cpp`, `system-error.cpp`<br>• `src/posix-io/file-descriptors-manager.cpp`<br>• `src/rtos/os-mutex.cpp`, `os-thread.cpp`<br>• `src/rtos/os-condvar.cpp`, `os-timer.cpp`<br>• `src/rtos/os-clocks.cpp`, `port/os-inlines.h` | Fixes ISO C99/C11 compliance, `DIR` duplicates on modern glibc, iterator concept conformance, `calloc` integer overflow security flaw, C++17 aligned allocation, lost-wakeup in condvars, priority ceiling inversions, and highres clock SysTick overflow. | **72/72 frozen baseline tests PASS** with `-Werror`. Single-core binary completely untouched by SMP. |
+| **PR #2: SMP Multi-Core Kernel & Native Host Platform** (Steps 14–23 / Step 14) | **K**, **C**, **P** | • `include/cmsis-plus/rtos/os-sched.h`<br>• `src/rtos/os-core.cpp`, `os-idle.cpp`<br>• `src/rtos/os-main.cpp`, `os-thread.cpp`<br>• `include/cmsis-plus/rtos/port/os-decls.h`<br>• `src/host_cpu.cpp`, `include/host_cpu.hpp`<br>• `src/exception_handler.cpp`, `free-store.cpp`<br>• `tests/platforms/native-smp/` (dual-core) | Implements portable multi-core scheduling under `#if defined(OS_USE_SMP_SCHEDULER)`: recursive `_smp_klock`, per-CPU ready lists, CPU affinity mask, 5-stage deferred stack switch, pthread-based host CPU emulation with RT signal IPI. Introduces genuine `native-smp` 2-core test platform. | `unifdef -UOS_USE_SMP_SCHEDULER` zero-diff invariant; 72/72 baseline PASS; `native-smp` dual-core suite (3/3) PASS. |
+| **PR #3: Port Package Semantic Releases** (Step 24) | **P**, **C** | • `micro-os-plus-iii-posix-arch/package.json`<br>• `micro-os-plus-iii-cortexm/package.json` | Increments semantic version numbers (`posix-arch v1.1.0`, `cortexm v1.2.0`) to formally publish the SMP port contract. Local Git tags created without premature remote pushes. | Version-only diff in `package.json`; ports build cleanly against kernel. |
+| **PR #4: Dissolution & Subtree Ingestion of `devices`** (Part 0) | **P**, **C**, **A32**, **A64** | • `soc/native/`, `drivers/*` (into POSIX)<br>• `soc/stm32f4xx/`, `soc/rp2350/` (into Cortex-M)<br>• `soc/bcm2837/`, `drivers/*` (into AArch32/64)<br>• `CMakeLists.txt` (ALIAS shims) | Eliminates unwanted 7th repository (`micro-os-plus-iii-devices`) by folding SoCs and drivers directly into owning architecture ports via history-preserving `git subtree add`. Adds `micro-os-plus::devices` ALIAS shims for backwards compatibility. | All legacy board targets linking `micro-os-plus::devices` configure and build without errors. |
+| **PR #5: ARMv8-M Silicon Cores & Modular Add-Only CMake** (Steps 25–26) | **K**, **C**, **P**, **Arch** | • `include-m33/`, `include-rp2350/`<br>• `src/rtos/os-core-m33.cpp`, `os-core-rp2350.cpp`<br>• `cmake/uos-app.cmake`, `cmake/toolchains/*`<br>• `tests/platforms/2xcortex-m33/`<br>• `tests/device-qemu-cortexm-m33/` | Adds support for ARM Cortex-M33 (MPS2 AN521, SSE-200 MHU inter-core interrupt) and RP2350 (SIO spinlocks). Introduces modular CMake toolchains and additive fat `::iii` library links. | 72/72 baseline tests PASS; `2xcortex-m33` QEMU dual-core suite (4/4) PASS. |
+| **PR #6: SMP Validation Testbed & Multi-Arch Harness** (Steps 27–28) | **K**, **C**, **P**, **Arch** | • `tests/sources/fp-switch/`<br>• `tests/smp-support/` (relocated `test_smpl/`)<br>• `tests/platforms/aarch32-rpi3b/`<br>• `tests/platforms/aarch64-rpi3b/`<br>• `tests/platforms/cortexm-pico2/`<br>• `tests/package.json` (`test-smp-all`) | Imports multi-core FPU context-switch stress test (`fp-switch`). Relocates non-standard root `test_smpl/` into standardized `tests/smp-support/`. Wires 4-core Raspberry Pi 3B QEMU targets for AArch32/AArch64. Introduces composite `test-smp-all` action. | 72/72 baseline PASS; `test-smp-all` (M33 + Native-SMP + AArch) 100% green. |
+| **PR #7: Documentation Suite & Final Merge Reconciliation** (Steps 29–30) | **All Repositories** | • `docs/*.md`, `docs/*.pdf`<br>• `docs/render-pdfs.sh`<br>• `.github/workflows/ci.yml`<br>• `README.md`, `LICENSE`<br>• Purge of `scripts/smp/` | Synchronizes all Markdown specifications and PDF runbooks via `md2pdf.py`. Reconciles Git history with `origin/xpack-development`. Restores pristine upstream CI metadata (100% byte-identical). Cleanses transient developer tooling. | Upstream CI metadata byte-identical to upstream; `test-all` (72/72) and `test-smp-all` 100% green. |
+| **Step 31: Dedicated Pico 2 Hardware Platform** (Step 31) | **C**, **K** | • `include-rp2350/cmsis-plus/rtos/port/os-inlines.h`<br>• `src/rtos/os-core-rp2350.cpp`<br>• `tests/platforms/cortexm-pico2/` | Configures complete physical hardware testbed for Raspberry Pi Pico 2 (RP2350 dual Cortex-M33). Implements SIO boot mailbox handshake and hardware spinlock 0 recursive locking. | Hardware OpenOCD SWD flashing and UART verification on physical RP2350 silicon. |
+
+### 1.3 Multi-Repository Diff Accounting & Codebase Exhaustiveness
+
+Every single modified, added, or deleted file across all component repositories has been cross-referenced against the PR migration blueprint:
+
+1. **Kernel (`micro-os-plus-iii` — 382 changed files):**
+   - *Core Kernel RTOS:* `os-thread.*`, `os-core.cpp`, `os-idle.cpp`, `os-mutex.cpp`, `os-condvar.cpp`, `os-timer.cpp`, `os-mqueue.cpp`, `os-clocks.cpp`, `os-memory.cpp`, `os-c-wrapper.cpp` -> **PR #1, PR #2**.
+   - *Allocators & Standard C++ Support:* `malloc.cpp`, `first-fit-top.*`, `lifo.cpp`, `block-pool.cpp`, `new.cpp`, `system-error.cpp`, `chrono.cpp` -> **PR #1**.
+   - *POSIX I/O & System Call Aliases:* `file-descriptors-manager.cpp`, `file-system.h`, `net-stack.h`, `block-device.cpp`, `c-syscalls-aliases-standard.h` -> **PR #1**.
+   - *Build System & Toolchains:* `CMakeLists.txt`, `cmake/uos-app.cmake`, `cmake/toolchains/*` -> **PR #5**.
+   - *SMP Testbed & Harness Platform Dispatches:* `tests/sources/fp-switch/`, `tests/smp-support/`, `tests/platforms/*`, `tests/package.json` -> **PR #2, PR #5, PR #6, Step 31**.
+   - *Documentation & Runbooks:* `docs/*.md`, `docs/*.pdf`, `docs/render-pdfs.sh` -> **PR #7**.
+   - *Transitional Tooling & Upstream Cleansing:* `scripts/smp/`, `.github/**`, `README.md`, `LICENSE`, `doxygen/**` -> **PR #7 (Step 30)**.
+
+2. **Cortex-M Port (`micro-os-plus-iii-cortexm` — 277 changed files):**
+   - *Core Port & Port Contracts:* `os-c-decls.h`, `os-decls.h`, `os-inlines.h`, `src/rtos/os-core.cpp` -> **PR #1, PR #2**.
+   - *ARMv8-M Architecture Evolutions:* `include-m33/`, `include-rp2350/`, `os-core-m33.cpp`, `os-core-rp2350.cpp` -> **PR #5**.
+   - *Subtree Ingested SoCs:* `soc/stm32f4xx/`, `soc/rp2350/` -> **PR #4**.
+   - *Port Package Semantic Version:* `package.json` (v1.2.0) -> **PR #3**.
+   - *Pico 2 Hardware Platform Infrastructure:* `test/boards/pico2/`, `test/pico2/` -> **Step 31**.
+
+3. **POSIX Architecture Port (`micro-os-plus-iii-posix-arch` — 69 changed files):**
+   - *Core Port & Host Multiprocessing:* `os-c-decls.h`, `os-decls.h`, `os-inlines.h`, `src/rtos/os-core.cpp`, `host_cpu.cpp`, `host_cpu.hpp`, `free-store.cpp`, `board-contract.cpp`, `exception_handler.*`, `hw_result.hpp` -> **PR #1, PR #2**.
+   - *Subtree Ingested Native SoC & Portable Drivers:* `soc/native/`, `drivers/include/`, `drivers/src/`, `drivers/fatfs/` -> **PR #4**.
+   - *Port Package Semantic Version:* `package.json` (v1.1.0) -> **PR #3**.
+   - *Native Host Test Suites:* `test/native/*`, `test/boards/native/*` -> **PR #2**.
+
+4. **AArch32 & AArch64 Architecture Ports (`micro-os-plus-iii-aarch32/64` — 196 / 103 changed files):**
+   - *Subtree Ingested SoC & Drivers:* `soc/bcm2837/`, `drivers/*` -> **PR #4**.
+   - *Multi-Core Context Switch & Boot:* `src/context_switch.cpp`, `src/handlers.cpp`, `include/*` -> **PR #6**.
+   - *QEMU Board Test Runners:* `test/boards/rpi-zero-2w/`, `test/luckfox-lyra/`, `test/rpi-zero-2w/` -> **PR #6**.
+
+5. **Devices Repository (`micro-os-plus-iii-devices`):**
+   - *Dissolution:* 100% absorbed via `git subtree` into owning architecture repositories (`posix-arch`, `cortexm`, `aarch32`, `aarch64`) with ALIAS CMake shims in **PR #4**.
+
+### 1.4 Transitional Tooling, Scratch Runners, & Upstream Invariance Reconciliation
+
+To ensure upstream purity, four specific integration policies are strictly applied:
+
+1. **Purge of Developer Tooling (`scripts/smp/`):**
+   - *Policy:* The `scripts/smp/` directory contains migration helper scripts (`new-step.sh`, `verify-step.sh`, `advance-step.sh`, `chunks/`, `run-loop.sh`). These are developer-only tools required during the migration process.
+   - *Reconciliation:* Automatically deleted in **Step 30 (PR #7)** before the pull request is finalized.
+
+2. **Standardization of Non-Standard Root Test Directory (`test_smpl/`):**
+   - *Policy:* The experimental `smp` branch accumulated runner scripts in a non-standard root `test_smpl/` folder.
+   - *Reconciliation:* Absorbed additively into standard [`tests/smp-support/`](file:///home/dan/Documents/Work/micro-os-plus/micro-os-plus-iii/tests/smp-support/) via `absorb-test-smpl.sh` in **Step 27 (PR #6)**, eliminating non-standard root entries.
+
+3. **Pristine Restoration of Upstream CI Metadata:**
+   - *Policy:* Upstream `.github/workflows/ci.yml`, `README.md`, `LICENSE`, and Doxygen templates must not be polluted by downstream divergence.
+   - *Reconciliation:* Step 30 restores these files to be 100% byte-identical to `origin/xpack-development`.
+
+4. **Preservation of Upstream Newlib Baseline (`src/libc/stdlib/timegm.c`):**
+   - *Policy:* The `smp` branch hid `timegm()` behind `#if !defined(__GLIBC__)`, breaking glibc ≥ 2.44 builds.
+   - *Reconciliation:* The upstream baseline version is deliberately kept in **Step 1 (PR #1)**.
+
 ---
 
 ## 2. Chronological Step-by-Step File Manifest & Technical Rationale ("WHY")

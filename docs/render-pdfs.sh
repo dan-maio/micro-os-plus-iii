@@ -41,6 +41,26 @@ render tests-in-aarch32-aarch64 \
     --title    "How the tests are organised and run" \
     --subtitle "Every board owns its tests" \
     --footer   "$FOOT"
+render MICRO-OS-PLUS-SMP-VS-SINGLECORE-ANALYSIS \
+    --title    "µOS++ SMP vs Single-Core Analysis" \
+    --subtitle "Architectural differences, data structures and state machines" \
+    --footer   "$FOOT" \
+    --toc
+render SMP-UPSTREAM-INTEGRATION-PLAN \
+    --title    "SMP Upstream Integration Plan" \
+    --subtitle "Master strategy for upstreaming multi-core capabilities" \
+    --footer   "$FOOT" \
+    --toc
+render Implementation-SMP-Integration \
+    --title    "SMP Integration — Implementation Runbook" \
+    --subtitle "Step-by-step lifting procedures and invariants" \
+    --footer   "$FOOT" \
+    --toc
+render files-modif-by-step \
+    --title    "Files Modified by Step — SMP Integration" \
+    --subtitle "Exhaustive Manifest & Lifting Recipes" \
+    --footer   "$FOOT" \
+    --toc
 render pull-request \
     --title    "Progressive Pull Request — SMP integration" \
     --subtitle "What, why, file and code, from the corrections to the SMP integration" \

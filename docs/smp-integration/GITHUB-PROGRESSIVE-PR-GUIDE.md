@@ -1,88 +1,147 @@
-# Master Progressive & Step-by-Step Pull Request Playbook — µOS++ IIIe SMP Integration
+# True Single-Theme Pull Request Playbook — µOS++ IIIe SMP Integration
 
-*Unified GitHub PR & Step-by-Step Operator Guide (`github.com/dan-maio` → `github.com/micro-os-plus`)*
+*Exclusively Single-Subject Pull Requests on GitHub (`github.com/dan-maio` → `github.com/micro-os-plus`)*
 
 ---
 
-## 1. The 7 Progressive Pull Requests & 31 Bisectable Steps Architecture
+## 1. Architectural Principle: Pure Single-Theme Pull Requests
 
-This playbook provides the complete, authoritative operational guide for upstreaming the SMP multi-core capabilities into `xpack-development` (`github.com/dan-maio` → `github.com/micro-os-plus`).
+In the initial migration scratchpad, early fixes were artificially bundled under generic buckets (e.g. "Step 1" lumped together POSIX `dirent.h` empty structs, C++ template list iterators in `lists.h`, newlib syscall macros, and exported thread suspend symbols). 
 
-To ensure seamless upstream review, total domain isolation, and an unbroken bisectable history, the integration is structured with **100% unified numbering** across [`GITHUB-PROGRESSIVE-PR-GUIDE.md`](GITHUB-PROGRESSIVE-PR-GUIDE.md), [`files-modif-by-step.md`](files-modif-by-step.md), and [`pull-request.md`](pull-request.md):
+**These changes are completely unrelated.** A maintainer reviewing C++ intrusive list iterators should not have to review POSIX directory structs or newlib syscall aliases.
+
+This playbook enforces a **pure single-subject / single-theme architecture**: every pull request addresses **exactly one functional concern, one bug, or one subsystem**, ordered from uniprocessor bugfixes to full SMP multi-core integration.
 
 ```text
-+---------------------------------------------------------------------------------------------------+
-|                        PR #1: Part A — Single-Core Conformance & Bugfixes                         |
-|  - Steps 1–13 (Kernel, +Cortex-M/POSIX at Step 13)                                                |
-|  - ISO C/C++17 conformance, Allocator overflow guards, Condvar atomicity, Mutex priority ceiling  |
-|  - Base: xpack-development  -->  Head: step/13  |  Gate: 72/72 frozen baseline tests PASS         |
-+---------------------------------------------------------------------------------------------------+
-                                                  |
-                                                  v
-+---------------------------------------------------------------------------------------------------+
-|               PR #2: Part B — Multi-Core SMP Kernel & Port Contracts (step/14)                    |
-|  - Steps 14–23 collapsed (Kernel, Cortex-M, POSIX-Arch)                                           |
-|  - Recursive _smp_klock, Per-CPU ready lists, 5-stage stack pointer claim/publish handshake       |
-|  - Native SMP host platform (native-smp, 2 cores, pthreads + signal IPI)                          |
-|  - Base: step/13  -->  Head: step/14  |  Gate: unifdef zero-diff + native-smp (3/3) PASS          |
-+---------------------------------------------------------------------------------------------------+
-                         |                                                  |
-                         v                                                  v
-+--------------------------------------------------+   +--------------------------------------------+
-|     PR #3: Step 24 — Port Package Releases       |   |   PR #4: Part 0 — Dissolve 'devices' Repo  |
-|  - posix-arch v1.1.0, cortexm v1.2.0             |   |  - History-preserving git subtree add      |
-|  - Python package.json bump (no npm push)        |   |  - soc/native, drivers/*, soc/rp2350, etc. |
-|  - Base: step/14  -->  Head: step/24             |   |  - Base: Port branches -> Head: part0-dev  |
-+--------------------------------------------------+   +--------------------------------------------+
-                         |                                                  |
-                         +------------------------+-------------------------+
-                                                  |
-                                                  v
-+---------------------------------------------------------------------------------------------------+
-|             PR #5: Steps 25–26 (Part C2) — Silicon Cores & Modular Add-Only CMake                 |
-|  - Cortex-M33 (MPS2 AN521, SSE-200 MHU IPI), RP2350 (SIO Hardware Spinlock 0 + FIFO IRQ 25)       |
-|  - Modular toolchains, uos-app.cmake, 2xcortex-m33 target (links fat ::iii library)               |
-|  - Base: step/24 (+ PR #4)  -->  Head: step/26  |  Gate: 2xcortex-m33 (4/4) PASS                  |
-+---------------------------------------------------------------------------------------------------+
-                                                  |
-                                                  v
-+---------------------------------------------------------------------------------------------------+
-|        PR #6: Steps 27–28 (Part C3) — Multi-Core Test Suites & Multi-Arch Add-Only Platforms      |
-|  - Hardware FPU context switch test (fp-switch), tests/smp-support/ relocation                    |
-|  - 4-core QEMU raspi3b platforms (AArch32 & AArch64), composite test-smp-all action              |
-|  - Base: step/26  -->  Head: step/28  |  Gate: 72/72 baseline + test-smp-all (100% green)         |
-+---------------------------------------------------------------------------------------------------+
-                                                  |
-                                                  v
-+---------------------------------------------------------------------------------------------------+
-|          PR #7: Steps 29–30 (Part D) — Documentation Suite & Final Merge Reconciliation           |
-|  - Synchronized Markdown & PDF runbooks, pristine CI metadata (.github/**, README.md, LICENSE)     |
-|  - Dev-tooling removal (scripts/smp/), finalize.sh acceptance validation                          |
-|  - Base: step/28  -->  Head: step/30  |  Gate: Byte-identical CI metadata + full suite PASS       |
-+---------------------------------------------------------------------------------------------------+
++----------------------------------------------------------------------------+
+|           TRUE SINGLE-THEME PULL REQUEST PROGRESSION ARCHITECTURE          |
++----------------------------------------------------------------------------+
+
+--- PHASE 1: ATOMIC UNIPROCESSOR BUGFIXES & CONFORMANCE (ZERO SMP MACROS) ---
+
+  [PR #1: POSIX dirent.h ISO C99/C11 Empty Struct & glibc Guards]
+         |
+         v
+  [PR #2: Intrusive List (lists.h) Iterator Member Access Semantics]
+         |
+         v
+  [PR #3: Newlib Syscall Return Type Macro (c-syscalls-aliases-standard.h)]
+         |
+         v
+  [PR #4: Thread Suspend Symbol Export for CMSIS C Wrapper (os-thread.cpp)]
+         |
+         v
+  [PR #5: Memory Usable Size & Calloc Multiplication Overflow Guard]
+         |
+         v
+  [PR #6: ISO C++17 Aligned Memory Allocation Operators (operator new/delete)]
+         |
+         v
+  [PR #7: Thread-Safe Meyers Singletons for Error Categories]
+         |
+         v
+  [PR #8: Steady Clock 64-Bit Tick Duration Overflow Protection]
+         |
+         v
+  [PR #9: CMSIS-RTOS v1 C API Wrapper Cleanups (os-c-wrapper.cpp)]
+         |
+         v
+  [PR #10: POSIX I/O File Descriptor Table Critical Section Mutexing]
+         |
+         v
+  [PR #11: POSIX I/O Filesystem Mount & Network Stack List Mutexing]
+         |
+         v
+  [PR #12: Block Device Partition Size Validation Check]
+         |
+         v
+  [PR #13: ARMv8-M Architecture Semihosting Trap Instruction Guards]
+         |
+         v
+  [PR #14: ARMv8-M Security Extension (TrustZone) SecureFault Handler]
+         |
+         v
+  [PR #15: Semihosting Syscall fstat() Character Device Fallback Mode]
+         |
+         v
+  [PR #16: Software Timer Callback Execution Decoupling & Drift Prevention]
+         |
+         v
+  [PR #17: POSIX Mutex Priority Ceiling & Dynamic Inheritance Boost]
+         |
+         v
+  [PR #18: Thread Lifecycle State Machine (state::destroying) & Reaper]
+         |
+         v
+  [PR #19: Condition Variable Lost-Signal Elimination & Clock Binding]
+         |
+         v
+  [PR #20: C++ std::thread Native Handle Synchronization & Functor Lifetime]
+         |
+         v
+  [PR #21: Message Queue Preemptive Rescheduling on Wakeups]
+         |
+         v
+  [PR #22: High-Resolution Monotonic Clock Port Synchronization (K + C + P)]
+
+--- PHASE 2: MULTI-CORE SMP INFRASTRUCTURE & GENUINE HOST VALIDATION ---
+
+  [PR #23: Multi-Core SMP Kernel Infrastructure, Ports & native-smp Host]
+
+--- PHASE 3: RELEASES, ARCHITECTURE DISSOLUTION & SILICON EXTENSIONS ---
+
+  [PR #24: Port Package Semantic Releases (posix-arch v1.1.0, cortexm v1.2.0)]
+         |
+         v
+  [PR #25: History-Preserving Devices Repository Subtree Dissolution]
+         |
+         v
+  [PR #26: Modern Multi-Core Silicon Ports (ARM Cortex-M33 & RP2350)]
+         |
+         v
+  [PR #27: Modular Add-Only CMake Build Architecture & Cross Toolchains]
+
+--- PHASE 4: MULTI-CORE TEST SUITES, MULTI-ARCH PLATFORMS & CI INTEGRATION ---
+
+  [PR #28: Multi-Core Hardware FPU Context Switch Stress Suite]
+         |
+         v
+  [PR #29: Multi-Architecture 4-Core QEMU Platforms & Composite CI Action]
+
+--- PHASE 5: DOCUMENTATION, FINAL MERGE & SILICON WIRING ---
+
+  [PR #30: Architectural Documentation & Specification Runbooks Suite]
+         |
+         v
+  [PR #31: Final Master Reconciliation, CI Metadata Restoration & Cleanup]
+         |
+         v
+  [PR #32: Dedicated Hardware Silicon Platform Wiring (Raspberry Pi Pico 2)]
++----------------------------------------------------------------------------+
 ```
 
-### 1.1 Pull Request & Step Mapping Matrix
+### 1.1 Mapping the 7 Progressive Macro PRs to the Granular PR Catalog
 
-| Progressive Macro PR | Included Steps | Repositories | Core Domain & Focus | Target Base $\leftarrow$ Head | Acceptance Gate & Invariants |
+Depending on maintainer review preferences, the migration series can be submitted either as **7 Progressive Macro PRs** (as defined in [`pull-request.md`](pull-request.md) and [`files-modif-by-step.md`](files-modif-by-step.md)) or as **32 Pure Single-Theme PRs** (detailed below in §2):
+
+| Progressive Macro PR | Granular Single-Theme PRs | Underlying Steps | Repositories | Core Domain & Focus | Target Base $\leftarrow$ Head |
 |---|---|---|---|---|---|
-| **PR #1: Single-Core Defect Corrections & Hardening** | **Steps 1–13** (Part A) | **K**, +**C**+**P** at Step 13 | ISO C/C++17 conformance, Allocator overflow guards, POSIX I/O concurrency, Condvars, Mutexes, Clocks | `xpack-development` $\leftarrow$ `step/13` | **72/72 frozen baseline tests PASS**; zero SMP macro leakage. |
-| **PR #2: Core SMP Architecture & Native Host Platform** | **Step 14** (Steps 14–23 / Part B) | **K**, **C**, **P** | SMP scheduler, recursive `_smp_klock`, per-CPU ready lists, deferred stack switch, IPI, `native-smp` 2-core test platform | `step/13` $\leftarrow$ `step/14` | `unifdef -UOS_USE_SMP_SCHEDULER` zero-diff invariant; 72/72 baseline PASS; `native-smp` dual-core suite (3/3) PASS. |
-| **PR #3: Multi-Architecture Port Releases** | **Step 24** (Part C1) | **P**, **C** | Semantic version bumps publishing SMP port contract: `posix-arch v1.1.0`, `cortexm v1.2.0` | `step/14` $\leftarrow$ `step/24` | `package.json` version bump only; local git tags created without pushing. |
-| **PR #4: Dissolution & Subtree Ingestion of `devices`** | **Part 0** | **P**, **C**, **A32**, **A64** | Subtree ingestion of `soc/*`, `drivers/*` into architecture ports; `micro-os-plus::devices` ALIAS shims | `part0-devices` (out-of-band) | All legacy board targets linking `micro-os-plus::devices` configure and build cleanly. |
-| **PR #5: ARMv8-M Silicon Ports & Modular CMake** | **Steps 25–26** (Part C2) | **K**, **C**, **P**, **Arch** | Cortex-M33, RP2350, modular CMake toolchains, `uos-app.cmake`, `2xcortex-m33` target | `step/24` $\leftarrow$ `step/26` | 72/72 baseline pass; `2xcortex-m33` QEMU dual-core suite (4/4) PASS. |
-| **PR #6: SMP Validation Testbed & Multi-Arch Harness** | **Steps 27–28** (Part C3) | **K**, **C**, **P**, **Arch** | `fp-switch`, `tests/smp-support/`, 4-core RPi3B QEMU targets (AArch32/64), `test-smp-all` action | `step/26` $\leftarrow$ `step/28` | 72/72 baseline pass; `test-smp-all` (M33 + Native-SMP + AArch) 100% green. |
-| **PR #7: Documentation Suite & Master Reconciliation** | **Steps 29–30** (Part D) | **All Repos** | PDF documentation suite build, `.github/**` pristine restoration, `scripts/smp/` purge | `step/28` $\leftarrow$ `step/30` | Upstream CI metadata byte-identical to baseline; `test-all` and `test-smp-all` 100% green. |
-| **Appendix: Step 31: Dedicated Pico 2 Hardware Platform** | **Step 31** | **C**, **K** | Physical RP2350 silicon SWD flashing & SIO boot mailbox | `cortexm-pico2` | Hardware OpenOCD SWD flashing and UART verification on physical RP2350 silicon. |
+| **Macro PR #1: Single-Core Defect Corrections & Hardening** | PR #1 – PR #22 | Steps 1–13 (Part A) | **K**, +**C**+**P** at Step 13 | ISO C/C++, Allocators, POSIX I/O, Condvars, Mutexes, Clocks | `xpack-development` $\leftarrow$ `step/13` |
+| **Macro PR #2: Core SMP Architecture & Native Host Platform** | PR #23 | Steps 14–23 (Part B collapsed) | **K**, **C**, **P** | SMP scheduler, `_smp_klock`, ready lists, stack switch, IPI, `native-smp` 2-core test | `step/13` $\leftarrow$ `step/14` |
+| **Macro PR #3: Multi-Architecture Port Releases** | PR #24 | Step 24 (Part C1) | **P**, **C** | Semantic version bumps: `posix-arch v1.1.0`, `cortexm v1.2.0` | `step/14` $\leftarrow$ `step/24` |
+| **Macro PR #4: Dissolution & Subtree Ingestion of `devices`** | PR #25 | Part 0 | **P**, **C**, **A32**, **A64** | Subtree ingestion of `soc/*`, `drivers/*`, CMake ALIAS shims | `part0-devices` (out-of-band) |
+| **Macro PR #5: ARMv8-M Silicon Ports & Modular CMake** | PR #26 & PR #27 | Steps 25–26 (Part C2) | **K**, **C**, **P**, **Arch** | Cortex-M33, RP2350, modular toolchains, AN521 platform | `step/24` $\leftarrow$ `step/26` |
+| **Macro PR #6: SMP Validation Testbed & Multi-Arch Harness** | PR #28 & PR #29 | Steps 27–28 (Part C3) | **K**, **C**, **P**, **Arch** | `fp-switch`, `tests/smp-support/`, 4-core RPi3B QEMU targets, `test-smp-all` | `step/26` $\leftarrow$ `step/28` |
+| **Macro PR #7: Documentation Suite & Master Reconciliation** | PR #30 & PR #31 | Steps 29–30 (Part D) | **All Repos** | PDF suite build, `.github/**` pristine restoration, `scripts/smp/` purge | `step/28` $\leftarrow$ `step/30` |
+| **Appendix Step 31: Dedicated Pico 2 Hardware Platform** | PR #32 | Step 31 | **C**, **K** | Physical RP2350 silicon SWD flashing & SIO boot mailbox | `cortexm-pico2` |
 
 ---
 
-## 2. Comprehensive Catalog of Progressive Pull Requests & Step Manifests
+## 2. Catalog of Pure Single-Theme Pull Requests
+
 ---
 
-### Step 1 (PR #1 · Step 1): ISO C Conformance, Intrusive Lists & Exported Suspend
-
-#### Step 1.1: POSIX `dirent.h` ISO C Empty Struct Conformance & glibc Inclusion Guards
+### PR #1: POSIX `dirent.h` ISO C Empty Struct Conformance & glibc Inclusion Guards
 - **Single Theme:** ISO C99/C11 syntax validity and host glibc macro collision prevention.
 - **Repository:** `micro-os-plus-iii`
 - **File Touched:** `include/cmsis-plus/posix/dirent.h`
@@ -113,7 +172,7 @@ gh pr create --repo micro-os-plus/micro-os-plus-iii   --base xpack-development -
 
 ---
 
-#### Step 1.2: Intrusive Double-List (`lists.h`) Iterator Member Access Semantics
+### PR #2: Intrusive Double-List (`lists.h`) Iterator Member Access Semantics
 - **Single Theme:** Modern C++ standard template iterator concept conformance.
 - **Repository:** `micro-os-plus-iii`
 - **File Touched:** `include/cmsis-plus/utils/lists.h`
@@ -154,7 +213,7 @@ gh pr create --repo micro-os-plus/micro-os-plus-iii   --base xpack-development -
 
 ---
 
-#### Step 1.3: Newlib C Syscall Weak Aliases Return Type Macro
+### PR #3: Newlib C Syscall Weak Aliases Return Type Macro
 - **Single Theme:** Newlib 64-bit libc syscall signature compatibility.
 - **Repository:** `micro-os-plus-iii`
 - **File Touched:** `include/cmsis-plus/posix-io/c-syscalls-aliases-standard.h`
@@ -186,7 +245,7 @@ gh pr create --repo micro-os-plus/micro-os-plus-iii   --base xpack-development -
 
 ---
 
-#### Step 1.4: Thread Suspend External Symbol Export for CMSIS C Wrapper
+### PR #4: Thread Suspend External Symbol Export for CMSIS C Wrapper
 - **Single Theme:** Linker external symbol visibility for thread suspension.
 - **Repository:** `micro-os-plus-iii`
 - **File Touched:** `src/rtos/os-thread.cpp`
@@ -214,7 +273,7 @@ gh pr create --repo micro-os-plus/micro-os-plus-iii   --base xpack-development -
 
 ---
 
-### Step 2 (PR #1 · Step 2): Memory Allocator Usable Size & Integer Overflow Protection
+### PR #5: Memory Allocator Usable Size & Integer Overflow Protection
 - **Single Theme:** Memory resource introspection and heap integer multiplication overflow protection.
 - **Repository:** `micro-os-plus-iii`
 - **Files Touched:** `os-memory.*`, `first-fit-top.*`, `lifo.cpp`, `block-pool.cpp`, `malloc.cpp`
@@ -254,9 +313,7 @@ gh pr create --repo micro-os-plus/micro-os-plus-iii   --base xpack-development -
 
 ---
 
-### Step 3 (PR #1 · Step 3): ISO C++17 Aligned Allocation, Meyers Singletons & Chrono Overflow
-
-#### Step 3.1: ISO C++17 Aligned Memory Allocation Operators
+### PR #6: ISO C++17 Aligned Memory Allocation Operators
 - **Single Theme:** C++17 over-aligned dynamic memory allocation overloads.
 - **Repository:** `micro-os-plus-iii`
 - **File Touched:** `src/libcpp/new.cpp`
@@ -294,7 +351,7 @@ gh pr create --repo micro-os-plus/micro-os-plus-iii   --base xpack-development -
 
 ---
 
-#### Step 3.2: Thread-Safe Meyers Singletons for Error Categories
+### PR #7: Thread-Safe Meyers Singletons for Error Categories
 - **Single Theme:** Standard library error category thread-safety and compiler exit-destructor diagnostics.
 - **Repository:** `micro-os-plus-iii`
 - **File Touched:** `src/libcpp/system-error.cpp`
@@ -333,7 +390,7 @@ gh pr create --repo micro-os-plus/micro-os-plus-iii   --base xpack-development -
 
 ---
 
-#### Step 3.3: Steady Clock 64-Bit Duration Multiplicative Overflow Protection
+### PR #8: Steady Clock 64-Bit Duration Multiplicative Overflow Protection
 - **Single Theme:** Long-uptime duration integer overflow prevention.
 - **Repository:** `micro-os-plus-iii`
 - **File Touched:** `src/libcpp/chrono.cpp`
@@ -360,7 +417,7 @@ gh pr create --repo micro-os-plus/micro-os-plus-iii   --base xpack-development -
 
 ---
 
-### Step 4 (PR #1 · Step 4): CMSIS-RTOS v1 C API Wrapper Cleanups
+### PR #9: CMSIS-RTOS v1 C API Wrapper Cleanups
 - **Single Theme:** CMSIS-RTOS specification conformance in C wrapper.
 - **Repository:** `micro-os-plus-iii`
 - **File Touched:** `src/rtos/os-c-wrapper.cpp`
@@ -396,9 +453,7 @@ gh pr create --repo micro-os-plus/micro-os-plus-iii   --base xpack-development -
 
 ---
 
-### Step 5 (PR #1 · Step 5): POSIX I/O Concurrency Safety & Mutex Protection
-
-#### Step 5.1: POSIX I/O File Descriptor Table Critical Section Mutexing
+### PR #10: POSIX I/O File Descriptor Table Critical Section Mutexing
 - **Single Theme:** Thread-safe file descriptor allocation and deallocation.
 - **Repository:** `micro-os-plus-iii`
 - **File Touched:** `src/posix-io/file-descriptors-manager.cpp`
@@ -433,7 +488,7 @@ gh pr create --repo micro-os-plus/micro-os-plus-iii   --base xpack-development -
 
 ---
 
-#### Step 5.2: POSIX I/O Filesystem Mount & Network Stack List Mutexing
+### PR #11: POSIX I/O Filesystem Mount & Network Stack List Mutexing
 - **Single Theme:** Thread-safe filesystem mount and network stack linked list management.
 - **Repositories:** `micro-os-plus-iii`
 - **Files Touched:** `include/cmsis-plus/posix-io/file-system.h`, `include/cmsis-plus/posix-io/net-stack.h`
@@ -466,7 +521,7 @@ gh pr create --repo micro-os-plus/micro-os-plus-iii   --base xpack-development -
 
 ---
 
-#### Step 5.3: Block Device Partition Size Validation Check
+### PR #12: Block Device Partition Size Validation Check
 - **Single Theme:** Block device partition bounds validation.
 - **Repository:** `micro-os-plus-iii`
 - **File Touched:** `src/posix-io/block-device.cpp`
@@ -493,9 +548,7 @@ gh pr create --repo micro-os-plus/micro-os-plus-iii   --base xpack-development -
 
 ---
 
-### Step 6 (PR #1 · Step 6): ARMv8-M Conformance, SecureFault Handler & Semihosting fstat
-
-#### Step 6.1: ARMv8-M Architecture Semihosting Trap Instruction Guards
+### PR #13: ARMv8-M Architecture Semihosting Trap Instruction Guards
 - **Single Theme:** ARMv8-M mainline/baseline semihosting trap instructions.
 - **Repository:** `micro-os-plus-iii`
 - **File Touched:** `include/cmsis-plus/arm/semihosting.h`
@@ -521,7 +574,7 @@ gh pr create --repo micro-os-plus/micro-os-plus-iii   --base xpack-development -
 
 ---
 
-#### Step 6.2: ARMv8-M Security Extension (TrustZone) SecureFault Handler
+### PR #14: ARMv8-M Security Extension (TrustZone) SecureFault Handler
 - **Single Theme:** ARM TrustZone security violation fault handling.
 - **Repository:** `micro-os-plus-iii`
 - **File Touched:** `src/startup/exception-handlers.c`
@@ -550,7 +603,7 @@ gh pr create --repo micro-os-plus/micro-os-plus-iii   --base xpack-development -
 
 ---
 
-#### Step 6.3: Semihosting Syscall `fstat()` Character Device Fallback Mode
+### PR #15: Semihosting Syscall `fstat()` Character Device Fallback Mode
 - **Single Theme:** Semihosting filesystem attribute fallback handling.
 - **Repository:** `micro-os-plus-iii`
 - **File Touched:** `src/semihosting/c-syscalls-semihosting.cpp`
@@ -575,7 +628,7 @@ gh pr create --repo micro-os-plus/micro-os-plus-iii   --base xpack-development -
 
 ---
 
-### Step 7 (PR #1 · Step 7): Software Timer Callback Execution Decoupling & Drift Prevention
+### PR #16: Software Timer Callback Execution Decoupling & Drift Prevention
 - **Single Theme:** Deadlock-free software timer callback execution and periodic drift elimination.
 - **Repository:** `micro-os-plus-iii`
 - **Files Touched:** `src/rtos/os-timer.cpp`, `src/rtos/internal/os-lists.cpp`, `include/cmsis-plus/rtos/os-thread.h`
@@ -607,7 +660,7 @@ gh pr create --repo micro-os-plus/micro-os-plus-iii   --base xpack-development -
 
 ---
 
-### Step 8 (PR #1 · Step 8): POSIX Mutex Priority Ceiling Protocol & Dynamic Boost Protocol
+### PR #17: POSIX Mutex Priority Ceiling & Dynamic Boost Protocol
 - **Single Theme:** Real-time priority ceiling protocol and dynamic priority inheritance tracking.
 - **Repository:** `micro-os-plus-iii`
 - **File Touched:** `src/rtos/os-mutex.cpp`
@@ -636,7 +689,7 @@ gh pr create --repo micro-os-plus/micro-os-plus-iii   --base xpack-development -
 
 ---
 
-### Step 9 (PR #1 · Step 9): Thread Lifecycle State Machine (`state::destroying`), Atomic Join & Idle Reaper
+### PR #18: Thread Lifecycle State Machine (`state::destroying`) & Idle Reaper
 - **Single Theme:** Safe asynchronous thread resource reclamation and atomic join synchronization.
 - **Repository:** `micro-os-plus-iii`
 - **Files Touched:** `os-thread.*`, `os-idle.cpp`, `os-c-decls.h`
@@ -674,7 +727,7 @@ gh pr create --repo micro-os-plus/micro-os-plus-iii   --base xpack-development -
 
 ---
 
-### Step 10 (PR #1 · Step 10): Condition Variable Lost-Signal Elimination & Clock Binding
+### PR #19: Condition Variable Lost-Signal Elimination & Clock Binding
 - **Single Theme:** Lost-signal race elimination in condition variables and clock attribute binding.
 - **Repository:** `micro-os-plus-iii`
 - **Files Touched:** `os-condvar.*`, `instrumentation.h`, `os-c-decls.h`
@@ -703,7 +756,7 @@ gh pr create --repo micro-os-plus/micro-os-plus-iii   --base xpack-development -
 
 ---
 
-### Step 11 (PR #1 · Step 11): C++ `std::thread` Native Handle Synchronization & Functor Lifetime
+### PR #20: C++ `std::thread` Native Handle Synchronization & Functor Lifetime
 - **Single Theme:** ISO C++ standard thread wrapper join semantics and closure memory safety.
 - **Repository:** `micro-os-plus-iii`
 - **Files Touched:** `src/libcpp/thread-cpp.h`, `include/cmsis-plus/estd/thread_internal.h`
@@ -734,7 +787,7 @@ gh pr create --repo micro-os-plus/micro-os-plus-iii   --base xpack-development -
 
 ---
 
-### Step 12 (PR #1 · Step 12): Message Queue Preemptive Rescheduling on Wakeups
+### PR #21: Message Queue Preemptive Rescheduling on Wakeups
 - **Single Theme:** Immediate scheduler preemption upon message queue wakeups.
 - **Repository:** `micro-os-plus-iii`
 - **File Touched:** `src/rtos/os-mqueue.cpp`
@@ -759,7 +812,7 @@ gh pr create --repo micro-os-plus/micro-os-plus-iii   --base xpack-development -
 
 ---
 
-### Step 13 (PR #1 · Step 13): High-Resolution Monotonic Clock Port Synchronization (K + C + P)
+### PR #22: High-Resolution Monotonic Clock Port Synchronization
 - **Single Theme:** Cross-repository monotonic hardware clock interface and SysTick overflow detection.
 - **Repositories:** `micro-os-plus-iii`, `micro-os-plus-iii-cortexm`, `micro-os-plus-iii-posix-arch`
 - **Files Touched:** Kernel `os-decls.h` & `os-clocks.cpp`, Cortex-M `os-inlines.h`, POSIX-Arch `os-inlines.h`
@@ -799,7 +852,7 @@ gh pr create --repo micro-os-plus/micro-os-plus-iii   --base xpack-development -
 
 ---
 
-### Step 14 (PR #2 · Step 14): Multi-Core SMP Kernel Infrastructure, Port Contracts & `native-smp` Host Platform
+### PR #23: Multi-Core SMP Kernel Infrastructure, Port Contracts & `native-smp`
 - **Single Theme:** Multi-core SMP scheduling engine, recursive kernel spinlock, 5-stage stack handshake, and host dual-core platform.
 - **Repositories:** `micro-os-plus-iii`, `micro-os-plus-iii-cortexm`, `micro-os-plus-iii-posix-arch`
 - **Base Branch:** `step/13` | **Head Branch:** `step/14`
@@ -871,7 +924,7 @@ gh pr create --repo micro-os-plus/micro-os-plus-iii-cortexm --base step/14 --hea
 
 ---
 
-### Part 0 (PR #4 · Part 0): History-Preserving Devices Repository Subtree Dissolution
+### PR #25: History-Preserving Devices Repository Subtree Dissolution
 - **Single Theme:** Folding device drivers and SoC silicon files into architecture repositories.
 - **Repositories:** `micro-os-plus-iii-posix-arch`, `micro-os-plus-iii-cortexm`, `micro-os-plus-iii-aarch32`, `micro-os-plus-iii-aarch64`
 - **Problem & Solution:**
@@ -895,7 +948,7 @@ gh pr create --repo micro-os-plus/micro-os-plus-iii-cortexm   --base xpack-devel
 
 ---
 
-### Step 25 (PR #5 · Step 25): Modern Multi-Core Silicon Ports (ARM Cortex-M33 & RP2350)
+### PR #26: Modern Multi-Core Silicon Ports (Cortex-M33 & RP2350)
 - **Single Theme:** Hardware port implementations for ARM Cortex-M33 and Raspberry Pi RP2350.
 - **Repositories:** `micro-os-plus-iii-cortexm`, `micro-os-plus-iii`
 - **Files Touched:** `include-m33/`, `src/rtos/os-core-m33.cpp`, `include-rp2350/`, `src/rtos/os-core-rp2350.cpp`, `thread::resume()` IPI
@@ -928,7 +981,7 @@ gh pr create --repo micro-os-plus/micro-os-plus-iii-cortexm   --base step/24 --h
 
 ---
 
-### Step 26 (PR #5 · Step 26): Modular Add-Only CMake Build Architecture & Cross Toolchains
+### PR #27: Modular Add-Only CMake Build Architecture & Cross Toolchains
 - **Single Theme:** Modular CMake targets, cross toolchains, and `2xcortex-m33` platform.
 - **Repositories:** `micro-os-plus-iii`, `micro-os-plus-iii-cortexm`
 - **Files Touched:** `cmake/toolchains/`, `cmake/uos-app.cmake`, `micro-os-plus::cortexm-qemu-m33`, `tests/platforms/2xcortex-m33/`
@@ -955,7 +1008,7 @@ gh pr create --repo micro-os-plus/micro-os-plus-iii   --base step/25 --head dan-
 
 ---
 
-### Step 27 (PR #6 · Step 27): Multi-Core FPU Stress Testing & Scaffolding Relocation (`fp-switch`, `tests/smp-support/`)
+### PR #28: Multi-Core FPU Stress Testing & Scaffolding Relocation
 - **Single Theme:** Hardware FPU context switch stress testing and test runner standardization.
 - **Repository:** `micro-os-plus-iii`
 - **Files Touched:** `tests/sources/fp-switch/`, `tests/smp-support/`
@@ -981,7 +1034,7 @@ gh pr create --repo micro-os-plus/micro-os-plus-iii   --base step/26 --head dan-
 
 ---
 
-### Step 28 (PR #6 · Step 28): Multi-Architecture 4-Core Platforms (AArch32/64 RPi3B) & Composite CI Action (`test-smp-all`)
+### PR #29: Multi-Architecture 4-Core Platforms & Composite CI Action
 - **Single Theme:** AArch32/AArch64 4-core QEMU platforms and `test-smp-all` action.
 - **Repositories:** `micro-os-plus-iii`, `micro-os-plus-iii-aarch32`, `micro-os-plus-iii-aarch64`
 - **Files Touched:** `aarch32-rpi3b`, `aarch64-rpi3b`, `test-smp-all` in `tests/package.json`
@@ -1012,7 +1065,7 @@ gh pr create --repo micro-os-plus/micro-os-plus-iii   --base step/27 --head dan-
 
 ---
 
-### Step 29 (PR #7 · Step 29): Comprehensive Architectural Documentation & Specification Runbooks Suite
+### PR #30: Comprehensive Architectural Documentation & Specification Runbooks
 - **Single Theme:** Architectural specifications, diagrams, and PDF documentation suite.
 - **Repository:** `micro-os-plus-iii`
 - **Files Touched:** `docs/*.md`, `docs/*.pdf`
@@ -1036,7 +1089,7 @@ gh pr create --repo micro-os-plus/micro-os-plus-iii   --base step/28 --head dan-
 
 ---
 
-### Step 30 (PR #7 · Step 30): Final Master Reconciliation, Pristine CI Metadata Restoration & Repository Cleansing
+### PR #31: Final Upstream Master Reconciliation & Repository Cleansing
 - **Single Theme:** Upstream master branch reconciliation, pristine CI configuration restoration, and tooling cleanup.
 - **Repositories:** `micro-os-plus-iii`, all ports
 - **Base Branch:** `step/29` | **Head Branch:** `step/30`
@@ -1062,7 +1115,7 @@ gh pr create --repo micro-os-plus/micro-os-plus-iii   --base xpack-development -
 
 ---
 
-### Step 31 (Appendix · Step 31): Dedicated Physical Silicon Board Wiring (Raspberry Pi Pico 2)
+### PR #32: Dedicated Physical Silicon Board Wiring (Raspberry Pi Pico 2)
 - **Single Theme:** Hardware platform definition and OpenOCD SWD flashing runners for physical RP2350 silicon.
 - **Repositories:** `micro-os-plus-iii`, `micro-os-plus-iii-cortexm`
 - **Files Touched:** `tests/platforms/cortexm-pico2/`, `os-core-rp2350.cpp`
@@ -1109,33 +1162,42 @@ To ensure that **every single pull request compiles, links, and can be independe
    - Self-contained add-only additions.
    - Tested by running `xpm run test-smp-all` alongside the baseline `xpm run test-all`.
 
-### 4.2 Comprehensive Verification Matrix Per Step & Progressive Pull Request
+### 4.2 Comprehensive Verification Matrix Per Single-Theme PR
 
-| Step & PR ID | Theme / Subject | Repositories | Self-Contained? | Local Verification Command | Acceptance Gate & Invariants |
+| PR # | Theme / Subject | Repos | Self-Contained? | Local Build & Test Command | Acceptance Gate |
 |---|---|---|---|---|---|
-| **Step 1** (PR #1 · S1) | ISO C Conformance, Lists & Suspend | Kernel | **Yes** (Cohesive 4 files) | `xpm run test-all` | 72/72 tests pass; `-Wextra-semi` clean; suspend exported |
-| **Step 2** (PR #1 · S2) | Memory Allocator Usable Size & Calloc | Kernel | **Yes** (Cohesive 7 files) | `xpm run test-all` | 72/72 tests pass; `malloc_usable_size` & calloc overflow verified |
-| **Step 3** (PR #1 · S3) | C++17 Aligned Alloc, Singletons & Chrono | Kernel | **Yes** (Cohesive 3 files) | `xpm run test-all` | 72/72 tests pass; `operator new` overloads & chrono overflow clean |
-| **Step 4** (PR #1 · S4) | CMSIS-RTOS C Wrapper Cleanups | Kernel | **Yes** (Standalone) | `xpm run test-all` | 72/72 tests pass; `cmsis-os-validator` (60/60) |
-| **Step 5** (PR #1 · S5) | POSIX I/O FD Table & Mutex Protection | Kernel | **Yes** (Cohesive 4 files) | `xpm run test-all` | 72/72 tests pass; concurrent I/O stress green |
-| **Step 6** (PR #1 · S6) | ARMv8-M Traps, SecureFault & Semihosting | Kernel | **Yes** (Cohesive 3 files) | `xpm run test-all` | 72/72 tests pass; exception vectors compile |
-| **Step 7** (PR #1 · S7) | Software Timer Callback Decoupling | Kernel | **Yes** (Cohesive 3 files) | `xpm run test-all` | 72/72 tests pass; timer callback mutexes clean |
-| **Step 8** (PR #1 · S8) | Mutex Priority Ceiling Protocol & Boost | Kernel | **Yes** (Standalone) | `xpm run test-all` | 72/72 tests pass; `mutex-stress-test` passes |
-| **Step 9** (PR #1 · S9) | Thread Lifecycle (`state::destroying`) & Reaper | Kernel | **Yes** (Cohesive 4 files) | `xpm run test-all` | 72/72 tests pass; dynamic thread reaper green |
-| **Step 10** (PR #1 · S10) | CondVar Lost-Signal Elimination & Clocks | Kernel | **Yes** (Cohesive 4 files) | `xpm run test-all` | 72/72 tests pass; condvar concurrency stress green |
-| **Step 11** (PR #1 · S11) | `std::thread` Handle Sync & Functor Life | Kernel | **Yes** (Cohesive 2 files) | `xpm run test-all` | 72/72 tests pass; functor closure lifetime verified |
-| **Step 12** (PR #1 · S12) | MQueue Preemptive Rescheduling | Kernel | **Yes** (Standalone) | `xpm run test-all` | 72/72 tests pass; message queue preemption green |
-| **Step 13** (PR #1 · S13) | High-Res Clock Port Sync | K + C + P | **Yes** (Atomic across repos) | `xpm run test-all` | 72/72 tests pass; ICSR pending fix verified |
-| **Step 14** (PR #2 · S14) | Multi-Core SMP Core & `native-smp` Host | K + C + P | **Yes** (Atomic across repos) | `scripts/smp/verify-step.sh 14` | `unifdef` zero-diff + 72/72 + `native-smp` (3/3) PASS |
-| **Step 24** (PR #3 · S24) | Port Package Semantic Releases | P + C | **Yes** (Version bump only) | `git tag -l` | `v1.1.0` and `v1.2.0` local tags generated |
-| **Part 0** (PR #4 · Part 0) | Devices Repository Subtree Dissolution | P + C + Arch | **Yes** (Subtree add) | `xpm run build ...` | Subtree merged; CMake ALIAS targets resolve |
-| **Step 25** (PR #5 · S25) | Modern Silicon Ports (M33 & RP2350) | C + K | **Yes** (Add-only) | `scripts/smp/verify-step.sh 25` | M33/RP2350 port targets compile cleanly |
-| **Step 26** (PR #5 · S26) | Modular Add-Only CMake Build Architecture | K + C | **Yes** (Add-only) | `scripts/smp/verify-step.sh 26` | 72/72 baseline + `2xcortex-m33` (4/4) PASS |
-| **Step 27** (PR #6 · S27) | FPU Context Switch Stress (`fp-switch`) | Kernel | **Yes** (Add-only) | `scripts/smp/verify-step.sh 27` | `fp-switch` passes on `2xcortex-m33` (4/4) |
-| **Step 28** (PR #6 · S28) | Multi-Arch 4-Core Platforms & `test-smp-all` | K + A32 + A64 | **Yes** (Add-only) | `scripts/smp/verify-step.sh 28` | `test-smp-all` passes (Native, M33, AArch) |
-| **Step 29** (PR #7 · S29) | Comprehensive Documentation Suite | Kernel | **Yes** (Standalone) | `docs/render-pdfs.sh` | All PDFs compile cleanly without warnings |
-| **Step 30** (PR #7 · S30) | Final Merge Reconciliation & Cleansing | All Repos | **Yes** (Clean merge) | `bash scripts/smp/finalize.sh` | Upstream CI metadata 100% byte-identical |
-| **Step 31** (Appendix · S31) | Dedicated Pico 2 Hardware Platform | K + C | **Yes** (Add-only) | `xpm run build --config cortexm-pico2` | Pico 2 platform compiles for hardware SWD |
+| **#1** | POSIX `dirent.h` Conformance | Kernel | **Yes** (Standalone) | `xpm run test-all` | 72/72 tests pass; `-Wextra-semi` clean |
+| **#2** | List Iterator Member Semantics | Kernel | **Yes** (Standalone) | `xpm run test-all` | 72/72 tests pass; intrusive list suite green |
+| **#3** | Newlib Syscall Return Types | Kernel | **Yes** (Standalone) | `xpm run test-all` | 72/72 tests pass; newlib reentrant tests pass |
+| **#4** | Thread Suspend Symbol Export | Kernel | **Yes** (Standalone) | `xpm run test-all` | 72/72 tests pass; C wrapper resolves symbol |
+| **#5** | Memory Allocator Usable Size | Kernel | **Yes** (Cohesive 7 files) | `xpm run test-all` | 72/72 tests pass; `malloc_usable_size` verified |
+| **#6** | C++17 Aligned Allocation | Kernel | **Yes** (Standalone) | `xpm run test-all` | 72/72 tests pass; `operator new` overloads green |
+| **#7** | Meyers Error Singletons | Kernel | **Yes** (Standalone) | `xpm run test-all` | 72/72 tests pass; `-Wexit-time-destructors` clean |
+| **#8** | Steady Clock Duration Overflow | Kernel | **Yes** (Standalone) | `xpm run test-all` | 72/72 tests pass; chrono math overflow-free |
+| **#9** | CMSIS-RTOS C Wrapper | Kernel | **Yes** (Standalone) | `xpm run test-all` | 72/72 tests pass; `cmsis-os-validator` (60/60) |
+| **#10** | POSIX I/O FD Table Mutex | Kernel | **Yes** (Standalone) | `xpm run test-all` | 72/72 tests pass; concurrent I/O stress green |
+| **#11** | POSIX I/O Mount List Locking | Kernel | **Yes** (Standalone) | `xpm run test-all` | 72/72 tests pass; filesystem mount tests green |
+| **#12** | Block Device Partition Bounds | Kernel | **Yes** (Standalone) | `xpm run test-all` | 72/72 tests pass; invalid partition returns `EINVAL` |
+| **#13** | ARMv8-M Semihosting Traps | Kernel | **Yes** (Standalone) | `xpm run test-all` | 72/72 tests pass; ARM semihosting tests pass |
+| **#14** | SecureFault Exception Handler | Kernel | **Yes** (Standalone) | `xpm run test-all` | 72/72 tests pass; exception vectors compile |
+| **#15** | Semihosting `fstat()` Mode | Kernel | **Yes** (Standalone) | `xpm run test-all` | 72/72 tests pass; file mode attributes clean |
+| **#16** | Software Timer Decoupling | Kernel | **Yes** (Cohesive 3 files) | `xpm run test-all` | 72/72 tests pass; timer callback mutexes clean |
+| **#17** | Mutex Priority Ceiling | Kernel | **Yes** (Standalone) | `xpm run test-all` | 72/72 tests pass; `mutex-stress-test` passes |
+| **#18** | Thread Lifecycle & Reaper | Kernel | **Yes** (Cohesive 4 files) | `xpm run test-all` | 72/72 tests pass; dynamic thread reaper green |
+| **#19** | CondVar Lost-Signal Elimination | Kernel | **Yes** (Cohesive 4 files) | `xpm run test-all` | 72/72 tests pass; condvar concurrency stress green |
+| **#20** | `std::thread` Handle Sync | Kernel | **Yes** (Cohesive 2 files) | `xpm run test-all` | 72/72 tests pass; functor closure lifetime verified |
+| **#21** | MQueue Preemptive Reschedule | Kernel | **Yes** (Standalone) | `xpm run test-all` | 72/72 tests pass; message queue preemption green |
+| **#22** | High-Res Clock Port Sync | K + C + P | **Yes** (Atomic across repos) | `xpm run test-all` | 72/72 tests pass; ICSR pending fix verified |
+| **#23** | Multi-Core SMP Core & Native | K + C + P | **Yes** (Atomic across repos) | `scripts/smp/verify-step.sh 14` | `unifdef` zero-diff + 72/72 + `native-smp` (3/3) |
+| **#24** | Port Semantic Releases | P + C | **Yes** (Version bump only) | `git tag -l` | `v1.1.0` and `v1.2.0` local tags generated |
+| **#25** | Devices Subtree Dissolution | P + C + Arch | **Yes** (Subtree add) | `xpm run build ...` | Subtree merged; CMake ALIAS targets resolve |
+| **#26** | Modern Silicon Ports | C + K | **Yes** (Add-only) | `scripts/smp/verify-step.sh 25` | M33/RP2350 port targets compile cleanly |
+| **#27** | Modular Add-Only CMake | K + C | **Yes** (Add-only) | `scripts/smp/verify-step.sh 26` | 72/72 baseline + `2xcortex-m33` (4/4) PASS |
+| **#28** | FPU Context Switch Stress | Kernel | **Yes** (Add-only) | `scripts/smp/verify-step.sh 27` | `fp-switch` passes on `2xcortex-m33` (4/4) |
+| **#29** | Multi-Arch 4-Core Platforms | K + A32 + A64 | **Yes** (Add-only) | `scripts/smp/verify-step.sh 28` | `test-smp-all` passes (Native, M33, AArch) |
+| **#30** | Documentation Suite | Kernel | **Yes** (Standalone) | `docs/render-pdfs.sh` | All PDFs compile cleanly without warnings |
+| **#31** | Final Merge & Cleansing | All Repos | **Yes** (Clean merge) | `bash scripts/smp/finalize.sh` | Upstream CI metadata 100% byte-identical |
+| **#32** | Pico 2 Hardware Platform | K + C | **Yes** (Add-only) | `xpm run build --config cortexm-pico2` | Pico 2 platform compiles for hardware SWD |
 
 ## 4. Command-Line Rebase & Stacked PR Maintenance Cheatsheet
 
@@ -1291,7 +1353,8 @@ Reviewers and authors can collaborate directly within the GitHub.com web interfa
 - Toggle between **"Unified"** (inline) and **"Split"** (side-by-side) diff views using the gear icon.
 - Click the **"+"** icon on any line number in the diff to leave an inline comment.
 
-##Reviewers can propose exact code replacements directly in comment boxes:
+#### 2. Using Markdown Suggestion Blocks
+Reviewers can propose exact code replacements directly in comment boxes:
 ````markdown
 ```suggestion
   int reserved;

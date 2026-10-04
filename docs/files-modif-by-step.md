@@ -303,7 +303,7 @@ Every modification across each repository is catalogued below with its precise t
   - `docs/MICRO-OS-PLUS-SMP-VS-SINGLECORE-ANALYSIS.md` & `.pdf`
   - `docs/SMP-UPSTREAM-INTEGRATION-PLAN.md` & `.pdf`
   - `docs/Implementation-SMP-Integration.md` & `.pdf`
-  - `docs/pool-request.md` & `.pdf`
+  - `docs/pull-request.md` & `.pdf`
   - `docs/files-modif-by-step.md` & `.pdf`
 - **K M** `docs/render-pdfs.sh`: Updates batch PDF compilation script using `md2pdf.py`.
 
@@ -7872,7 +7872,7 @@ rm -rf test_smpl
 #### Why PR #7 is Needed as a Standalone Pull Request
 
 1. **Complete Architectural Documentation:**
-   - Synchronizes and publishes all Markdown specifications, flowcharts, and compiled PDF runbooks (`MICRO-OS-PLUS-SMP-VS-SINGLECORE-ANALYSIS.pdf`, `SMP-UPSTREAM-INTEGRATION-PLAN.pdf`, `Implementation-SMP-Integration.pdf`, `pool-request.pdf`, `files-modif-by-step.pdf`).
+   - Synchronizes and publishes all Markdown specifications, flowcharts, and compiled PDF runbooks (`MICRO-OS-PLUS-SMP-VS-SINGLECORE-ANALYSIS.pdf`, `SMP-UPSTREAM-INTEGRATION-PLAN.pdf`, `Implementation-SMP-Integration.pdf`, `pull-request.pdf`, `files-modif-by-step.pdf`).
 2. **Pristine CI Metadata Restoration:**
    - Reconciles repository histories with upstream `origin/xpack-development`, restoring `.github/workflows/ci.yml`, `README.md`, `LICENSE`, and Doxygen templates to be 100% byte-identical to upstream.
 3. **Cleansing of Developer Tooling:**
@@ -7881,7 +7881,7 @@ rm -rf test_smpl
 ### smp-step(29): Documentation suite synchronization
 
 #### Why Step 29 (Documentation Synchronization) is Needed:
-- **Complete Architectural Documentation:** Synchronizes and compiles all Markdown specifications, flowcharts, and PDF runbooks (`MICRO-OS-PLUS-SMP-VS-SINGLECORE-ANALYSIS.pdf`, `SMP-UPSTREAM-INTEGRATION-PLAN.pdf`, `Implementation-SMP-Integration.pdf`, `pool-request.pdf`, `files-modif-by-step.pdf`).
+- **Complete Architectural Documentation:** Synchronizes and compiles all Markdown specifications, flowcharts, and PDF runbooks (`MICRO-OS-PLUS-SMP-VS-SINGLECORE-ANALYSIS.pdf`, `SMP-UPSTREAM-INTEGRATION-PLAN.pdf`, `Implementation-SMP-Integration.pdf`, `pull-request.pdf`, `files-modif-by-step.pdf`).
 
 
 ```bash

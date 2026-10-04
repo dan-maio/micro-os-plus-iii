@@ -1055,14 +1055,14 @@ gh pr create --repo micro-os-plus/micro-os-plus-iii   --base step/27 --head dan-
 - **Repository:** `micro-os-plus-iii`
 - **Files Touched:** `docs/*.md`, `docs/*.pdf`
 - **Problem & Solution:**
-  - Synchronizes and builds complete PDF documentation suite (`MICRO-OS-PLUS-SMP-VS-SINGLECORE-ANALYSIS.pdf`, `SMP-UPSTREAM-INTEGRATION-PLAN.pdf`, `Implementation-SMP-Integration.pdf`, `pool-request.pdf`, `files-modif-by-step.pdf`, `GITHUB-PROGRESSIVE-PR-GUIDE.pdf`).
+  - Synchronizes and builds complete PDF documentation suite (`MICRO-OS-PLUS-SMP-VS-SINGLECORE-ANALYSIS.pdf`, `SMP-UPSTREAM-INTEGRATION-PLAN.pdf`, `Implementation-SMP-Integration.pdf`, `pull-request.pdf`, `files-modif-by-step.pdf`, `GITHUB-PROGRESSIVE-PR-GUIDE.pdf`).
 - **Exact Unified Diff Applied:**
 ```diff
 --- a/docs/render-pdfs.sh
 +++ b/docs/render-pdfs.sh
 @@ -24,6 +24,7 @@ render_doc "SMP-UPSTREAM-INTEGRATION-PLAN.md"
  render_doc "Implementation-SMP-Integration.md"
- render_doc "pool-request.md"
+ render_doc "pull-request.md"
  render_doc "files-modif-by-step.md"
 +render_doc "GITHUB-PROGRESSIVE-PR-GUIDE.md"
 ```

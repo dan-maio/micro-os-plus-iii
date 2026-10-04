@@ -41,7 +41,7 @@ render tests-in-aarch32-aarch64 \
     --title    "How the tests are organised and run" \
     --subtitle "Every board owns its tests" \
     --footer   "$FOOT"
-render pool-request \
+render pull-request \
     --title    "Progressive Pull Request — SMP integration" \
     --subtitle "What, why, file and code, from the corrections to the SMP integration" \
     --footer   "$FOOT" \

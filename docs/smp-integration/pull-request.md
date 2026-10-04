@@ -151,7 +151,7 @@ platform it runs on, always travel in the same step (or PR).
 
 ---
 
-## 2. Phase 0 — Dissolve the `devices` repository (PR #4)
+## 2. Phase 0 — Dissolve the `devices` repository (PR #4 · Part 0)
 
 **Why the whole part.** `xpack-development` has six components; `smp` adds a
 seventh, `micro-os-plus-iii-devices`. Upstream has no such repo and nowhere to
@@ -174,7 +174,7 @@ and builds; the standalone `devices` repo is no longer a dependency.
 
 ---
 
-## 3. Phase A — Corrections: single-core correctness (PR #1, Steps 1–13)
+## 3. Phase A — Corrections: single-core correctness (PR #1 · Steps 1–13)
 
 **Why the whole part.** These fixes are correct and valuable **without** SMP.
 Landing them first keeps each step bisectable and makes Part B a pure SMP diff.
@@ -218,7 +218,7 @@ inline clock_highres::timestamp_t clock_highres::cycles_since_tick (void) {
 
 ---
 
-## 4. Phase B — SMP infrastructure (PR #2, Steps 14–23, collapsed into `step/14`)
+## 4. Phase B — SMP infrastructure (PR #2 · Step 14 / Steps 14–23 collapsed)
 
 **Why one blob.** Unlike Part A, all ten steps' SMP code is interleaved inside the
 same `#if defined(OS_USE_SMP_SCHEDULER)` blocks in the same files. The whole set
@@ -289,7 +289,7 @@ delta = 0 + 72/72 + the genuine `native-smp` dual-core suite (`rtos-apis-test`,
 
 ---
 
-## 5. Phase C1 — Port releases (PR #3, Step 24)
+## 5. Phase C1 — Port releases (PR #3 · Step 24)
 
 **Why now.** The releases publish the SMP port model that Part B just landed;
 they depend only on Part B, not on the new boards or tests, so they are their own
@@ -304,7 +304,7 @@ exist locally only; the port branches still build.
 
 ---
 
-## 6. Phase C2 — New cores/boards + modular CMake (PR #5, Steps 25–26)
+## 6. Phase C2 — New cores/boards + modular CMake (PR #5 · Steps 25–26)
 
 **Why here.** These are **evolutions**: the M33 and RP2350 cores and the additive
 CMake that lets a new platform link the fat `::iii` without touching the existing
@@ -321,7 +321,7 @@ platform configures and builds.
 
 ---
 
-## 7. Phase C3 — New test sources + add-only platforms (PR #6, Steps 27–28)
+## 7. Phase C3 — New test sources + add-only platforms (PR #6 · Steps 27–28)
 
 **Why here.** These are the **tests**: existing, proven `smp` suites promoted
 add-only, plus the AArch platforms. They need the cores/boards from PR #5.
@@ -336,7 +336,7 @@ add-only, plus the AArch platforms. They need the cores/boards from PR #5.
 
 ---
 
-## 8. Phase D — Documentation and final merge (PR #7, Steps 29–30)
+## 8. Phase D — Documentation and final merge (PR #7 · Steps 29–30)
 
 | Step | What | Why | File | Code |
 |---|---|---|---|---|
@@ -429,7 +429,7 @@ out of band, so #5's port side is rebased on it before review.
 
 ---
 
-## 13. Appendix — Step 31: Dedicated Raspberry Pi Pico 2 (`cortexm-pico2`) Hardware Platform Wiring
+## 13. Appendix — Dedicated Raspberry Pi Pico 2 (`cortexm-pico2`) Hardware Platform Wiring (PR #8 · Step 31)
 
 **Why:** Configures complete standalone hardware testing infrastructure for physical Raspberry Pi Pico 2 silicon (RP2350 dual ARM Cortex-M33).
 

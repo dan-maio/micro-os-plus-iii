@@ -7,32 +7,35 @@ architecture, running under QEMU or on a Raspberry Pi.
 
 ## 1. Get the sources
 
-Each architecture project keeps **no copy** of the kernel or the drivers. Clone
-what you need side by side:
+Each architecture project keeps **no copy** of the kernel. The drivers (SD,
+flatfs, DWC2 USB, FatFs) and the SoC support are part of the port itself, in
+`drivers/` and `soc/<chip>/` (they were in `micro-os-plus-iii-devices` until
+that repository was dissolved into the ports on 2026-10-06). Clone the kernel
+and the port side by side, on branch `smp`:
 
 ```sh
 mkdir workspace && cd workspace
-git clone <remote>/micro-os-plus-iii-smp.git
-git clone <remote>/micro-os-plus-iii-devices.git
-git clone <remote>/micro-os-plus-iii-aarch64.git      # and/or -aarch32
+git clone -b smp <remote>/micro-os-plus-iii.git
+git clone -b smp <remote>/micro-os-plus-iii-aarch64.git   # and/or -aarch32
 ```
 
 ```
 workspace/
-├── micro-os-plus-iii-smp/
-├── micro-os-plus-iii-devices/
-├── micro-os-plus-iii-aarch64/
-└── micro-os-plus-iii-aarch32/
+├── micro-os-plus-iii/
+├── micro-os-plus-iii-aarch64/    drivers/, soc/bcm2837/
+└── micro-os-plus-iii-aarch32/    drivers/, soc/bcm2837/, soc/rk3506/
 ```
 
-CMake finds them as siblings. Override either with
+CMake finds the kernel as a sibling (`micro-os-plus-iii`, else
+`micro-os-plus-iii-smp`, with or without `.git`). Override it with
 
 ```sh
-cmake -DUOS_SMP_DIR=/elsewhere/micro-os-plus-iii-smp \
-      -DUOS_DEVICES_DIR=/elsewhere/micro-os-plus-iii-devices ...
+cmake -DUOS_SMP_DIR=/elsewhere/micro-os-plus-iii ...
 ```
 
-A build that cannot find one stops and names the repository to clone.
+A build that cannot find it stops and names the repository to clone. Through
+the µOS++ test framework the same builds are `xpm run test-aarch32-rpi3b-cmake`
+(and the other `aarch*` actions) in `micro-os-plus-iii/tests`.
 
 One kernel working copy serves every architecture project on the machine, so an
 edit to it is visible to all of them at once — no submodule pointer to bump, no
@@ -409,12 +412,16 @@ carries its own in `test/<board>/{include,src}/`. Linking `iii-posix-io` into a 
 to compile: it declares `read`/`write` returning `ssize_t` where newlib
 declares `int`.
 
-### `micro-os-plus-iii-devices`
+### Drivers and SoC targets (defined by each port)
 
-| Target | Contents |
-|---|---|
-| `micro-os-plus::devices` | SD, flatfs, DWC2, FatFs |
-| `micro-os-plus::soc-bcm2837` | BCM2837 registers, IRQ, mailbox |
+| Target | Contents | Ports |
+|---|---|---|
+| `micro-os-plus::devices` | SD, flatfs, DWC2, FatFs (`drivers/`) | aarch32, aarch64 |
+| `micro-os-plus::soc-bcm2837` | BCM2837 registers, IRQ, mailbox (`soc/bcm2837/`) | aarch32, aarch64 |
+| `micro-os-plus::devices-rk3506` | RK3506 DesignWare SD back-end (`soc/rk3506/`) | aarch32 |
+
+Until 2026-10-06 these came from the separate `micro-os-plus-iii-devices`
+repository.
 
 ### The architecture projects
 
@@ -433,6 +440,10 @@ header fixes, what `uos_add_app` sets, what each architecture project's
 switches matter (none of them, for these builds).
 
 ## 9. Rebuilding this document
+
+> On the rebuilt `smp` branch (xpack-dev-smp.md Part II) `docs/render-pdfs.sh`
+> and `docs/md2pdf.py` are not committed (no procedure scripts). Render a PDF
+> with `pandoc -f gfm -t html5 -s <doc>.md | weasyprint - <doc>.pdf`.
 
 Every PDF under `docs/` is rendered by one script, which holds each document's
 title page and running footer so they do not have to be recovered from the PDFs

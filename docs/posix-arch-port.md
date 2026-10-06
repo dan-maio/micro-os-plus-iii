@@ -96,9 +96,12 @@ The measurements further down ("11 passed", the sanitizer runs) were taken
 with the first eleven applications, before `smp-mutex-stress` and
 `smp-rtos-apis` were added; they are kept as they were measured.
 
-The port depends on the kernel (`micro-os-plus-iii-smp`) and the device layer
-(`micro-os-plus-iii-devices`), holds no copy of either, and neither of them
-knows it exists. That one-way dependency is why the kernel tree stays
+The port depends on the kernel (`micro-os-plus-iii`, branch `smp`; formerly
+`micro-os-plus-iii-smp`), holds no copy of it, and the kernel does not know the
+port exists. The device layer that used to be the separate
+`micro-os-plus-iii-devices` repository is now part of the port: the neutral
+drivers are in `drivers/` and the host-file SD back-end is in `soc/native/`
+(dissolved on 2026-10-06, xpack-dev-smp.md §14). That one-way dependency is why the kernel tree stays
 merge-clean against upstream.
 
 ### Where it came from
@@ -1632,7 +1635,7 @@ cannot fail that way.
 ### The SD card is a file
 
 Two of the carried tests reach a block device.
-`micro-os-plus-iii-devices/include/sd.hpp` dispatches on a define and its
+`drivers/include/sd.hpp` (formerly in `micro-os-plus-iii-devices`) dispatches on a define and its
 comment states the contract: a new back-end arrives as a **new file** and a
 **new target**, defining `sd::SdCard` with the same eight methods and the same
 failure vocabulary.
@@ -1679,12 +1682,14 @@ to either test**.
 
 ```cmake
 get_filename_component (_uos_siblings "${CMAKE_CURRENT_SOURCE_DIR}/.." ABSOLUTE)
-set (UOS_SMP_DIR     "${_uos_siblings}/micro-os-plus-iii-smp"     CACHE PATH …)
-set (UOS_DEVICES_DIR "${_uos_siblings}/micro-os-plus-iii-devices" CACHE PATH …)
+set (UOS_SMP_DIR "${_uos_siblings}/micro-os-plus-iii" CACHE PATH …)
+# else micro-os-plus-iii-smp, each also with a .git suffix
 ```
 
-Clone the three repositories side by side and it works; override either with
-`-D` to build against a working copy elsewhere. A missing dependency produces a
+The drivers and the SD back-end are in the port itself (`drivers/`,
+`soc/native/`), so only the kernel is a sibling. Clone the two repositories
+side by side and it works; override the kernel with `-DUOS_SMP_DIR=` to build
+against a working copy elsewhere. A missing dependency produces a
 `FATAL_ERROR` that tells you the clone command, not a stack of CMake noise.
 
 ### Boards are discovered, not listed
@@ -1918,7 +1923,8 @@ Initialising SD card via SDHCI @0x3F300000...
 ```
 
 (The "SDHCI @0x3F300000" is the carried test's own text; the back-end behind it
-is a file.) These two are the reason `micro-os-plus-iii-devices` gained a third
+is a file.) These two are the reason the device layer (then
+`micro-os-plus-iii-devices`, now the port's `soc/native/`) gained a third
 back-end, and they run with **no edit at all**.
 
 Their per-core distribution is lopsided — `Produced by Core: c0=3275 c1=0 c2=0
@@ -2398,7 +2404,7 @@ applications. Nothing in the port's `CMakeLists.txt` changes. The work is in
 become a `kqueue` timer or a dispatch source, and `swapcontext` is deprecated
 there.
 
-**A new SD back-end**: a new file under `micro-os-plus-iii-devices/soc/<id>/`,
+**A new SD back-end**: a new file under the port's `soc/<id>/`,
 a new target, a new `#elif` in `sd.hpp`. Nothing existing changes — that is the
 contract.
 
@@ -2850,7 +2856,6 @@ async-signal-safe, and this lock is taken from signal handlers.
 | `BUILD` | `test/build` | `test/boards/native/run.sh` |
 | `UOS_RUN_ONLY` | — | `test_smpl/run-host.sh` |
 | `UOS_SMP_DIR` | the sibling | the board runner, CMake |
-| `UOS_DEVICES_DIR` | the sibling | CMake |
 | `UOS_SD_IMAGE` | `disk.img` | the host-file SD back-end |
 | `UOS_SD_SECTORS` | `65536` (32 MiB) | the host-file SD back-end |
 
@@ -2861,7 +2866,6 @@ async-signal-safe, and this lock is taken from signal handlers.
 | `-DBOARD=` | `native` | must name a `test/boards/<id>/board.cmake` |
 | `-DNCPU=` | `4` | host threads acting as CPUs |
 | `-DUOS_SMP_DIR=` | sibling | the kernel working copy |
-| `-DUOS_DEVICES_DIR=` | sibling | the devices working copy |
 | `-DCMAKE_BUILD_TYPE=` | — | `Release` for the suite; `Debug` shifts the windows |
 
 ### Signals
@@ -2877,10 +2881,11 @@ async-signal-safe, and this lock is taken from signal handlers.
 | | |
 |---|---|
 | port | `micro-os-plus-iii-posix-arch` |
-| kernel | `micro-os-plus-iii-smp` |
-| devices | `micro-os-plus-iii-devices` |
-| the SD back-end | `micro-os-plus-iii-devices/soc/native/` |
-| the shared runner | `micro-os-plus-iii-smp/test_smpl/run-host.sh` |
+| kernel | `micro-os-plus-iii` (branch `smp`) |
+| drivers | `micro-os-plus-iii-posix-arch/drivers/` |
+| the SD back-end | `micro-os-plus-iii-posix-arch/soc/native/` |
+| the shared runner | `micro-os-plus-iii/test_smpl/run-host.sh` |
+| the xpm gate | `xpm run test-native-cmake` in `micro-os-plus-iii/tests` |
 | the design decision | `docs/specs/2026-09-20-…-unification-design.md` §7.6, D12 |
 | the sibling ports | [`cortexm-port.md`](cortexm-port.md), [`tests-in-aarch32-aarch64.md`](tests-in-aarch32-aarch64.md) |
 

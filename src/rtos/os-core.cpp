@@ -478,6 +478,45 @@ namespace os
 
 #if !defined(OS_USE_RTOS_PORT_SCHEDULER)
 
+#if defined(OS_USE_SMP_SCHEDULER)
+      // Affinity gate: a per-core idle thread is pinned to its own core,
+      // everything else follows its cpu_affinity() bitmask.
+      //
+      // Identity against os_idle_thread_core[] is the authoritative test: it
+      // covers every core whatever the thread is named. The name rules are
+      // only the fallback for the boot window, between the moment a secondary
+      // idle thread is linked into the ready list by its constructor and the
+      // moment it is registered in os_idle_thread_core[]. Without a rule for
+      // core OS_NCPU-1 an unregistered idle thread inherits the default
+      // 0xFFFFFFFF affinity, so another core can pick it out of the ready list
+      // and run it on the same stack as its own core does.
+      static bool
+      is_thread_allowed_on_cpu (thread* th, unsigned cpu)
+      {
+        for (unsigned c = 0; c < OS_NCPU; ++c)
+          {
+            if (th == scheduler::os_idle_thread_core[c])
+              {
+                return (cpu == c);
+              }
+          }
+        const char* name = th->name ();
+        if (name != nullptr && name[0] == 'i' && name[1] == 'd'
+            && name[2] == 'l' && name[3] == 'e')
+          {
+            if (name[4] == '\0' || name[4] == '0')
+              {
+                return (cpu == 0);
+              }
+            if (name[4] >= '1' && name[4] <= '9' && name[5] == '\0')
+              {
+                return (cpu == static_cast<unsigned> (name[4] - '0'));
+              }
+          }
+        return (th->cpu_affinity () & (1u << cpu)) != 0;
+      }
+#endif /* defined(OS_USE_SMP_SCHEDULER) */
+
       void
       internal_switch_threads (void)
       {
@@ -521,6 +560,77 @@ namespace os
         // current thread and return the top priority thread.
         if (!locked ())
           {
+#if defined(OS_USE_SMP_SCHEDULER)
+            unsigned cpu = port_cpu_id ();
+            thread* old_thread = scheduler::current_thread_[cpu];
+
+            instrumentation::thread::suspended (
+                old_thread, OS_INTEGER_INSTRUMENTATION_SUSPEND_CAUSE_SWITCH);
+
+            bool is_old_idle = false;
+            for (unsigned c = 0; c < OS_NCPU; ++c)
+              {
+                if (old_thread == scheduler::os_idle_thread_core[c])
+                  {
+                    is_old_idle = true;
+                    break;
+                  }
+              }
+
+            if (!is_old_idle)
+              {
+                old_thread->internal_relink_running_ ();
+              }
+            else
+              {
+                old_thread->state_ = thread::state::ready;
+              }
+
+            // Affinity-aware pick from the ready list. Skip threads whose
+            // stack_ptr is still nullptr (their context is live in another
+            // CPU's registers -- publish is deferred to the asm restore path);
+            // this CPU's own outgoing thread may always be re-picked.
+            thread* next_thread = nullptr;
+            auto* sentinel = reinterpret_cast<internal::waiting_thread_node*> (
+                &scheduler::ready_threads_list_);
+            auto* node = const_cast<internal::waiting_thread_node*> (
+                static_cast<const volatile internal::waiting_thread_node*> (
+                    scheduler::ready_threads_list_.head ()));
+
+            while (node != nullptr && node != sentinel)
+              {
+                thread* th = node->thread_;
+                if (th != nullptr && is_thread_allowed_on_cpu (th, cpu)
+                    && (th == old_thread
+                        || (th->state_ != thread::state::running
+                            && th->context_.port_.stack_ptr != nullptr)))
+                  {
+                    next_thread = th;
+                    node->unlink ();
+                    next_thread->state_ = thread::state::running;
+                    break;
+                  }
+                node = static_cast<internal::waiting_thread_node*> (
+                    node->next ());
+              }
+
+            if (next_thread != nullptr)
+              {
+                scheduler::current_thread_[cpu] = next_thread;
+              }
+            else
+              {
+                scheduler::current_thread_[cpu]
+                    = scheduler::os_idle_thread_core[cpu];
+                if (scheduler::os_idle_thread_core[cpu] != nullptr)
+                  {
+                    scheduler::os_idle_thread_core[cpu]->state_
+                        = thread::state::running;
+                  }
+              }
+
+            instrumentation::thread::active (scheduler::current_thread_[cpu]);
+#else
             instrumentation::thread::suspended (
                 scheduler::current_thread_,
                 OS_INTEGER_INSTRUMENTATION_SUSPEND_CAUSE_SWITCH);
@@ -532,6 +642,7 @@ namespace os
                 = scheduler::ready_threads_list_.unlink_head ();
 
             instrumentation::thread::active (scheduler::current_thread_);
+#endif /* defined(OS_USE_SMP_SCHEDULER) */
           }
 
           // ***** Pointer switched to new thread! *****

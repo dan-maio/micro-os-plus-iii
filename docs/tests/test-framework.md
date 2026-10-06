@@ -12,6 +12,15 @@ all development happens, later merged into `xpack`). The reference commit used
 while writing is `c47f806b` ("ci.yml update deps"). Where the `smp` branch
 differs, this document is only about `xpack-development`.
 
+> **The `smp` side.** What the `smp` branch changes in this framework (the
+> port test builders, the board models, `tests-main.cmake` choosing the port by
+> `PLATFORM_NAME`, `test_smpl/`, the SMP platforms and `test-smp-cmake`) is
+> described in [`TESTS-XPACK-SYSTEM.md`](TESTS-XPACK-SYSTEM.md) and
+> [`STEPS.md`](STEPS.md). The commits that take this branch to `smp`, one
+> subject each, are listed in
+> [`xpack-dev-smp.md`](../smp-integration/xpack-dev-smp.md) §15.4–§15.6 and
+> Part III.
+
 ---
 
 ## 1. The mental model in one page

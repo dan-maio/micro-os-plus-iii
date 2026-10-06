@@ -1160,7 +1160,7 @@ Part II was executed once from scratch on 2026-10-06. Fresh clones of `github.co
 ### 20.1 Starting point
 | Repository | Base (`origin/xpack-development`) | Result branch | Commits |
 |---|---|---|---:|
-| `micro-os-plus-iii` (kernel, K) | `7f1ce5ca` | `smp` | 125 |
+| `micro-os-plus-iii` (kernel, K) | `7f1ce5ca` | `smp` | 125 (+ 32 documentation updates, §22.3) |
 | `micro-os-plus-iii-posix-arch` (P) | `86a6a1f` | `smp` | 24 |
 | `micro-os-plus-iii-cortexm` (C) | `687e975` | `smp` | 86 |
 | `micro-os-plus-iii-aarch32` (A32) | `307c62f` | `smp` | 64 |
@@ -1187,7 +1187,7 @@ Each commit carries the trailer `Commit-ID: <ID> (xpack-dev-smp.md Part II)`. Ea
 | 12 | S4 AArch32/AArch64 boards | A32-20, A32-21, A32-R3, A32-LL; A64-20, A64-21, A64-R3; K58–K62 | Port CMake, board models (rpi-zero-2w, rpi3b, luckfox-lyra), and the kernel platforms `aarch32-rpi-zero-2w`, `aarch32-rpi3b`, `aarch32-luckfox-lyra`, `aarch64-rpi-zero-2w`, `aarch64-rpi3b`. | build per commit |
 | 13 | S4 port tests | P21–P35, A32-T-*, A32-R3-*, A32-LL-*, A64-T-*, A64-R3-* | One commit per test directory, each adding one `ctest` entry: 15 native, 30 AArch32 Raspberry Pi, 20 Luckfox Lyra, 30 AArch64. | build per commit |
 | 14 | S4 remaining harness | K39c, K48-nucleo-f411re/-f767zi/-h743zi/-raspberrypi-pico | The validator host build uses glibc's `ucontext`. The legacy hardware platforms label their tests `hwd` and link the modular targets. | see §21.3 |
-| 15 | S5 docs and chores | K901–K935, K980–K984, P14, P36, C28, C29 | One commit per document; `.clang-format`; `.gitignore` additions; the TSan probe; the cortexm board README; this document. | — |
+| 15 | S5 docs and chores | K901–K935, K980–K984, P14, P36, C28, C29; after the run K985–K987 (§22.3) | One commit per document; `.clang-format`; `.gitignore` additions; the TSan probe; the cortexm board README; this document. | — |
 | 16 | S6 parity | all (read-only diff with `golden/smp`) | §21.4. | — |
 | 17 | S6 full test | `micro-os-plus-iii/tests` | §21.5. | all green |
 
@@ -1655,3 +1655,42 @@ All of them run on QEMU or on the host; `ctest -LE hwd` excludes the real-hardwa
 | 1 | D01 | (bundle) | docs | S0 devices | `docs: retire the repository -- its contents moved to the architecture ports` |  |
 
 D01 is kept in `devices-retired.bundle` (the local clone was deleted after S0, §14.2). On GitHub, the repository is archived instead of being changed.
+
+### 22.3 Documentation updates after the migration (kernel)
+
+Made after the full test run, so that every document in `docs/` describes the executed state: Part III itself (K985); one commit per document (K986-*), which corrects stale facts in the reference documents (no `micro-os-plus-iii-devices`, no `UOS_DEVICES_DIR`, the current clone layout and the verified results) and adds a *Status 2026-10-06* note to the historical plans and reviews (their PDFs regenerated); and this section (K987). The upstream documents that do not concern the migration (`HISTORY`, `NOTES`, `TODO`, `posix-io-*`, `other-posix-systems`, `upstream-*`) are unchanged.
+
+| # | Commit-ID | SHA | Category | Subject |
+|---:|---|---|---|---|
+| 126 | K985 | `6fb211a9` | docs | `docs(smp): xpack-dev-smp.md Part III -- execution record, step summary, commit list` |
+| 127 | K986-STATUS | `e2a90a42` | docs | `docs: STATUS for the commit-only migration of 2026-10-06` |
+| 128 | K986-aarch32-second-board | `7bfb05be` | docs | `docs: aarch32-second-board -- the RK3506 SD driver is in the port` |
+| 129 | K986-building-aarch32-aarch64 | `a256bafe` | docs | `docs: building-aarch32-aarch64 without the devices repository` |
+| 130 | K986-posix-arch-port | `6c6a136a` | docs | `docs: posix-arch-port -- drivers and SD back-end are in the port` |
+| 131 | K986-cortexm-port | `a9c1ad47` | docs | `docs: cortexm-port -- the SoC directories and the verified results` |
+| 132 | K986-test-smpl | `c273abb1` | docs | `docs: test-smpl lists the verdict contract and the no-power-cycle configs` |
+| 133 | K986-tests-in-aarch32-aarch64 | `0ff357af` | docs | `docs: tests-in-aarch32-aarch64 shows drivers/ and soc/ in the port` |
+| 134 | K986-WORK-SMP-HARNESS-GUIDE | `359b2b73` | docs | `docs(tests): WORK-SMP harness guide -- no devices repository` |
+| 135 | K986-TESTS-XPACK-SYSTEM | `982522d7` | docs | `docs(tests): TESTS-XPACK-SYSTEM -- the four ports, devices dissolved` |
+| 136 | K986-HARNESS-TESTS-PARADIGM | `a8983cd6` | docs | `docs(tests): HARNESS-TESTS-PARADIGM -- no devices repository` |
+| 137 | K986-HARNESS-BOARD-TEST-CHEATSHEET | `ef3d8096` | docs | `docs(tests): HARNESS-BOARD-TEST-CHEATSHEET -- no devices repository` |
+| 138 | K986-AARCH32-RPI-ZERO-2W-TESTS | `997146ca` | docs | `docs(tests): AARCH32-RPI-ZERO-2W-TESTS -- drivers are in the port` |
+| 139 | K986-STEPS | `335b3416` | docs | `docs(tests): STEPS -- a port finds only the kernel as a sibling` |
+| 140 | K986-TESTS-DEVELOPER-GUIDE | `3ee23fe2` | docs | `docs(tests): TESTS-DEVELOPER-GUIDE -- the workspace without devices` |
+| 141 | K986-TESTS-CATALOG | `63f2b822` | docs | `docs(tests): TESTS-CATALOG -- four ports, and the last verified run` |
+| 142 | K986-tests-README-DEVELOPER | `d504cbc4` | docs | `docs(tests): README-DEVELOPER -- the current clone layout` |
+| 143 | K986-tests-README-MAINTAINER | `0ddf9763` | docs | `docs(tests): README-MAINTAINER -- the current clone layout` |
+| 144 | K986-test-framework | `b60858d1` | docs | `docs(tests): test-framework points to the smp side` |
+| 145 | K986-agy-review | `8c3477d2` | docs | `docs(smp): agy-review -- status note, superseded by xpack-dev-smp.md` |
+| 146 | K986-DeepSeek-review | `60e4d0ef` | docs | `docs(smp): DeepSeek-review -- status note, superseded by xpack-dev-smp.md` |
+| 147 | K986-files-modif-by-step | `1da601cd` | docs | `docs(smp): files-modif-by-step -- status note, superseded by xpack-dev-smp.md` |
+| 148 | K986-GITHUB-PROGRESSIVE-PR-GUIDE | `66ef2fa5` | docs | `docs(smp): GITHUB-PROGRESSIVE-PR-GUIDE -- status note, superseded by xpack-dev-smp.md` |
+| 149 | K986-Implementation-SMP-Integration | `440716ba` | docs | `docs(smp): Implementation-SMP-Integration -- status note, superseded by xpack-dev-smp.md` |
+| 150 | K986-micro-os-plus-iii-project-unification | `c6c7eebe` | docs | `docs(smp): project-unification -- status note` |
+| 151 | K986-MICRO-OS-PLUS-SMP-VS-SINGLECORE-ANALYSIS | `df0f0ed9` | docs | `docs(smp): SMP-VS-SINGLECORE-ANALYSIS -- status note` |
+| 152 | K986-new-modifications | `2be02079` | docs | `docs(smp): new-modifications -- status note` |
+| 153 | K986-pull-request | `0e1416d3` | docs | `docs(smp): pull-request -- status note, superseded by xpack-dev-smp.md` |
+| 154 | K986-smp-construction | `02e62612` | docs | `docs(smp): smp-construction -- status note` |
+| 155 | K986-SMP-UPSTREAM-INTEGRATION-PLAN | `21d772ad` | docs | `docs(smp): SMP-UPSTREAM-INTEGRATION-PLAN -- status note, superseded by xpack-dev-smp.md` |
+| 156 | K986-2026-09-20-micro-os-plus-iii-smp-unification-design | `039c42c6` | docs | `docs(specs): smp-unification-design -- status note` |
+| 157 | K987 | (this commit) | docs | `docs(smp): xpack-dev-smp.md lists the documentation updates` |

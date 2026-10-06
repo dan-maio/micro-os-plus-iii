@@ -1,5 +1,16 @@
 # Master Progressive Pull-Request Blueprint — µOS++ IIIe SMP Migration
 
+> **Status 2026-10-06.** This file-by-step map belongs to the earlier 30-step, script-driven plan; the executed per-commit file lists are the commits themselves (`pr/<ID>`). The migration from `xpack-development` to `smp`
+> was then executed with the commit-only procedure of
+> [`xpack-dev-smp.md`](xpack-dev-smp.md) Part II: no `scripts/smp/`, no chunk recipes, one
+> subject per commit, only added or modified files. The result is recorded in
+> its Part III: 343 commits over `micro-os-plus-iii`, `-posix-arch`,
+> `-cortexm`, `-aarch32` and `-aarch64`; `micro-os-plus-iii-devices` dissolved
+> into the ports' `drivers/` and `soc/<chip>/` (no `UOS_DEVICES_DIR`); every
+> commit built; the full xpm test run (native, QEMU Cortex-M, `test-smp-cmake`)
+> green. Where this document disagrees with it (step or PR numbering, scripts,
+> the devices repository, test counts), `xpack-dev-smp.md` applies.
+
 *Files Modified Per Step, In-Depth Technical Rationale ("WHY"), and Lifting Recipes (Part 0 → Part D, Steps 1–31)*
 
 **Source:** The verified multi-core `smp` branch across all component repositories, compared against the uniprocessor upstream baseline (`origin/xpack-development`).  

@@ -1513,6 +1513,39 @@
           "shortConfigurationName": "cpsr"
         }
       },
+      "cortexm-nucleof411-cmake-gcc-debug": {
+        "inherit": [
+          "cortexm-actions",
+          "cmake-actions",
+          "cortexm-dependencies",
+          "arm-cmsis-dependencies",
+          "arm-none-eabi-gcc-dependencies",
+          "openocd-dependencies",
+          "short-win-paths-properties"
+        ],
+        "properties": {
+          "buildType": "Debug",
+          "platformName": "cortexm-nucleof411",
+          "toolchainFileName": "arm-none-eabi-gcc.cmake",
+          "shortConfigurationName": "cnfd"
+        },
+        "actions": {
+          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE hwd",
+          "test-cmsis-os-validator-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R cortexm-nucleof411-cmsis-os-validator-hwd",
+          "test-mos-test1-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R cortexm-nucleof411-mos-test1-hwd",
+          "test-mutex-stress-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R cortexm-nucleof411-mutex-stress-hwd",
+          "test-rtos-apis-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R cortexm-nucleof411-rtos-apis-hwd"
+        }
+      },
+      "cortexm-nucleof411-cmake-gcc-release": {
+        "inherit": [
+          "cortexm-nucleof411-cmake-gcc-debug"
+        ],
+        "properties": {
+          "buildType": "MinSizeRel",
+          "shortConfigurationName": "cnfr"
+        }
+      },
       "nucleo-f411re-cmake-gcc-debug": {
         "inherit": [
           "cortexm-actions",

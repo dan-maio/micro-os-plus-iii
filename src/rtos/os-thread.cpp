@@ -19,6 +19,17 @@
 #include <memory>
 #include <stdexcept>
 
+#if defined(OS_USE_SMP_SCHEDULER)
+extern "C" unsigned port_cpu_id(void);
+extern "C" void port_smp_ipi(unsigned cpu) __attribute__ ((weak));
+
+extern "C" void __attribute__ ((weak))
+port_smp_ipi (unsigned cpu)
+{
+  (void) cpu;
+}
+#endif /* defined(OS_USE_SMP_SCHEDULER) */
+
 // ----------------------------------------------------------------------------
 
 #if defined(__clang__)
@@ -577,7 +588,11 @@ namespace os
 
         if (!scheduler::started ())
           {
+#if defined(OS_USE_SMP_SCHEDULER)
+            scheduler::current_thread_[port_cpu_id()] = this;
+#else
             scheduler::current_thread_ = this;
+#endif /* defined(OS_USE_SMP_SCHEDULER) */
           }
 
         // Add to ready list, but do not yield yet.
@@ -1841,7 +1856,22 @@ namespace os
 
 #else
 
+#if defined(OS_USE_SMP_SCHEDULER)
+        {
+          // Read the core id and that core's current thread with this core's
+          // interrupts masked. With them enabled, a preemption between the
+          // two reads can move the caller to another core, and it would get
+          // back the thread now running on the core it left -- as a mutex
+          // owner, a waiter, or the errno it writes. The IRQ critical section
+          // is the per-core mask every port provides; it also takes the
+          // kernel lock, recursively, so a caller already inside one pays
+          // nothing more.
+          interrupts::critical_section ics;
+          th = scheduler::current_thread_[port_cpu_id ()];
+        }
+#else
         th = scheduler::current_thread_;
+#endif /* defined(OS_USE_SMP_SCHEDULER) */
 
 #endif
         return th;

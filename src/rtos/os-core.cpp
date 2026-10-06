@@ -24,6 +24,11 @@
 
 // ----------------------------------------------------------------------------
 
+#if defined(OS_USE_SMP_SCHEDULER)
+// Provided by the SMP port (e.g. Cortex-A7); returns the current core index.
+extern "C" unsigned port_cpu_id(void);
+#endif /* defined(OS_USE_SMP_SCHEDULER) */
+
 namespace
 {
 #if defined(OS_HAS_INTERRUPTS_STACK)
@@ -130,9 +135,20 @@ namespace os
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wcast-align"
+#if defined(OS_USE_SMP_SCHEDULER)
+      // One running thread per CPU, indexed by port_cpu_id().
+      thread* volatile current_thread_[OS_NCPU]
+          = {reinterpret_cast<thread*> (&tiny_thread)};
+#else
       thread* volatile current_thread_
           = reinterpret_cast<thread*> (&tiny_thread);
+#endif /* defined(OS_USE_SMP_SCHEDULER) */
 #pragma GCC diagnostic pop
+
+#if defined(OS_USE_SMP_SCHEDULER)
+      // One idle thread per CPU (secondary cores register theirs at boot).
+      thread* os_idle_thread_core[OS_NCPU] = {nullptr};
+#endif /* defined(OS_USE_SMP_SCHEDULER) */
 
 #pragma GCC diagnostic push
 #if defined(__clang__)
@@ -490,7 +506,11 @@ namespace os
         scheduler::statistics::cpu_cycles_ += delta;
 
         // Accumulate durations to old thread.
+#if defined(OS_USE_SMP_SCHEDULER)
+        scheduler::current_thread_[port_cpu_id()]->statistics_.cpu_cycles_ += delta;
+#else
         scheduler::current_thread_->statistics_.cpu_cycles_ += delta;
+#endif /* defined(OS_USE_SMP_SCHEDULER) */
 
         // Remember the timestamp for the next context switch.
         scheduler::statistics::switch_timestamp_ = now;
@@ -527,7 +547,11 @@ namespace os
         scheduler::statistics::context_switches_++;
 
         // Increment new thread context switches.
+#if defined(OS_USE_SMP_SCHEDULER)
+        scheduler::current_thread_[port_cpu_id()]->statistics_.context_switches_++;
+#else
         scheduler::current_thread_->statistics_.context_switches_++;
+#endif /* defined(OS_USE_SMP_SCHEDULER) */
 
 #endif /* defined(OS_INCLUDE_RTOS_STATISTICS_THREAD_CONTEXT_SWITCHES) */
       }

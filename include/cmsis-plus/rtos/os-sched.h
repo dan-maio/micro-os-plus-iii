@@ -55,7 +55,11 @@ namespace os
 
 #if !defined(OS_USE_RTOS_PORT_SCHEDULER)
       extern bool is_preemptive_;
+#if defined(OS_USE_SMP_SCHEDULER)
+      extern thread* volatile current_thread_[OS_NCPU];
+#else
       extern thread* volatile current_thread_;
+#endif /* defined(OS_USE_SMP_SCHEDULER) */
       extern internal::ready_threads_list ready_threads_list_;
 #endif /* !defined(OS_USE_RTOS_PORT_SCHEDULER) */
 

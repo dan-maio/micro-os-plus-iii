@@ -7,6 +7,17 @@ status: approved — revision 2, 2026-09-20 (architecture-specific ports, multi-
 
 # 1. Goal
 
+> **Status 2026-10-06.** This is the original unification design; its decisions stand, except that the separate devices repository (and its `UOS_DEVICES_DIR`) was later dissolved into the ports. The migration from `xpack-development` to `smp`
+> was then executed with the commit-only procedure of
+> [`xpack-dev-smp.md`](../smp-integration/xpack-dev-smp.md) Part II: no `scripts/smp/`, no chunk recipes, one
+> subject per commit, only added or modified files. The result is recorded in
+> its Part III: 343 commits over `micro-os-plus-iii`, `-posix-arch`,
+> `-cortexm`, `-aarch32` and `-aarch64`; `micro-os-plus-iii-devices` dissolved
+> into the ports' `drivers/` and `soc/<chip>/` (no `UOS_DEVICES_DIR`); every
+> commit built; the full xpm test run (native, QEMU Cortex-M, `test-smp-cmake`)
+> green. Where this document disagrees with it (step or PR numbering, scripts,
+> the devices repository, test counts), `xpack-dev-smp.md` applies.
+
 > **Superseded on 2026-09-21 for the test layout.** This design put one copy of
 > each test in `test_smpl/common/` and had every port build the same list. That
 > is no longer how it works: every board owns its tests, in

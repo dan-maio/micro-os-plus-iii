@@ -197,8 +197,10 @@ will appear in an `if/elseif` chain. The layout is
 
 Since this chapter was first written, the Lyra **has** gained its SD card: the
 predecessor's RK3506 DesignWare MSHC driver is now
-`micro-os-plus-iii-devices/soc/rk3506/`, reached through
-`micro-os-plus::devices-rk3506`, and the board builds 11 of the 12 shared
+`soc/rk3506/` of the aarch32 port itself (it was in `micro-os-plus-iii-devices`
+until that repository was dissolved into the ports on 2026-10-06), reached
+through `micro-os-plus::devices-rk3506`, which the port's `CMakeLists.txt`
+defines, and the board builds 11 of the 12 shared
 applications plus eight of its own. Only `usb_test` is still missing, waiting
 on the RK3506 DWC2 device stack.
 

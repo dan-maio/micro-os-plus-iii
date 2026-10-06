@@ -1461,6 +1461,70 @@ namespace os
         // ----- Enter critical section ---------------------------------------
         scheduler::critical_section scs;
 
+#if defined(OS_USE_SMP_SCHEDULER)
+        // On SMP the thread may be running on another CPU -- typically
+        // still inside its own internal_exit_(), right after the event that
+        // let this caller go on -- or be terminated and already taken off
+        // the funeral list by an idle reaper, which destroys it outside the
+        // lock. Destroying it here in either case frees the stack another
+        // CPU runs on, or destroys it twice. So wait, with the lock
+        // released, until it is off every CPU and unclaimed; from then on
+        // the lock held keeps it so.
+        for (;;)
+          {
+            if (__atomic_load_n (&state_, __ATOMIC_ACQUIRE) == state::destroyed)
+              {
+                break;
+              }
+
+            bool busy = (__atomic_load_n (&context_.port_.stack_ptr,
+                                          __ATOMIC_ACQUIRE)
+                         == nullptr);
+            unsigned busy_cpu = OS_NCPU;
+            for (unsigned c = 0; c < OS_NCPU; ++c)
+              {
+                if (__atomic_load_n (&scheduler::current_thread_[c],
+                                     __ATOMIC_ACQUIRE)
+                    == this)
+                  {
+                    busy = true;
+                    busy_cpu = c;
+                    break;
+                  }
+              }
+
+            thread::state_t st = __atomic_load_n (&state_, __ATOMIC_ACQUIRE);
+            if (st == state::destroying)
+              {
+                busy = true;
+              }
+            else if (st == state::terminated && ready_node_.unlinked ())
+              {
+                // Idle reaper claimed it and will destroy it.
+                busy = true;
+              }
+
+            if (!busy)
+              {
+                break;
+              }
+
+            // Actively trigger reschedule IPI if running on another core
+            if (busy_cpu < OS_NCPU && busy_cpu != port_cpu_id ())
+              {
+                port_smp_ipi (busy_cpu);
+              }
+
+            {
+              // ----- Enter uncritical section -------------------------------
+              scheduler::uncritical_section sucs;
+
+              this_thread::yield ();
+              // ----- Exit uncritical section --------------------------------
+            }
+          }
+#endif /* defined(OS_USE_SMP_SCHEDULER) */
+
         if (state_ == state::destroyed)
           {
 #if defined(OS_TRACE_RTOS_THREAD)

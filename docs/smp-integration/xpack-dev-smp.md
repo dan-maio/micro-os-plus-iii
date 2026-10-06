@@ -79,7 +79,7 @@ Every step in this rebuilt history adheres strictly to the **GitHub Pull Request
 
 > **Procedure update (Part II, §11–§18):** The rebuild is carried out **only with git commits**. No bash or Python scripts are used: no `scripts/smp/`, no chunk recipes, no stashes and no `git checkout golden -- <files>` lifts. Each commit only modifies or adds files, covers one subject (one fix, one feature, one test, one board, one document), and becomes one GitHub pull request. §11–§18 are the authoritative per-repository commit lists for `micro-os-plus-iii`, `cortexm`, `posix-arch`, `aarch32` and `aarch64`, including the retirement of `devices`. Where §3, §9 and §10 disagree with them, §11–§18 apply.
 
-> **Execution record (Part III, §20–§22):** Part II was executed on 2026-10-06. §20 summarizes every step from `xpack-development` (single CPU) to `smp` (SMP) across all repositories. §21 records the deviations from the plan, the builds, the parity check and the final test results. §22 lists all 343 commits by number, Commit-ID, category, stage/theme and subject.
+> **Execution record (Part III, §20–§22):** Part II was executed on 2026-10-06. §20 summarizes every step from `xpack-development` (single CPU) to `smp` (SMP) across all repositories. §21 records the deviations from the plan, the builds, the parity check and the final test results. §22 lists every commit of every repository (kernel, posix-arch, cortexm, aarch32, aarch64, devices) as a pull request: number, head and base branch, SHA, category, stage/theme and subject, plus the cross-repository merge order.
 
 ### 1.3 Target Architecture: The Five Clean Repositories & Dissolution of `devices`
 In the original architecture, device-specific drivers and SoC registers were segregated into a separate `micro-os-plus-iii-devices` repository. This model introduced unnecessary cross-repository coupling and circular dependencies during multi-core bringup.
@@ -1160,7 +1160,7 @@ Part II was executed once from scratch on 2026-10-06. Fresh clones of `github.co
 ### 20.1 Starting point
 | Repository | Base (`origin/xpack-development`) | Result branch | Commits |
 |---|---|---|---:|
-| `micro-os-plus-iii` (kernel, K) | `7f1ce5ca` | `smp` | 125 (+ 32 documentation updates, §22.3) |
+| `micro-os-plus-iii` (kernel, K) | `7f1ce5ca` | `smp` | 125 (+ 33 documentation updates, §22.4) |
 | `micro-os-plus-iii-posix-arch` (P) | `86a6a1f` | `smp` | 24 |
 | `micro-os-plus-iii-cortexm` (C) | `687e975` | `smp` | 86 |
 | `micro-os-plus-iii-aarch32` (A32) | `307c62f` | `smp` | 64 |
@@ -1187,7 +1187,7 @@ Each commit carries the trailer `Commit-ID: <ID> (xpack-dev-smp.md Part II)`. Ea
 | 12 | S4 AArch32/AArch64 boards | A32-20, A32-21, A32-R3, A32-LL; A64-20, A64-21, A64-R3; K58–K62 | Port CMake, board models (rpi-zero-2w, rpi3b, luckfox-lyra), and the kernel platforms `aarch32-rpi-zero-2w`, `aarch32-rpi3b`, `aarch32-luckfox-lyra`, `aarch64-rpi-zero-2w`, `aarch64-rpi3b`. | build per commit |
 | 13 | S4 port tests | P21–P35, A32-T-*, A32-R3-*, A32-LL-*, A64-T-*, A64-R3-* | One commit per test directory, each adding one `ctest` entry: 15 native, 30 AArch32 Raspberry Pi, 20 Luckfox Lyra, 30 AArch64. | build per commit |
 | 14 | S4 remaining harness | K39c, K48-nucleo-f411re/-f767zi/-h743zi/-raspberrypi-pico | The validator host build uses glibc's `ucontext`. The legacy hardware platforms label their tests `hwd` and link the modular targets. | see §21.3 |
-| 15 | S5 docs and chores | K901–K935, K980–K984, P14, P36, C28, C29; after the run K985–K987 (§22.3) | One commit per document; `.clang-format`; `.gitignore` additions; the TSan probe; the cortexm board README; this document. | — |
+| 15 | S5 docs and chores | K901–K935, K980–K984, P14, P36, C28, C29; after the run K985–K988 (§22.4) | One commit per document; `.clang-format`; `.gitignore` additions; the TSan probe; the cortexm board README; this document. | — |
 | 16 | S6 parity | all (read-only diff with `golden/smp`) | §21.4. | — |
 | 17 | S6 full test | `micro-os-plus-iii/tests` | §21.5. | all green |
 
@@ -1260,437 +1260,452 @@ No other difference remains.
 
 All of them run on QEMU or on the host; `ctest -LE hwd` excludes the real-hardware tests. The hardware-only platforms are built but not run.
 
-## 22. Complete Commit List
+## 22. Complete Pull-Request and Commit List (all repositories)
 
-### 22.1 Legend
-- **#**: position of the commit on `smp`, counted from the base (§20.1). It is also the PR order.
-- **Commit-ID**: the ID in the commit trailer and in the `pr/<ID>` branch name.
+Every commit of every repository is one pull request. A PR's head is the local branch `pr/<Commit-ID>`, which points at that commit; its base is the previous PR's branch in the same repository (the first PR of a repository targets `xpack-development`). After a PR is merged, the next one is retargeted to `xpack-development` (§12.5). The branches exist locally in each `/tmp/<repository>` clone and are pushed to `github.com/dan-maio/<repository>` only when the PRs are opened.
+
+### 22.1 Legend and totals
+- **PR**: position on `smp`, counted from the base (§20.1); this is the order in which the repository's PRs are opened and merged.
+- **Head branch (Commit-ID)**: `pr/<ID>`, where `<ID>` is the ID in the commit trailer `Commit-ID: <ID> (xpack-dev-smp.md Part II)`.
+- **Base branch**: the branch the PR targets.
 - **Category**: `correction` (fix), `new code` (feat), `test`, `build`, `docs`, `chore`, `tool`.
-- **Stage / theme**: the Part II stage (§13.1).
-- **Group**: set when the commit belongs to an R6 group (§21.2).
+- **Stage / theme**: the Part II stage (§13.1), followed by the R6 group (§21.2) when the commit belongs to one.
 
-| Repository | Corrections | New code | Tests | Build | Docs | Chore / tool | Total |
+| Repository | Corrections | New code | Tests | Build | Docs | Chore / tool | PRs |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| micro-os-plus-iii | 31 | 18 | 32 | 3 | 39 | 2 | 125 |
-| posix-arch | 0 | 5 | 15 | 2 | 0 | 2 | 24 |
-| cortexm | 1 | 9 | 72 | 2 | 1 | 1 | 86 |
-| aarch32 | 0 | 10 | 52 | 1 | 0 | 1 | 64 |
-| aarch64 | 0 | 9 | 32 | 1 | 0 | 1 | 43 |
-| devices | 0 | 0 | 0 | 0 | 1 | 0 | 1 |
-| **Total** | **32** | **51** | **203** | **9** | **41** | **7** | **343** |
+| micro-os-plus-iii (migration) | 31 | 18 | 32 | 3 | 39 | 2 | 125 |
+| micro-os-plus-iii (documentation updates, §22.4) | 0 | 0 | 0 | 0 | 33 | 0 | 33 |
+| micro-os-plus-iii-posix-arch | 0 | 5 | 15 | 2 | 0 | 2 | 24 |
+| micro-os-plus-iii-cortexm | 1 | 9 | 72 | 2 | 1 | 1 | 86 |
+| micro-os-plus-iii-aarch32 | 0 | 10 | 52 | 1 | 0 | 1 | 64 |
+| micro-os-plus-iii-aarch64 | 0 | 9 | 32 | 1 | 0 | 1 | 43 |
+| micro-os-plus-iii-devices | 0 | 0 | 0 | 0 | 1 | 0 | 1 |
+| **Total** | **32** | **51** | **203** | **9** | **74** | **7** | **376** |
 
-### 22.2 Commits per repository
+### 22.2 Cross-repository merge order
+The PRs of one repository merge in their own order (22.3). Across repositories, R6 (provider before consumer) adds these constraints:
 
-#### micro-os-plus-iii (125 commits)
+| Before | Merge | Why |
+|---|---|---|
+| — | S0 in every port: posix-arch PR 1–3, cortexm PR 1–3, aarch32 PR 1–3, aarch64 PR 1–2; then devices PR 1 | The drivers and SoC support exist in the ports before the devices repository is retired. |
+| kernel K28a | **G-hrclock together:** kernel K28 + cortexm C04, C04b + posix-arch P04 | The kernel calls `clock_highres::has_hardware_counter()`, which each port defines. |
+| kernel K39b | posix-arch P05, P06 | The host SMP port relies on the kernel's tolerant `port_cpu_id()` declarations. |
+| kernel K30–K39b, K40, K41, K43a–d | **G-harness together:** kernel K42, K44, K45, K46-m0..m7f + posix-arch P20 + cortexm C20a, C20b | The kernel harness switches to the port test builders; neither side builds alone. |
+| cortexm C09 / C10 and its board PR | kernel K50 (`2xcortex-m33`), K51 (`pico2-1cpu`), K52–K57 (one per cortexm board) | A kernel platform needs its port core and board. |
+| aarch32 A32-20, A32-21 (and A32-R3, A32-LL) | kernel K58, K59, K62 | idem for AArch32. |
+| aarch64 A64-20, A64-21 (and A64-R3) | kernel K60, K61 | idem for AArch64. |
+| the board PR of a port | that board's test PRs (`pr/<board-ID>-<test>`) | One test directory = one `ctest` entry on an existing platform. |
 
-| # | Commit-ID | SHA | Category | Stage / theme | Subject | Group |
+### 22.3 Pull requests per repository
+
+#### micro-os-plus-iii -- 158 pull requests (github.com/dan-maio/micro-os-plus-iii)
+
+| PR | Head branch (Commit-ID) | Base branch | SHA | Category | Stage / theme | Subject |
 |---:|---|---|---|---|---|---|
-| 1 | K01 | `b364e689` | correction | S1 single-core | `fix(posix): ISO C conformant DIR in dirent.h` |  |
-| 2 | K02 | `52a7f499` | correction | S1 single-core | `fix(utils): list iterators call node_->next()/prev()` |  |
-| 3 | K03 | `2f8c482e` | correction | S1 single-core | `fix(posix-io): match newlib's syscall return types in the weak aliases` |  |
-| 4 | K04 | `bcb5737e` | correction | S1 single-core | `fix(rtos): emit this_thread::suspend() out of line` |  |
-| 5 | K06 | `ef9bb2ce` | correction | S1 single-core | `fix(memory): block_pool asserts on a null result, not on a valid one` |  |
-| 6 | K07 | `a6d6c475` | correction | S1 single-core | `fix(estd): polymorphic_allocator copy keeps its memory resource` |  |
-| 7 | K08 | `51bdad10` | new code | S1 single-core | `feat(memory): usable size for the RTOS allocators, overflow-checked calloc()` |  |
-| 8 | K09 | `1c589065` | new code | S1 single-core | `feat(libcpp): C++17 aligned operator new/delete` |  |
-| 9 | K10 | `de47254b` | correction | S1 single-core | `fix(libcpp): error categories with static storage` |  |
-| 10 | K11 | `c8aa3024` | correction | S1 single-core | `fix(libcpp): steady_clock::now() without 64-bit overflow` |  |
-| 11 | K12 | `0c11e258` | correction | S1 single-core | `fix(rtos): C API timers default to one-shot` |  |
-| 12 | K13 | `ebfa07b3` | correction | S1 single-core | `fix(rtos): C API deletes mutexes and semaphores through their concrete type` |  |
-| 13 | K14 | `b4d6fdcf` | correction | S1 single-core | `fix(rtos): widen millisec before scaling in the CMSIS-RTOS API` |  |
-| 14 | K15 | `8ed1c7b0` | correction | S1 single-core | `fix(posix-io): serialize the file descriptor table` |  |
-| 15 | K16 | `fa232ed7` | correction | S1 single-core | `fix(posix-io): lock the deferred file-system and socket lists` |  |
-| 16 | K17 | `01b50480` | correction | S1 single-core | `fix(posix-io): block_device size queries tested the wrong condition` |  |
-| 17 | K18 | `deeabab3` | new code | S1 single-core | `feat(arm): semihosting trap for ARMv8-M, and an optional HLT trap` |  |
-| 18 | K19 | `b85b378a` | new code | S1 single-core | `feat(startup): exception handlers and fault dump for ARMv8-M Mainline` |  |
-| 19 | K20a | `182b5f41` | correction | S1 single-core | `fix(semihosting): fstat() keeps a file type the caller already set` |  |
-| 20 | K20b | `98eaf96f` | new code | S1 single-core | `feat(semihosting): weak board console mirror for stdout/stderr` |  |
-| 21 | K21a | `236b2d1a` | correction | S1 single-core | `fix(rtos): errno in handler mode does not assert` |  |
-| 22 | K21 | `8ea2f2f6` | correction | S1 single-core | `fix(rtos): run timer callbacks outside the critical section` |  |
-| 23 | K23a | `267b955b` | correction | S1 single-core | `fix(rtos): refuse a priority-ceiling lock before taking ownership` |  |
-| 24 | K23b | `f5861fc2` | correction | S1 single-core | `fix(rtos): priority inheritance keeps the highest boost among waiters` |  |
-| 25 | K23c | `e2b3709c` | correction | S1 single-core | `fix(rtos): mutex lock re-checks the owner after boosting it` |  |
-| 26 | K24a | `5390f31d` | new code | S1 single-core | `feat(rtos): thread state destroying, claimed by exactly one destroyer` |  |
-| 27 | K24b | `8fcfbc41` | correction | S1 single-core | `fix(rtos): resume() re-enqueues only a suspended or initializing thread` |  |
-| 28 | K24c | `61756303` | correction | S1 single-core | `fix(rtos): priority changes test and relink under one lock` |  |
-| 29 | K24d | `94dce976` | new code | S1 single-core | `feat(rtos): implement thread::detach()` |  |
-| 30 | K24e | `af3dfd7b` | correction | S1 single-core | `fix(rtos): join() and thread destruction without a lost wake-up` |  |
-| 31 | K25a | `325a75cc` | correction | S1 single-core | `fix(estd): condition_variable::wait_for() trusts the kernel's timeout verdict` |  |
-| 32 | K25b | `102a9136` | correction | S1 single-core | `fix(rtos): condition variable without lost signals, bound to its clock` |  |
-| 33 | K26a | `e57aff39` | correction | S1 single-core | `fix(estd): std::thread keeps its own pointer to the bound function object` |  |
-| 34 | K26b | `8742e5f4` | correction | S1 single-core | `fix(estd): std::thread::join() waits for the thread before freeing it` |  |
-| 35 | K27 | `72af88d8` | correction | S1 single-core | `fix(rtos): message queue reschedules after waking a peer` |  |
-| 36 | K28a | `135edeb3` | correction | S1 single-core | `fix(rtos): <cmsis-plus/rtos/os-decls.h> includes the C declarations again` |  |
-| 37 | K28 | `b474cf72` | new code | S1 single-core | `feat(rtos): the high-resolution clock reads the port's hardware counter` | G-hrclock |
-| 38 | K29a | `4804b93c` | test | S1 single-core | `test(rtos-apis): a 512 KiB RTOS arena` |  |
-| 39 | K29b | `675a698e` | test | S1 single-core | `test(rtos-apis): OS_EXCLUDE_RTOS_APIS_FATFS leaves the FatFs leg out` |  |
-| 40 | K29c | `f242e451` | correction | S1 single-core | `fix(test): enable the FPU when the compiler targets one` |  |
-| 41 | K29d | `9cb742d0` | docs | S1 single-core | `docs(test): the MPS2 AN385/AN386 flash comment says 128M` |  |
-| 42 | K30 | `6f51da7a` | new code | S2 SMP core | `feat(port): smp-common -- the SMP declarations a thin port shares` |  |
-| 43 | K31 | `f1894152` | new code | S2 SMP core | `feat(rtos): one current thread per CPU` |  |
-| 44 | K32 | `604321a6` | new code | S2 SMP core | `feat(rtos): thread CPU affinity` |  |
-| 45 | K33 | `ccfc03ec` | new code | S2 SMP core | `feat(rtos): SMP thread picker with affinity and the stack-pointer claim` |  |
-| 46 | K34 | `3764d613` | new code | S2 SMP core | `feat(rtos): wake an eligible CPU with an IPI when a thread is resumed elsewhere` |  |
-| 47 | K35 | `ce44e5b8` | new code | S2 SMP core | `feat(rtos): join() returns only once the thread is off every CPU` |  |
-| 48 | K36 | `1a811b99` | new code | S2 SMP core | `feat(rtos): kill() waits until the thread is off every CPU and unclaimed` |  |
-| 49 | K37 | `a5194f6e` | new code | S2 SMP core | `feat(rtos): the idle reaper leaves a thread that is still live on another CPU` |  |
-| 50 | K38 | `bcab09e7` | new code | S2 SMP core | `feat(rtos): pin the main thread to CPU 0` |  |
-| 51 | K39 | `b4e819eb` | new code | S2 SMP core | `feat(rtos): CMSIS-RTOS v1 threads run on CPU 0` |  |
-| 52 | K39b | `12882e19` | correction | S2 SMP core | `fix(rtos): the kernel's port_cpu_id() declarations tolerate the port's own` |  |
-| 53 | K40 | `1f6d219f` | build | S4a harness | `build(cmake): toolchain profiles for arm-none-eabi, aarch64-none-elf and the host` |  |
-| 54 | K41 | `68155aee` | build | S4a harness | `build(cmake): uos_add_app() -- one call declares an application against a port` |  |
-| 55 | K43a | `0b6d9339` | test | S4a harness | `test: the verdict contract every board shares (hw_result, board contract)` |  |
-| 56 | K43b | `a569c214` | test | S4a harness | `test: the host runner for the port test applications` |  |
-| 57 | K43c | `4db26232` | test | S4a harness | `test: the QEMU runner for the port test applications` |  |
-| 58 | K43d | `0092d31d` | test | S4a harness | `test: the hardware runner and the OpenOCD configs that need no power cycle` |  |
-| 59 | K42 | `a530fac4` | build | S4a harness | `build(cmake): modular kernel targets` | G-harness |
-| 60 | K44 | `2f21e8ca` | test | S4a harness | `test(cmake): the library under test is the architecture port, found as a sibling` | G-harness |
-| 61 | K45 | `5fef63ae` | test | S4a harness | `test(native): run posix-arch's own test applications` | G-harness |
-| 62 | K46-m0 | `62d55a6e` | test | S4a harness | `test(qemu-cortex-m0): build against the cortexm port's generic QEMU core` | G-harness |
-| 63 | K46-m3 | `acc3e284` | test | S4a harness | `test(qemu-cortex-m3): build against the cortexm port's generic QEMU core` | G-harness |
-| 64 | K46-m4f | `b3322cc3` | test | S4a harness | `test(qemu-cortex-m4f): build against the cortexm port's generic QEMU core` | G-harness |
-| 65 | K46-m7f | `d0edbce3` | test | S4a harness | `test(qemu-cortex-m7f): build against the cortexm port's generic QEMU core` | G-harness |
-| 66 | K47 | `c91f3b6b` | test | S4a harness | `test(qemu): MPS2 AN505/AN521 memory maps and ARMv8-M support in the QEMU device` |  |
-| 67 | K49 | `9a194e45` | test | S4b test suite | `test: fp-switch -- the FPU registers survive a preemptive switch and a core move` |  |
-| 68 | K50 | `8efc3ecb` | test | S4c platform | `test(2xcortex-m33): two Cortex-M33 cores on QEMU mps2-an521` |  |
-| 69 | K51 | `85c38290` | test | S4c platform | `test(pico2-1cpu): the RP2350's Cortex-M33 code at one CPU on QEMU` |  |
-| 70 | K52 | `5af5b8d7` | test | S4c platform | `test(cortexm-pico2): the Pico 2 board's own tests, on QEMU and on the board` |  |
-| 71 | K53 | `41ee57a4` | test | S4c platform | `test(cortexm-pico2-rp2350b-psram): the RP2350B PSRAM board's tests` |  |
-| 72 | K54 | `e5a581a8` | test | S4c platform | `test(cortexm-pico2-pizero): the pico2-pizero board's tests, hardware only` |  |
-| 73 | K55 | `76fd013c` | test | S4c platform | `test(cortexm-nucleof411): the NUCLEO-F411RE board's tests under the SMP scheduler at one CPU` |  |
-| 74 | K56 | `c0772ab8` | test | S4c platform | `test(cortexm-weactf411): the WeAct F411 board's tests` |  |
-| 75 | K57 | `084b6528` | test | S4c platform | `test(cortexm-weactf412): the WeAct F412 board's tests` |  |
-| 76 | K58 | `93faa7da` | test | S4c platform | `test(aarch32-rpi-zero-2w): the Zero 2 W's AArch32 tests on QEMU raspi3b` |  |
-| 77 | K59 | `8f3a1051` | test | S4c platform | `test(aarch32-rpi3b): the Pi 3 B's AArch32 tests on QEMU raspi3b` |  |
-| 78 | K62 | `9ee32a05` | test | S4c platform | `test(aarch32-luckfox-lyra): build the Luckfox Lyra's tests` |  |
-| 79 | K60 | `55841a50` | test | S4c platform | `test(aarch64-rpi-zero-2w): the Zero 2 W's AArch64 tests on QEMU raspi3b` |  |
-| 80 | K61 | `eb23b89a` | test | S4c platform | `test(aarch64-rpi3b): the Pi 3 B's AArch64 tests on QEMU raspi3b` |  |
-| 81 | K39c | `c329210b` | test | S2 SMP core | `test(validator): the host build uses glibc's ucontext, not libucontext` |  |
-| 82 | K48-nucleo-f411re | `a62e6992` | test | S4a harness | `test(nucleo-f411re): label the board tests hwd and link the kernel's modular targets` |  |
-| 83 | K48-nucleo-f767zi | `0f3d65ad` | test | S4a harness | `test(nucleo-f767zi): label the board tests hwd and link the kernel's modular targets` |  |
-| 84 | K48-nucleo-h743zi | `cfa25b4c` | test | S4a harness | `test(nucleo-h743zi): label the board tests hwd and link the kernel's modular targets` |  |
-| 85 | K48-raspberrypi-pico | `87be7f54` | test | S4a harness | `test(raspberrypi-pico): label the board tests hwd and link the kernel's modular targets` |  |
-| 86 | K901 | `eb6fb4d9` | docs | S5 docs/chore | `docs: aarch32-second-board` |  |
-| 87 | K902 | `b8c45608` | docs | S5 docs/chore | `docs: building-aarch32-aarch64` |  |
-| 88 | K903 | `5f899167` | docs | S5 docs/chore | `docs: cortexm-port` |  |
-| 89 | K904 | `8800c1c7` | docs | S5 docs/chore | `docs: posix-arch-port` |  |
-| 90 | K905 | `c3f5b83a` | docs | S5 docs/chore | `docs: smp-integration/agy-review` |  |
-| 91 | K906 | `b2027337` | docs | S5 docs/chore | `docs: smp-integration/DeepSeek-review` |  |
-| 92 | K907 | `c98fcc93` | docs | S5 docs/chore | `docs: smp-integration/diagrams` |  |
-| 93 | K908 | `8ddcb6c6` | docs | S5 docs/chore | `docs: smp-integration/files-modif-by-step` |  |
-| 94 | K909 | `b9695be3` | docs | S5 docs/chore | `docs: smp-integration/GITHUB-PROGRESSIVE-PR-GUIDE` |  |
-| 95 | K910 | `ac125125` | docs | S5 docs/chore | `docs: smp-integration/Implementation-SMP-Integration` |  |
-| 96 | K911 | `75e7e1c3` | docs | S5 docs/chore | `docs: smp-integration/micro-os-plus-iii-project-unification` |  |
-| 97 | K912 | `0e26f6e2` | docs | S5 docs/chore | `docs: smp-integration/MICRO-OS-PLUS-SMP-VS-SINGLECORE-ANALYSIS` |  |
-| 98 | K913 | `371d71b1` | docs | S5 docs/chore | `docs: smp-integration/new-modifications` |  |
-| 99 | K914 | `8930f3c7` | docs | S5 docs/chore | `docs: smp-integration/pull-request` |  |
-| 100 | K915 | `6658ffb3` | docs | S5 docs/chore | `docs: smp-integration/smp-construction` |  |
-| 101 | K916 | `28e2fb7d` | docs | S5 docs/chore | `docs: smp-integration/SMP-UPSTREAM-INTEGRATION-PLAN` |  |
-| 102 | K917 | `a840dec4` | docs | S5 docs/chore | `docs: smp-integration/xpack-dev-smp` |  |
-| 103 | K918 | `8fdb54ca` | docs | S5 docs/chore | `docs: specs` |  |
-| 104 | K919 | `32f6644e` | docs | S5 docs/chore | `docs: STATUS` |  |
-| 105 | K920 | `5e847731` | docs | S5 docs/chore | `docs: tests/AARCH32-RPI-ZERO-2W-TESTS` |  |
-| 106 | K921 | `d925dc2c` | docs | S5 docs/chore | `docs: tests/HARNESS-BOARD-TEST-CHEATSHEET` |  |
-| 107 | K922 | `bc6c523b` | docs | S5 docs/chore | `docs: tests/HARNESS-TESTS-PARADIGM` |  |
-| 108 | K923 | `8c4fbd55` | docs | S5 docs/chore | `docs: tests-in-aarch32-aarch64` |  |
-| 109 | K924 | `646cb078` | docs | S5 docs/chore | `docs: test-smpl` |  |
-| 110 | K925 | `a136e8bd` | docs | S5 docs/chore | `docs: tests/README` |  |
-| 111 | K926 | `20bf4b20` | docs | S5 docs/chore | `docs: tests/README-DEVELOPER` |  |
-| 112 | K927 | `9b8d0fe9` | docs | S5 docs/chore | `docs: tests/README-MAINTAINER` |  |
-| 113 | K928 | `d53e34c7` | docs | S5 docs/chore | `docs: tests/STEPS` |  |
-| 114 | K929 | `3a0b2153` | docs | S5 docs/chore | `docs: tests/test-framework` |  |
-| 115 | K930 | `4815480b` | docs | S5 docs/chore | `docs: tests/TESTS-CATALOG` |  |
-| 116 | K931 | `d142d5a1` | docs | S5 docs/chore | `docs: tests/TESTS-DEVELOPER-GUIDE` |  |
-| 117 | K932 | `c72b7500` | docs | S5 docs/chore | `docs: tests/TESTS-XPACK-SYSTEM` |  |
-| 118 | K933 | `1deca033` | docs | S5 docs/chore | `docs: tests/WORK-SMP-AARCH32-AARCH64-HARNESS-GUIDE` |  |
-| 119 | K934 | `72f5d7a1` | docs | S5 docs/chore | `docs: upstream-CHANGELOG` |  |
-| 120 | K935 | `6e0c1276` | docs | S5 docs/chore | `docs: upstream-package` |  |
-| 121 | K980 | `675652cb` | docs | S5 docs/chore | `docs: README-DEVELOPER updated from the reference smp branch` |  |
-| 122 | K981 | `f6337d83` | docs | S5 docs/chore | `docs(test): tests/README for the 22 platforms, TO-CHECK marked as history` |  |
-| 123 | K982 | `0301394d` | chore | S5 docs/chore | `chore: a .clang-format for the kernel sources` |  |
-| 124 | K983 | `c7541e17` | chore | S5 docs/chore | `chore: ignore every build* directory and the build products` |  |
-| 125 | K984 | `ba3817b5` | docs | S5 docs/chore | `docs(smp): xpack-dev-smp.md Part II -- the commit-only migration procedure` |  |
+| 1 | `pr/K01` | `xpack-development` | `b364e689` | correction | S1 single-core | `fix(posix): ISO C conformant DIR in dirent.h` |
+| 2 | `pr/K02` | `pr/K01` | `52a7f499` | correction | S1 single-core | `fix(utils): list iterators call node_->next()/prev()` |
+| 3 | `pr/K03` | `pr/K02` | `2f8c482e` | correction | S1 single-core | `fix(posix-io): match newlib's syscall return types in the weak aliases` |
+| 4 | `pr/K04` | `pr/K03` | `bcb5737e` | correction | S1 single-core | `fix(rtos): emit this_thread::suspend() out of line` |
+| 5 | `pr/K06` | `pr/K04` | `ef9bb2ce` | correction | S1 single-core | `fix(memory): block_pool asserts on a null result, not on a valid one` |
+| 6 | `pr/K07` | `pr/K06` | `a6d6c475` | correction | S1 single-core | `fix(estd): polymorphic_allocator copy keeps its memory resource` |
+| 7 | `pr/K08` | `pr/K07` | `51bdad10` | new code | S1 single-core | `feat(memory): usable size for the RTOS allocators, overflow-checked calloc()` |
+| 8 | `pr/K09` | `pr/K08` | `1c589065` | new code | S1 single-core | `feat(libcpp): C++17 aligned operator new/delete` |
+| 9 | `pr/K10` | `pr/K09` | `de47254b` | correction | S1 single-core | `fix(libcpp): error categories with static storage` |
+| 10 | `pr/K11` | `pr/K10` | `c8aa3024` | correction | S1 single-core | `fix(libcpp): steady_clock::now() without 64-bit overflow` |
+| 11 | `pr/K12` | `pr/K11` | `0c11e258` | correction | S1 single-core | `fix(rtos): C API timers default to one-shot` |
+| 12 | `pr/K13` | `pr/K12` | `ebfa07b3` | correction | S1 single-core | `fix(rtos): C API deletes mutexes and semaphores through their concrete type` |
+| 13 | `pr/K14` | `pr/K13` | `b4d6fdcf` | correction | S1 single-core | `fix(rtos): widen millisec before scaling in the CMSIS-RTOS API` |
+| 14 | `pr/K15` | `pr/K14` | `8ed1c7b0` | correction | S1 single-core | `fix(posix-io): serialize the file descriptor table` |
+| 15 | `pr/K16` | `pr/K15` | `fa232ed7` | correction | S1 single-core | `fix(posix-io): lock the deferred file-system and socket lists` |
+| 16 | `pr/K17` | `pr/K16` | `01b50480` | correction | S1 single-core | `fix(posix-io): block_device size queries tested the wrong condition` |
+| 17 | `pr/K18` | `pr/K17` | `deeabab3` | new code | S1 single-core | `feat(arm): semihosting trap for ARMv8-M, and an optional HLT trap` |
+| 18 | `pr/K19` | `pr/K18` | `b85b378a` | new code | S1 single-core | `feat(startup): exception handlers and fault dump for ARMv8-M Mainline` |
+| 19 | `pr/K20a` | `pr/K19` | `182b5f41` | correction | S1 single-core | `fix(semihosting): fstat() keeps a file type the caller already set` |
+| 20 | `pr/K20b` | `pr/K20a` | `98eaf96f` | new code | S1 single-core | `feat(semihosting): weak board console mirror for stdout/stderr` |
+| 21 | `pr/K21a` | `pr/K20b` | `236b2d1a` | correction | S1 single-core | `fix(rtos): errno in handler mode does not assert` |
+| 22 | `pr/K21` | `pr/K21a` | `8ea2f2f6` | correction | S1 single-core | `fix(rtos): run timer callbacks outside the critical section` |
+| 23 | `pr/K23a` | `pr/K21` | `267b955b` | correction | S1 single-core | `fix(rtos): refuse a priority-ceiling lock before taking ownership` |
+| 24 | `pr/K23b` | `pr/K23a` | `f5861fc2` | correction | S1 single-core | `fix(rtos): priority inheritance keeps the highest boost among waiters` |
+| 25 | `pr/K23c` | `pr/K23b` | `e2b3709c` | correction | S1 single-core | `fix(rtos): mutex lock re-checks the owner after boosting it` |
+| 26 | `pr/K24a` | `pr/K23c` | `5390f31d` | new code | S1 single-core | `feat(rtos): thread state destroying, claimed by exactly one destroyer` |
+| 27 | `pr/K24b` | `pr/K24a` | `8fcfbc41` | correction | S1 single-core | `fix(rtos): resume() re-enqueues only a suspended or initializing thread` |
+| 28 | `pr/K24c` | `pr/K24b` | `61756303` | correction | S1 single-core | `fix(rtos): priority changes test and relink under one lock` |
+| 29 | `pr/K24d` | `pr/K24c` | `94dce976` | new code | S1 single-core | `feat(rtos): implement thread::detach()` |
+| 30 | `pr/K24e` | `pr/K24d` | `af3dfd7b` | correction | S1 single-core | `fix(rtos): join() and thread destruction without a lost wake-up` |
+| 31 | `pr/K25a` | `pr/K24e` | `325a75cc` | correction | S1 single-core | `fix(estd): condition_variable::wait_for() trusts the kernel's timeout verdict` |
+| 32 | `pr/K25b` | `pr/K25a` | `102a9136` | correction | S1 single-core | `fix(rtos): condition variable without lost signals, bound to its clock` |
+| 33 | `pr/K26a` | `pr/K25b` | `e57aff39` | correction | S1 single-core | `fix(estd): std::thread keeps its own pointer to the bound function object` |
+| 34 | `pr/K26b` | `pr/K26a` | `8742e5f4` | correction | S1 single-core | `fix(estd): std::thread::join() waits for the thread before freeing it` |
+| 35 | `pr/K27` | `pr/K26b` | `72af88d8` | correction | S1 single-core | `fix(rtos): message queue reschedules after waking a peer` |
+| 36 | `pr/K28a` | `pr/K27` | `135edeb3` | correction | S1 single-core | `fix(rtos): <cmsis-plus/rtos/os-decls.h> includes the C declarations again` |
+| 37 | `pr/K28` | `pr/K28a` | `b474cf72` | new code | S1 single-core · G-hrclock | `feat(rtos): the high-resolution clock reads the port's hardware counter` |
+| 38 | `pr/K29a` | `pr/K28` | `4804b93c` | test | S1 single-core | `test(rtos-apis): a 512 KiB RTOS arena` |
+| 39 | `pr/K29b` | `pr/K29a` | `675a698e` | test | S1 single-core | `test(rtos-apis): OS_EXCLUDE_RTOS_APIS_FATFS leaves the FatFs leg out` |
+| 40 | `pr/K29c` | `pr/K29b` | `f242e451` | correction | S1 single-core | `fix(test): enable the FPU when the compiler targets one` |
+| 41 | `pr/K29d` | `pr/K29c` | `9cb742d0` | docs | S1 single-core | `docs(test): the MPS2 AN385/AN386 flash comment says 128M` |
+| 42 | `pr/K30` | `pr/K29d` | `6f51da7a` | new code | S2 SMP core | `feat(port): smp-common -- the SMP declarations a thin port shares` |
+| 43 | `pr/K31` | `pr/K30` | `f1894152` | new code | S2 SMP core | `feat(rtos): one current thread per CPU` |
+| 44 | `pr/K32` | `pr/K31` | `604321a6` | new code | S2 SMP core | `feat(rtos): thread CPU affinity` |
+| 45 | `pr/K33` | `pr/K32` | `ccfc03ec` | new code | S2 SMP core | `feat(rtos): SMP thread picker with affinity and the stack-pointer claim` |
+| 46 | `pr/K34` | `pr/K33` | `3764d613` | new code | S2 SMP core | `feat(rtos): wake an eligible CPU with an IPI when a thread is resumed elsewhere` |
+| 47 | `pr/K35` | `pr/K34` | `ce44e5b8` | new code | S2 SMP core | `feat(rtos): join() returns only once the thread is off every CPU` |
+| 48 | `pr/K36` | `pr/K35` | `1a811b99` | new code | S2 SMP core | `feat(rtos): kill() waits until the thread is off every CPU and unclaimed` |
+| 49 | `pr/K37` | `pr/K36` | `a5194f6e` | new code | S2 SMP core | `feat(rtos): the idle reaper leaves a thread that is still live on another CPU` |
+| 50 | `pr/K38` | `pr/K37` | `bcab09e7` | new code | S2 SMP core | `feat(rtos): pin the main thread to CPU 0` |
+| 51 | `pr/K39` | `pr/K38` | `b4e819eb` | new code | S2 SMP core | `feat(rtos): CMSIS-RTOS v1 threads run on CPU 0` |
+| 52 | `pr/K39b` | `pr/K39` | `12882e19` | correction | S2 SMP core | `fix(rtos): the kernel's port_cpu_id() declarations tolerate the port's own` |
+| 53 | `pr/K40` | `pr/K39b` | `1f6d219f` | build | S4a harness | `build(cmake): toolchain profiles for arm-none-eabi, aarch64-none-elf and the host` |
+| 54 | `pr/K41` | `pr/K40` | `68155aee` | build | S4a harness | `build(cmake): uos_add_app() -- one call declares an application against a port` |
+| 55 | `pr/K43a` | `pr/K41` | `0b6d9339` | test | S4a harness | `test: the verdict contract every board shares (hw_result, board contract)` |
+| 56 | `pr/K43b` | `pr/K43a` | `a569c214` | test | S4a harness | `test: the host runner for the port test applications` |
+| 57 | `pr/K43c` | `pr/K43b` | `4db26232` | test | S4a harness | `test: the QEMU runner for the port test applications` |
+| 58 | `pr/K43d` | `pr/K43c` | `0092d31d` | test | S4a harness | `test: the hardware runner and the OpenOCD configs that need no power cycle` |
+| 59 | `pr/K42` | `pr/K43d` | `a530fac4` | build | S4a harness · G-harness | `build(cmake): modular kernel targets` |
+| 60 | `pr/K44` | `pr/K42` | `2f21e8ca` | test | S4a harness · G-harness | `test(cmake): the library under test is the architecture port, found as a sibling` |
+| 61 | `pr/K45` | `pr/K44` | `5fef63ae` | test | S4a harness · G-harness | `test(native): run posix-arch's own test applications` |
+| 62 | `pr/K46-m0` | `pr/K45` | `62d55a6e` | test | S4a harness · G-harness | `test(qemu-cortex-m0): build against the cortexm port's generic QEMU core` |
+| 63 | `pr/K46-m3` | `pr/K46-m0` | `acc3e284` | test | S4a harness · G-harness | `test(qemu-cortex-m3): build against the cortexm port's generic QEMU core` |
+| 64 | `pr/K46-m4f` | `pr/K46-m3` | `b3322cc3` | test | S4a harness · G-harness | `test(qemu-cortex-m4f): build against the cortexm port's generic QEMU core` |
+| 65 | `pr/K46-m7f` | `pr/K46-m4f` | `d0edbce3` | test | S4a harness · G-harness | `test(qemu-cortex-m7f): build against the cortexm port's generic QEMU core` |
+| 66 | `pr/K47` | `pr/K46-m7f` | `c91f3b6b` | test | S4a harness | `test(qemu): MPS2 AN505/AN521 memory maps and ARMv8-M support in the QEMU device` |
+| 67 | `pr/K49` | `pr/K47` | `9a194e45` | test | S4b test suite | `test: fp-switch -- the FPU registers survive a preemptive switch and a core move` |
+| 68 | `pr/K50` | `pr/K49` | `8efc3ecb` | test | S4c platform | `test(2xcortex-m33): two Cortex-M33 cores on QEMU mps2-an521` |
+| 69 | `pr/K51` | `pr/K50` | `85c38290` | test | S4c platform | `test(pico2-1cpu): the RP2350's Cortex-M33 code at one CPU on QEMU` |
+| 70 | `pr/K52` | `pr/K51` | `5af5b8d7` | test | S4c platform | `test(cortexm-pico2): the Pico 2 board's own tests, on QEMU and on the board` |
+| 71 | `pr/K53` | `pr/K52` | `41ee57a4` | test | S4c platform | `test(cortexm-pico2-rp2350b-psram): the RP2350B PSRAM board's tests` |
+| 72 | `pr/K54` | `pr/K53` | `e5a581a8` | test | S4c platform | `test(cortexm-pico2-pizero): the pico2-pizero board's tests, hardware only` |
+| 73 | `pr/K55` | `pr/K54` | `76fd013c` | test | S4c platform | `test(cortexm-nucleof411): the NUCLEO-F411RE board's tests under the SMP scheduler at one CPU` |
+| 74 | `pr/K56` | `pr/K55` | `c0772ab8` | test | S4c platform | `test(cortexm-weactf411): the WeAct F411 board's tests` |
+| 75 | `pr/K57` | `pr/K56` | `084b6528` | test | S4c platform | `test(cortexm-weactf412): the WeAct F412 board's tests` |
+| 76 | `pr/K58` | `pr/K57` | `93faa7da` | test | S4c platform | `test(aarch32-rpi-zero-2w): the Zero 2 W's AArch32 tests on QEMU raspi3b` |
+| 77 | `pr/K59` | `pr/K58` | `8f3a1051` | test | S4c platform | `test(aarch32-rpi3b): the Pi 3 B's AArch32 tests on QEMU raspi3b` |
+| 78 | `pr/K62` | `pr/K59` | `9ee32a05` | test | S4c platform | `test(aarch32-luckfox-lyra): build the Luckfox Lyra's tests` |
+| 79 | `pr/K60` | `pr/K62` | `55841a50` | test | S4c platform | `test(aarch64-rpi-zero-2w): the Zero 2 W's AArch64 tests on QEMU raspi3b` |
+| 80 | `pr/K61` | `pr/K60` | `eb23b89a` | test | S4c platform | `test(aarch64-rpi3b): the Pi 3 B's AArch64 tests on QEMU raspi3b` |
+| 81 | `pr/K39c` | `pr/K61` | `c329210b` | test | S2 SMP core | `test(validator): the host build uses glibc's ucontext, not libucontext` |
+| 82 | `pr/K48-nucleo-f411re` | `pr/K39c` | `a62e6992` | test | S4a harness | `test(nucleo-f411re): label the board tests hwd and link the kernel's modular targets` |
+| 83 | `pr/K48-nucleo-f767zi` | `pr/K48-nucleo-f411re` | `0f3d65ad` | test | S4a harness | `test(nucleo-f767zi): label the board tests hwd and link the kernel's modular targets` |
+| 84 | `pr/K48-nucleo-h743zi` | `pr/K48-nucleo-f767zi` | `cfa25b4c` | test | S4a harness | `test(nucleo-h743zi): label the board tests hwd and link the kernel's modular targets` |
+| 85 | `pr/K48-raspberrypi-pico` | `pr/K48-nucleo-h743zi` | `87be7f54` | test | S4a harness | `test(raspberrypi-pico): label the board tests hwd and link the kernel's modular targets` |
+| 86 | `pr/K901` | `pr/K48-raspberrypi-pico` | `eb6fb4d9` | docs | S5 docs/chore | `docs: aarch32-second-board` |
+| 87 | `pr/K902` | `pr/K901` | `b8c45608` | docs | S5 docs/chore | `docs: building-aarch32-aarch64` |
+| 88 | `pr/K903` | `pr/K902` | `5f899167` | docs | S5 docs/chore | `docs: cortexm-port` |
+| 89 | `pr/K904` | `pr/K903` | `8800c1c7` | docs | S5 docs/chore | `docs: posix-arch-port` |
+| 90 | `pr/K905` | `pr/K904` | `c3f5b83a` | docs | S5 docs/chore | `docs: smp-integration/agy-review` |
+| 91 | `pr/K906` | `pr/K905` | `b2027337` | docs | S5 docs/chore | `docs: smp-integration/DeepSeek-review` |
+| 92 | `pr/K907` | `pr/K906` | `c98fcc93` | docs | S5 docs/chore | `docs: smp-integration/diagrams` |
+| 93 | `pr/K908` | `pr/K907` | `8ddcb6c6` | docs | S5 docs/chore | `docs: smp-integration/files-modif-by-step` |
+| 94 | `pr/K909` | `pr/K908` | `b9695be3` | docs | S5 docs/chore | `docs: smp-integration/GITHUB-PROGRESSIVE-PR-GUIDE` |
+| 95 | `pr/K910` | `pr/K909` | `ac125125` | docs | S5 docs/chore | `docs: smp-integration/Implementation-SMP-Integration` |
+| 96 | `pr/K911` | `pr/K910` | `75e7e1c3` | docs | S5 docs/chore | `docs: smp-integration/micro-os-plus-iii-project-unification` |
+| 97 | `pr/K912` | `pr/K911` | `0e26f6e2` | docs | S5 docs/chore | `docs: smp-integration/MICRO-OS-PLUS-SMP-VS-SINGLECORE-ANALYSIS` |
+| 98 | `pr/K913` | `pr/K912` | `371d71b1` | docs | S5 docs/chore | `docs: smp-integration/new-modifications` |
+| 99 | `pr/K914` | `pr/K913` | `8930f3c7` | docs | S5 docs/chore | `docs: smp-integration/pull-request` |
+| 100 | `pr/K915` | `pr/K914` | `6658ffb3` | docs | S5 docs/chore | `docs: smp-integration/smp-construction` |
+| 101 | `pr/K916` | `pr/K915` | `28e2fb7d` | docs | S5 docs/chore | `docs: smp-integration/SMP-UPSTREAM-INTEGRATION-PLAN` |
+| 102 | `pr/K917` | `pr/K916` | `a840dec4` | docs | S5 docs/chore | `docs: smp-integration/xpack-dev-smp` |
+| 103 | `pr/K918` | `pr/K917` | `8fdb54ca` | docs | S5 docs/chore | `docs: specs` |
+| 104 | `pr/K919` | `pr/K918` | `32f6644e` | docs | S5 docs/chore | `docs: STATUS` |
+| 105 | `pr/K920` | `pr/K919` | `5e847731` | docs | S5 docs/chore | `docs: tests/AARCH32-RPI-ZERO-2W-TESTS` |
+| 106 | `pr/K921` | `pr/K920` | `d925dc2c` | docs | S5 docs/chore | `docs: tests/HARNESS-BOARD-TEST-CHEATSHEET` |
+| 107 | `pr/K922` | `pr/K921` | `bc6c523b` | docs | S5 docs/chore | `docs: tests/HARNESS-TESTS-PARADIGM` |
+| 108 | `pr/K923` | `pr/K922` | `8c4fbd55` | docs | S5 docs/chore | `docs: tests-in-aarch32-aarch64` |
+| 109 | `pr/K924` | `pr/K923` | `646cb078` | docs | S5 docs/chore | `docs: test-smpl` |
+| 110 | `pr/K925` | `pr/K924` | `a136e8bd` | docs | S5 docs/chore | `docs: tests/README` |
+| 111 | `pr/K926` | `pr/K925` | `20bf4b20` | docs | S5 docs/chore | `docs: tests/README-DEVELOPER` |
+| 112 | `pr/K927` | `pr/K926` | `9b8d0fe9` | docs | S5 docs/chore | `docs: tests/README-MAINTAINER` |
+| 113 | `pr/K928` | `pr/K927` | `d53e34c7` | docs | S5 docs/chore | `docs: tests/STEPS` |
+| 114 | `pr/K929` | `pr/K928` | `3a0b2153` | docs | S5 docs/chore | `docs: tests/test-framework` |
+| 115 | `pr/K930` | `pr/K929` | `4815480b` | docs | S5 docs/chore | `docs: tests/TESTS-CATALOG` |
+| 116 | `pr/K931` | `pr/K930` | `d142d5a1` | docs | S5 docs/chore | `docs: tests/TESTS-DEVELOPER-GUIDE` |
+| 117 | `pr/K932` | `pr/K931` | `c72b7500` | docs | S5 docs/chore | `docs: tests/TESTS-XPACK-SYSTEM` |
+| 118 | `pr/K933` | `pr/K932` | `1deca033` | docs | S5 docs/chore | `docs: tests/WORK-SMP-AARCH32-AARCH64-HARNESS-GUIDE` |
+| 119 | `pr/K934` | `pr/K933` | `72f5d7a1` | docs | S5 docs/chore | `docs: upstream-CHANGELOG` |
+| 120 | `pr/K935` | `pr/K934` | `6e0c1276` | docs | S5 docs/chore | `docs: upstream-package` |
+| 121 | `pr/K980` | `pr/K935` | `675652cb` | docs | S5 docs/chore | `docs: README-DEVELOPER updated from the reference smp branch` |
+| 122 | `pr/K981` | `pr/K980` | `f6337d83` | docs | S5 docs/chore | `docs(test): tests/README for the 22 platforms, TO-CHECK marked as history` |
+| 123 | `pr/K982` | `pr/K981` | `0301394d` | chore | S5 docs/chore | `chore: a .clang-format for the kernel sources` |
+| 124 | `pr/K983` | `pr/K982` | `c7541e17` | chore | S5 docs/chore | `chore: ignore every build* directory and the build products` |
+| 125 | `pr/K984` | `pr/K983` | `ba3817b5` | docs | S5 docs/chore | `docs(smp): xpack-dev-smp.md Part II -- the commit-only migration procedure` |
+| 126 | `pr/K985` | `pr/K984` | `6fb211a9` | docs | S5 docs/chore | `docs(smp): xpack-dev-smp.md Part III -- execution record, step summary, commit list` |
+| 127 | `pr/K986-STATUS` | `pr/K985` | `e2a90a42` | docs | S5 docs/chore | `docs: STATUS for the commit-only migration of 2026-10-06` |
+| 128 | `pr/K986-aarch32-second-board` | `pr/K986-STATUS` | `7bfb05be` | docs | S5 docs/chore | `docs: aarch32-second-board -- the RK3506 SD driver is in the port` |
+| 129 | `pr/K986-building-aarch32-aarch64` | `pr/K986-aarch32-second-board` | `a256bafe` | docs | S5 docs/chore | `docs: building-aarch32-aarch64 without the devices repository` |
+| 130 | `pr/K986-posix-arch-port` | `pr/K986-building-aarch32-aarch64` | `6c6a136a` | docs | S5 docs/chore | `docs: posix-arch-port -- drivers and SD back-end are in the port` |
+| 131 | `pr/K986-cortexm-port` | `pr/K986-posix-arch-port` | `a9c1ad47` | docs | S5 docs/chore | `docs: cortexm-port -- the SoC directories and the verified results` |
+| 132 | `pr/K986-test-smpl` | `pr/K986-cortexm-port` | `c273abb1` | docs | S5 docs/chore | `docs: test-smpl lists the verdict contract and the no-power-cycle configs` |
+| 133 | `pr/K986-tests-in-aarch32-aarch64` | `pr/K986-test-smpl` | `0ff357af` | docs | S5 docs/chore | `docs: tests-in-aarch32-aarch64 shows drivers/ and soc/ in the port` |
+| 134 | `pr/K986-WORK-SMP-HARNESS-GUIDE` | `pr/K986-tests-in-aarch32-aarch64` | `359b2b73` | docs | S5 docs/chore | `docs(tests): WORK-SMP harness guide -- no devices repository` |
+| 135 | `pr/K986-TESTS-XPACK-SYSTEM` | `pr/K986-WORK-SMP-HARNESS-GUIDE` | `982522d7` | docs | S5 docs/chore | `docs(tests): TESTS-XPACK-SYSTEM -- the four ports, devices dissolved` |
+| 136 | `pr/K986-HARNESS-TESTS-PARADIGM` | `pr/K986-TESTS-XPACK-SYSTEM` | `a8983cd6` | docs | S5 docs/chore | `docs(tests): HARNESS-TESTS-PARADIGM -- no devices repository` |
+| 137 | `pr/K986-HARNESS-BOARD-TEST-CHEATSHEET` | `pr/K986-HARNESS-TESTS-PARADIGM` | `ef3d8096` | docs | S5 docs/chore | `docs(tests): HARNESS-BOARD-TEST-CHEATSHEET -- no devices repository` |
+| 138 | `pr/K986-AARCH32-RPI-ZERO-2W-TESTS` | `pr/K986-HARNESS-BOARD-TEST-CHEATSHEET` | `997146ca` | docs | S5 docs/chore | `docs(tests): AARCH32-RPI-ZERO-2W-TESTS -- drivers are in the port` |
+| 139 | `pr/K986-STEPS` | `pr/K986-AARCH32-RPI-ZERO-2W-TESTS` | `335b3416` | docs | S5 docs/chore | `docs(tests): STEPS -- a port finds only the kernel as a sibling` |
+| 140 | `pr/K986-TESTS-DEVELOPER-GUIDE` | `pr/K986-STEPS` | `3ee23fe2` | docs | S5 docs/chore | `docs(tests): TESTS-DEVELOPER-GUIDE -- the workspace without devices` |
+| 141 | `pr/K986-TESTS-CATALOG` | `pr/K986-TESTS-DEVELOPER-GUIDE` | `63f2b822` | docs | S5 docs/chore | `docs(tests): TESTS-CATALOG -- four ports, and the last verified run` |
+| 142 | `pr/K986-tests-README-DEVELOPER` | `pr/K986-TESTS-CATALOG` | `d504cbc4` | docs | S5 docs/chore | `docs(tests): README-DEVELOPER -- the current clone layout` |
+| 143 | `pr/K986-tests-README-MAINTAINER` | `pr/K986-tests-README-DEVELOPER` | `0ddf9763` | docs | S5 docs/chore | `docs(tests): README-MAINTAINER -- the current clone layout` |
+| 144 | `pr/K986-test-framework` | `pr/K986-tests-README-MAINTAINER` | `b60858d1` | docs | S5 docs/chore | `docs(tests): test-framework points to the smp side` |
+| 145 | `pr/K986-agy-review` | `pr/K986-test-framework` | `8c3477d2` | docs | S5 docs/chore | `docs(smp): agy-review -- status note, superseded by xpack-dev-smp.md` |
+| 146 | `pr/K986-DeepSeek-review` | `pr/K986-agy-review` | `60e4d0ef` | docs | S5 docs/chore | `docs(smp): DeepSeek-review -- status note, superseded by xpack-dev-smp.md` |
+| 147 | `pr/K986-files-modif-by-step` | `pr/K986-DeepSeek-review` | `1da601cd` | docs | S5 docs/chore | `docs(smp): files-modif-by-step -- status note, superseded by xpack-dev-smp.md` |
+| 148 | `pr/K986-GITHUB-PROGRESSIVE-PR-GUIDE` | `pr/K986-files-modif-by-step` | `66ef2fa5` | docs | S5 docs/chore | `docs(smp): GITHUB-PROGRESSIVE-PR-GUIDE -- status note, superseded by xpack-dev-smp.md` |
+| 149 | `pr/K986-Implementation-SMP-Integration` | `pr/K986-GITHUB-PROGRESSIVE-PR-GUIDE` | `440716ba` | docs | S5 docs/chore | `docs(smp): Implementation-SMP-Integration -- status note, superseded by xpack-dev-smp.md` |
+| 150 | `pr/K986-micro-os-plus-iii-project-unification` | `pr/K986-Implementation-SMP-Integration` | `c6c7eebe` | docs | S5 docs/chore | `docs(smp): project-unification -- status note` |
+| 151 | `pr/K986-MICRO-OS-PLUS-SMP-VS-SINGLECORE-ANALYSIS` | `pr/K986-micro-os-plus-iii-project-unification` | `df0f0ed9` | docs | S5 docs/chore | `docs(smp): SMP-VS-SINGLECORE-ANALYSIS -- status note` |
+| 152 | `pr/K986-new-modifications` | `pr/K986-MICRO-OS-PLUS-SMP-VS-SINGLECORE-ANALYSIS` | `2be02079` | docs | S5 docs/chore | `docs(smp): new-modifications -- status note` |
+| 153 | `pr/K986-pull-request` | `pr/K986-new-modifications` | `0e1416d3` | docs | S5 docs/chore | `docs(smp): pull-request -- status note, superseded by xpack-dev-smp.md` |
+| 154 | `pr/K986-smp-construction` | `pr/K986-pull-request` | `02e62612` | docs | S5 docs/chore | `docs(smp): smp-construction -- status note` |
+| 155 | `pr/K986-SMP-UPSTREAM-INTEGRATION-PLAN` | `pr/K986-smp-construction` | `21d772ad` | docs | S5 docs/chore | `docs(smp): SMP-UPSTREAM-INTEGRATION-PLAN -- status note, superseded by xpack-dev-smp.md` |
+| 156 | `pr/K986-2026-09-20-micro-os-plus-iii-smp-unification-design` | `pr/K986-SMP-UPSTREAM-INTEGRATION-PLAN` | `039c42c6` | docs | S5 docs/chore | `docs(specs): smp-unification-design -- status note` |
+| 157 | `pr/K987` | `pr/K986-2026-09-20-micro-os-plus-iii-smp-unification-design` | `646a4904` | docs | S5 docs/chore | `docs(smp): xpack-dev-smp.md lists the documentation updates` |
+| 158 | `pr/K988` | `pr/K987` | (this commit) | docs | S5 docs/chore | `docs(smp): xpack-dev-smp.md -- the pull requests of every repository` |
 
-#### micro-os-plus-iii-posix-arch (24 commits)
+#### micro-os-plus-iii-posix-arch -- 24 pull requests (github.com/dan-maio/micro-os-plus-iii-posix-arch)
 
-| # | Commit-ID | SHA | Category | Stage / theme | Subject | Group |
+| PR | Head branch (Commit-ID) | Base branch | SHA | Category | Stage / theme | Subject |
 |---:|---|---|---|---|---|---|
-| 1 | P01 | `26a120bf` | new code | S0 devices | `feat(drivers): import the neutral SD, flatfs, USB and FatFs drivers` |  |
-| 2 | P02 | `b8e8b4ad` | new code | S0 devices | `feat(soc): import the native host-file SD backend` |  |
-| 3 | P03 | `9c5914ed` | build | S0 devices | `build(cmake): define the dissolved devices targets locally` |  |
-| 4 | P04 | `5a1a255a` | new code | S1 hrclock | `feat(port): clock_highres reads CLOCK_MONOTONIC` | G-hrclock |
-| 5 | P05 | `9be889da` | new code | S2 host SMP | `feat(port): the host is a multi-core machine -- one host thread per CPU` |  |
-| 6 | P06 | `22f54df7` | new code | S2 host SMP | `feat(port): the board verdict contract on the host` |  |
-| 7 | P20 | `e4f6c62f` | build | S4 harness | `build(cmake): the port selects its board, and builds its own tests` | G-harness |
-| 8 | P21 | `305de44c` | test | S4 test | `test(native): rtos-apis at OS_NCPU = 1` |  |
-| 9 | P22 | `e080ea6a` | test | S4 test | `test(native): mutex-stress` |  |
-| 10 | P23 | `76c72864` | test | S4 test | `test(native): flatfs-test -- append to a file created empty` |  |
-| 11 | P24 | `e648c634` | test | S4 test | `test(native): mutex-ceiling-test -- a refused protect lock leaves nothing behind` |  |
-| 12 | P25 | `f0820dd5` | test | S4 test | `test(native): smp_test0 -- bring-up on one active CPU` |  |
-| 13 | P26 | `c249804c` | test | S4 test | `test(native): smp_test1 -- semaphore ping-pong across CPUs` |  |
-| 14 | P27 | `4f1eee6b` | test | S4 test | `test(native): smp_test2 -- kernel lock coherency on every CPU` |  |
-| 15 | P28 | `c26ff0fe` | test | S4 test | `test(native): smp_test3 -- message queue producer/consumer across CPUs` |  |
-| 16 | P29 | `b67adcae` | test | S4 test | `test(native): smp_test4 -- load balancing without affinity` |  |
-| 17 | P30 | `75a487c7` | test | S4 test | `test(native): smp-num-test -- concurrent workers and console I/O` |  |
-| 18 | P31 | `9fe414ca` | test | S4 test | `test(native): smp-mat-test -- parallel block solver (N=500, B=50)` |  |
-| 19 | P32 | `e60f2f2c` | test | S4 test | `test(native): smp-pipeline-test -- multi-stage pipeline across CPUs` |  |
-| 20 | P33 | `e614e825` | test | S4 test | `test(native): smp-pro-cons-test -- producers and consumers over every kernel object` |  |
-| 21 | P34 | `c4f5f652` | test | S4 test | `test(native): smp-mutex-stress -- the SMP leg of mutex-stress, with per-core checks` |  |
-| 22 | P35 | `6aec9d4c` | test | S4 test | `test(native): smp-rtos-apis -- the SMP leg of rtos-apis` |  |
-| 23 | P14 | `e156e975` | tool | tool | `tools: a probe showing why TSan fiber annotations cannot work here` |  |
-| 24 | P36 | `93c42239` | chore | chore | `chore: ignore every build* directory and the build products` |  |
+| 1 | `pr/P01` | `xpack-development` | `26a120bf` | new code | S0 devices | `feat(drivers): import the neutral SD, flatfs, USB and FatFs drivers` |
+| 2 | `pr/P02` | `pr/P01` | `b8e8b4ad` | new code | S0 devices | `feat(soc): import the native host-file SD backend` |
+| 3 | `pr/P03` | `pr/P02` | `9c5914ed` | build | S0 devices | `build(cmake): define the dissolved devices targets locally` |
+| 4 | `pr/P04` | `pr/P03` | `5a1a255a` | new code | S1 hrclock · G-hrclock | `feat(port): clock_highres reads CLOCK_MONOTONIC` |
+| 5 | `pr/P05` | `pr/P04` | `9be889da` | new code | S2 host SMP | `feat(port): the host is a multi-core machine -- one host thread per CPU` |
+| 6 | `pr/P06` | `pr/P05` | `22f54df7` | new code | S2 host SMP | `feat(port): the board verdict contract on the host` |
+| 7 | `pr/P20` | `pr/P06` | `e4f6c62f` | build | S4 harness · G-harness | `build(cmake): the port selects its board, and builds its own tests` |
+| 8 | `pr/P21` | `pr/P20` | `305de44c` | test | S4 test | `test(native): rtos-apis at OS_NCPU = 1` |
+| 9 | `pr/P22` | `pr/P21` | `e080ea6a` | test | S4 test | `test(native): mutex-stress` |
+| 10 | `pr/P23` | `pr/P22` | `76c72864` | test | S4 test | `test(native): flatfs-test -- append to a file created empty` |
+| 11 | `pr/P24` | `pr/P23` | `e648c634` | test | S4 test | `test(native): mutex-ceiling-test -- a refused protect lock leaves nothing behind` |
+| 12 | `pr/P25` | `pr/P24` | `f0820dd5` | test | S4 test | `test(native): smp_test0 -- bring-up on one active CPU` |
+| 13 | `pr/P26` | `pr/P25` | `c249804c` | test | S4 test | `test(native): smp_test1 -- semaphore ping-pong across CPUs` |
+| 14 | `pr/P27` | `pr/P26` | `4f1eee6b` | test | S4 test | `test(native): smp_test2 -- kernel lock coherency on every CPU` |
+| 15 | `pr/P28` | `pr/P27` | `c26ff0fe` | test | S4 test | `test(native): smp_test3 -- message queue producer/consumer across CPUs` |
+| 16 | `pr/P29` | `pr/P28` | `b67adcae` | test | S4 test | `test(native): smp_test4 -- load balancing without affinity` |
+| 17 | `pr/P30` | `pr/P29` | `75a487c7` | test | S4 test | `test(native): smp-num-test -- concurrent workers and console I/O` |
+| 18 | `pr/P31` | `pr/P30` | `9fe414ca` | test | S4 test | `test(native): smp-mat-test -- parallel block solver (N=500, B=50)` |
+| 19 | `pr/P32` | `pr/P31` | `e60f2f2c` | test | S4 test | `test(native): smp-pipeline-test -- multi-stage pipeline across CPUs` |
+| 20 | `pr/P33` | `pr/P32` | `e614e825` | test | S4 test | `test(native): smp-pro-cons-test -- producers and consumers over every kernel object` |
+| 21 | `pr/P34` | `pr/P33` | `c4f5f652` | test | S4 test | `test(native): smp-mutex-stress -- the SMP leg of mutex-stress, with per-core checks` |
+| 22 | `pr/P35` | `pr/P34` | `6aec9d4c` | test | S4 test | `test(native): smp-rtos-apis -- the SMP leg of rtos-apis` |
+| 23 | `pr/P14` | `pr/P35` | `e156e975` | tool | tool | `tools: a probe showing why TSan fiber annotations cannot work here` |
+| 24 | `pr/P36` | `pr/P14` | `93c42239` | chore | chore | `chore: ignore every build* directory and the build products` |
 
-#### micro-os-plus-iii-cortexm (86 commits)
+#### micro-os-plus-iii-cortexm -- 86 pull requests (github.com/dan-maio/micro-os-plus-iii-cortexm)
 
-| # | Commit-ID | SHA | Category | Stage / theme | Subject | Group |
+| PR | Head branch (Commit-ID) | Base branch | SHA | Category | Stage / theme | Subject |
 |---:|---|---|---|---|---|---|
-| 1 | C01 | `b2bdd12c` | new code | S0 devices | `feat(soc): import the STM32F4xx SoC support` |  |
-| 2 | C02 | `2310c355` | new code | S0 devices | `feat(soc): import the RP2350 SoC support` |  |
-| 3 | C03 | `f64c09a4` | build | S0 devices | `build(cmake): define the dissolved SoC targets locally` |  |
-| 4 | C04 | `736010e8` | new code | S1 hrclock | `feat(port): clock_highres declares it has no hardware counter` | G-hrclock |
-| 5 | C04b | `31b04065` | correction | S1 hrclock | `fix(port): cycles_since_tick() reads the SysTick pending flag from ICSR` |  |
-| 6 | C05 | `dfbfda56` | new code | S2 Cortex-M SMP | `feat(port): the SMP port contract on the generic Cortex-M core` |  |
-| 7 | C06 | `cc6412ab` | new code | S2 Cortex-M SMP | `feat(port): the generic Cortex-M core runs the SMP scheduler on one CPU` |  |
-| 8 | C07 | `c9b5c630` | new code | S2 Cortex-M SMP | `feat(libc): a _getentropy() stub for the QEMU images` |  |
-| 9 | C08 | `597bdda8` | new code | S2 Cortex-M SMP | `feat: _Exit() reports the test verdict through semihosting` |  |
-| 10 | C09 | `ba9ef5ee` | new code | S3 new silicon | `feat(port): a generic Cortex-M33 (SSE-200) dual-core port for QEMU` |  |
-| 11 | C10 | `0071da04` | new code | S3 new silicon | `feat(port): the RP2350 dual-core port` |  |
-| 12 | C20a | `591b070e` | test | S4 board/harness | `test(nucleof411): the NUCLEO-F411RE board` |  |
-| 13 | C20b | `3629ead6` | build | S4 board/harness | `build(cmake): the port selects its board, builds its tests, and exports the QEMU cores` | G-harness |
-| 14 | C21 | `2187bd34` | test | S4 board/harness | `test(pico2): the Raspberry Pi Pico 2 board (RP2350, two Cortex-M33)` |  |
-| 15 | C21b | `fbd44d24` | test | S4 board/harness | `test(pico2): vendor the TinyUSB device stack for the RP2350` |  |
-| 16 | C21c | `e82f3f7e` | test | S4 board/harness | `test(pico2): a minimal pico-sdk shim for TinyUSB` |  |
-| 17 | C21d | `9e62cb6b` | test | S4 board/harness | `test(pico2): CDC-ACM and HID device configurations` |  |
-| 18 | C22-rtos-apis | `13e72795` | test | S4 test | `test(pico2): rtos-apis` |  |
-| 19 | C22-cmsis-os-validator-ram | `094d7daf` | test | S4 test | `test(pico2): cmsis-os-validator-ram` |  |
-| 20 | C22-cmsis-os-validator | `e58e7663` | test | S4 test | `test(pico2): cmsis-os-validator` |  |
-| 21 | C22-exc-test | `49e47089` | test | S4 test | `test(pico2): exc-test` |  |
-| 22 | C22-fp-switch | `3cbb8aff` | test | S4 test | `test(pico2): fp-switch` |  |
-| 23 | C22-mutex-stress-ram | `88bd02ad` | test | S4 test | `test(pico2): mutex-stress-ram` |  |
-| 24 | C22-mutex-stress | `c8fbb351` | test | S4 test | `test(pico2): mutex-stress` |  |
-| 25 | C22-rtos-apis-ram | `0a2e9b77` | test | S4 test | `test(pico2): rtos-apis-ram` |  |
-| 26 | C22-sc-test-ko | `89a5454d` | test | S4 test | `test(pico2): sc-test-ko` |  |
-| 27 | C22-smp-mat-test | `57149d31` | test | S4 test | `test(pico2): smp-mat-test` |  |
-| 28 | C22-smp-mat-test-ram | `d3bd1bff` | test | S4 test | `test(pico2): smp-mat-test-ram` |  |
-| 29 | C22-smp-test-ko | `d4fb4e67` | test | S4 test | `test(pico2): smp-test-ko` |  |
-| 30 | C22-smp-test-usb-cdc-acm | `6156aa38` | test | S4 test | `test(pico2): smp-test-usb-cdc-acm` |  |
-| 31 | C22-smp-test-usb-hid | `385cb24c` | test | S4 test | `test(pico2): smp-test-usb-hid` |  |
-| 32 | C22-smp-test0 | `e7546968` | test | S4 test | `test(pico2): smp-test0` |  |
-| 33 | C22-smp-test1 | `a8263f0d` | test | S4 test | `test(pico2): smp-test1` |  |
-| 34 | C22-smp-test2 | `137a1cb1` | test | S4 test | `test(pico2): smp-test2` |  |
-| 35 | C22-smp-test3 | `802c05fd` | test | S4 test | `test(pico2): smp-test3` |  |
-| 36 | C22-smp-test4 | `30d31e49` | test | S4 test | `test(pico2): smp-test4` |  |
-| 37 | C22-smp-test5 | `9367c2fa` | test | S4 test | `test(pico2): smp-test5` |  |
-| 38 | C23 | `1cffd384` | test | S4 board/harness | `test(pico2-rp2350b-psram): the RP2350B board with 16 MiB flash and PSRAM` |  |
-| 39 | C23-exc-test | `ecbfb0b0` | test | S4 test | `test(pico2-rp2350b-psram): exc-test` |  |
-| 40 | C23-fp-switch | `f2708769` | test | S4 test | `test(pico2-rp2350b-psram): fp-switch` |  |
-| 41 | C23-sc-test-ko | `9767e0dc` | test | S4 test | `test(pico2-rp2350b-psram): sc-test-ko` |  |
-| 42 | C23-smp-mat-test | `5a78743c` | test | S4 test | `test(pico2-rp2350b-psram): smp-mat-test` |  |
-| 43 | C23-smp-test-ko | `eb888556` | test | S4 test | `test(pico2-rp2350b-psram): smp-test-ko` |  |
-| 44 | C23-smp-test-nested-clock | `1c50c6c1` | test | S4 test | `test(pico2-rp2350b-psram): smp-test-nested-clock` |  |
-| 45 | C23-smp-test-nested-clock_200 | `dcc8fdf3` | test | S4 test | `test(pico2-rp2350b-psram): smp-test-nested-clock_200` |  |
-| 46 | C23-smp-test-nested-clock_250 | `53e7990b` | test | S4 test | `test(pico2-rp2350b-psram): smp-test-nested-clock_250` |  |
-| 47 | C23-smp-test-nested | `03462dd0` | test | S4 test | `test(pico2-rp2350b-psram): smp-test-nested` |  |
-| 48 | C23-smp-test0 | `4fddd1a6` | test | S4 test | `test(pico2-rp2350b-psram): smp-test0` |  |
-| 49 | C23-smp-test1 | `38f862a7` | test | S4 test | `test(pico2-rp2350b-psram): smp-test1` |  |
-| 50 | C23-smp-test2 | `792ee80b` | test | S4 test | `test(pico2-rp2350b-psram): smp-test2` |  |
-| 51 | C23-smp-test3 | `fdcd879c` | test | S4 test | `test(pico2-rp2350b-psram): smp-test3` |  |
-| 52 | C23-smp-test4 | `0b2d5838` | test | S4 test | `test(pico2-rp2350b-psram): smp-test4` |  |
-| 53 | C23-smp-test5 | `15867310` | test | S4 test | `test(pico2-rp2350b-psram): smp-test5` |  |
-| 54 | C24 | `994cb864` | test | S4 board/harness | `test(pico2-pizero): the RP2350 on a Pi Zero form-factor carrier` |  |
-| 55 | C24-exc-test | `e450aaff` | test | S4 test | `test(pico2-pizero): exc-test` |  |
-| 56 | C24-psram-exec | `ab90bf91` | test | S4 test | `test(pico2-pizero): psram-exec` |  |
-| 57 | C24-psram-mat-test-250 | `76a2d22f` | test | S4 test | `test(pico2-pizero): psram-mat-test-250` |  |
-| 58 | C24-sc-test-ko | `25cb812e` | test | S4 test | `test(pico2-pizero): sc-test-ko` |  |
-| 59 | C24-smp-mat-test | `43d09f78` | test | S4 test | `test(pico2-pizero): smp-mat-test` |  |
-| 60 | C24-smp-test-ko | `395b0d10` | test | S4 test | `test(pico2-pizero): smp-test-ko` |  |
-| 61 | C24-smp-test-usb-cdc-acm | `038509f6` | test | S4 test | `test(pico2-pizero): smp-test-usb-cdc-acm` |  |
-| 62 | C24-smp-test-usb-hid | `1eea852d` | test | S4 test | `test(pico2-pizero): smp-test-usb-hid` |  |
-| 63 | C24-smp-test0 | `044c5bde` | test | S4 test | `test(pico2-pizero): smp-test0` |  |
-| 64 | C24-smp-test1 | `12570a64` | test | S4 test | `test(pico2-pizero): smp-test1` |  |
-| 65 | C24-smp-test2 | `924b36a0` | test | S4 test | `test(pico2-pizero): smp-test2` |  |
-| 66 | C24-smp-test3 | `807afed1` | test | S4 test | `test(pico2-pizero): smp-test3` |  |
-| 67 | C24-smp-test4 | `cb72fb3e` | test | S4 test | `test(pico2-pizero): smp-test4` |  |
-| 68 | C24-smp-test5 | `b6459bcb` | test | S4 test | `test(pico2-pizero): smp-test5` |  |
-| 69 | C25-cmsis-os-validator | `14bba6b7` | test | S4 test | `test(nucleof411): cmsis-os-validator` |  |
-| 70 | C25-mos-test1 | `82c09863` | test | S4 test | `test(nucleof411): mos-test1` |  |
-| 71 | C25-mutex-stress | `5a3c8ec6` | test | S4 test | `test(nucleof411): mutex-stress` |  |
-| 72 | C25-rtos-apis | `904bc935` | test | S4 test | `test(nucleof411): rtos-apis` |  |
-| 73 | C26 | `b695919a` | test | S4 board/harness | `test(weactf411): the WeAct Black Pill F411 board` |  |
-| 74 | C26-cmsis-os-validator | `3edc06c0` | test | S4 test | `test(weactf411): cmsis-os-validator` |  |
-| 75 | C26-mos-test1 | `900c9402` | test | S4 test | `test(weactf411): mos-test1` |  |
-| 76 | C26-mutex-stress | `7b9526bb` | test | S4 test | `test(weactf411): mutex-stress` |  |
-| 77 | C26-rtos-apis | `c8d67d58` | test | S4 test | `test(weactf411): rtos-apis` |  |
-| 78 | C26-spi-pipeline | `6935c185` | test | S4 test | `test(weactf411): spi-pipeline` |  |
-| 79 | C27 | `dc22fcdb` | test | S4 board/harness | `test(weactf412): the WeAct F412 board` |  |
-| 80 | C27-cmsis-os-validator | `a5f805b5` | test | S4 test | `test(weactf412): cmsis-os-validator` |  |
-| 81 | C27-mos-test1 | `f2f0695c` | test | S4 test | `test(weactf412): mos-test1` |  |
-| 82 | C27-mutex-stress | `efa2b9a7` | test | S4 test | `test(weactf412): mutex-stress` |  |
-| 83 | C27-rtos-apis | `bc32b726` | test | S4 test | `test(weactf412): rtos-apis` |  |
-| 84 | C27-uart-test1 | `efd8432c` | test | S4 test | `test(weactf412): uart-test1` |  |
-| 85 | C28 | `72149579` | chore | S5 docs/chore | `chore: ignore every build* directory, the build products and the USB host tool` |  |
-| 86 | C29 | `c5a71fbc` | docs | S5 docs/chore | `docs: README for the six boards and the generic QEMU cores` |  |
+| 1 | `pr/C01` | `xpack-development` | `b2bdd12c` | new code | S0 devices | `feat(soc): import the STM32F4xx SoC support` |
+| 2 | `pr/C02` | `pr/C01` | `2310c355` | new code | S0 devices | `feat(soc): import the RP2350 SoC support` |
+| 3 | `pr/C03` | `pr/C02` | `f64c09a4` | build | S0 devices | `build(cmake): define the dissolved SoC targets locally` |
+| 4 | `pr/C04` | `pr/C03` | `736010e8` | new code | S1 hrclock · G-hrclock | `feat(port): clock_highres declares it has no hardware counter` |
+| 5 | `pr/C04b` | `pr/C04` | `31b04065` | correction | S1 hrclock | `fix(port): cycles_since_tick() reads the SysTick pending flag from ICSR` |
+| 6 | `pr/C05` | `pr/C04b` | `dfbfda56` | new code | S2 Cortex-M SMP | `feat(port): the SMP port contract on the generic Cortex-M core` |
+| 7 | `pr/C06` | `pr/C05` | `cc6412ab` | new code | S2 Cortex-M SMP | `feat(port): the generic Cortex-M core runs the SMP scheduler on one CPU` |
+| 8 | `pr/C07` | `pr/C06` | `c9b5c630` | new code | S2 Cortex-M SMP | `feat(libc): a _getentropy() stub for the QEMU images` |
+| 9 | `pr/C08` | `pr/C07` | `597bdda8` | new code | S2 Cortex-M SMP | `feat: _Exit() reports the test verdict through semihosting` |
+| 10 | `pr/C09` | `pr/C08` | `ba9ef5ee` | new code | S3 new silicon | `feat(port): a generic Cortex-M33 (SSE-200) dual-core port for QEMU` |
+| 11 | `pr/C10` | `pr/C09` | `0071da04` | new code | S3 new silicon | `feat(port): the RP2350 dual-core port` |
+| 12 | `pr/C20a` | `pr/C10` | `591b070e` | test | S4 board/harness | `test(nucleof411): the NUCLEO-F411RE board` |
+| 13 | `pr/C20b` | `pr/C20a` | `3629ead6` | build | S4 board/harness · G-harness | `build(cmake): the port selects its board, builds its tests, and exports the QEMU cores` |
+| 14 | `pr/C21` | `pr/C20b` | `2187bd34` | test | S4 board/harness | `test(pico2): the Raspberry Pi Pico 2 board (RP2350, two Cortex-M33)` |
+| 15 | `pr/C21b` | `pr/C21` | `fbd44d24` | test | S4 board/harness | `test(pico2): vendor the TinyUSB device stack for the RP2350` |
+| 16 | `pr/C21c` | `pr/C21b` | `e82f3f7e` | test | S4 board/harness | `test(pico2): a minimal pico-sdk shim for TinyUSB` |
+| 17 | `pr/C21d` | `pr/C21c` | `9e62cb6b` | test | S4 board/harness | `test(pico2): CDC-ACM and HID device configurations` |
+| 18 | `pr/C22-rtos-apis` | `pr/C21d` | `13e72795` | test | S4 test | `test(pico2): rtos-apis` |
+| 19 | `pr/C22-cmsis-os-validator-ram` | `pr/C22-rtos-apis` | `094d7daf` | test | S4 test | `test(pico2): cmsis-os-validator-ram` |
+| 20 | `pr/C22-cmsis-os-validator` | `pr/C22-cmsis-os-validator-ram` | `e58e7663` | test | S4 test | `test(pico2): cmsis-os-validator` |
+| 21 | `pr/C22-exc-test` | `pr/C22-cmsis-os-validator` | `49e47089` | test | S4 test | `test(pico2): exc-test` |
+| 22 | `pr/C22-fp-switch` | `pr/C22-exc-test` | `3cbb8aff` | test | S4 test | `test(pico2): fp-switch` |
+| 23 | `pr/C22-mutex-stress-ram` | `pr/C22-fp-switch` | `88bd02ad` | test | S4 test | `test(pico2): mutex-stress-ram` |
+| 24 | `pr/C22-mutex-stress` | `pr/C22-mutex-stress-ram` | `c8fbb351` | test | S4 test | `test(pico2): mutex-stress` |
+| 25 | `pr/C22-rtos-apis-ram` | `pr/C22-mutex-stress` | `0a2e9b77` | test | S4 test | `test(pico2): rtos-apis-ram` |
+| 26 | `pr/C22-sc-test-ko` | `pr/C22-rtos-apis-ram` | `89a5454d` | test | S4 test | `test(pico2): sc-test-ko` |
+| 27 | `pr/C22-smp-mat-test` | `pr/C22-sc-test-ko` | `57149d31` | test | S4 test | `test(pico2): smp-mat-test` |
+| 28 | `pr/C22-smp-mat-test-ram` | `pr/C22-smp-mat-test` | `d3bd1bff` | test | S4 test | `test(pico2): smp-mat-test-ram` |
+| 29 | `pr/C22-smp-test-ko` | `pr/C22-smp-mat-test-ram` | `d4fb4e67` | test | S4 test | `test(pico2): smp-test-ko` |
+| 30 | `pr/C22-smp-test-usb-cdc-acm` | `pr/C22-smp-test-ko` | `6156aa38` | test | S4 test | `test(pico2): smp-test-usb-cdc-acm` |
+| 31 | `pr/C22-smp-test-usb-hid` | `pr/C22-smp-test-usb-cdc-acm` | `385cb24c` | test | S4 test | `test(pico2): smp-test-usb-hid` |
+| 32 | `pr/C22-smp-test0` | `pr/C22-smp-test-usb-hid` | `e7546968` | test | S4 test | `test(pico2): smp-test0` |
+| 33 | `pr/C22-smp-test1` | `pr/C22-smp-test0` | `a8263f0d` | test | S4 test | `test(pico2): smp-test1` |
+| 34 | `pr/C22-smp-test2` | `pr/C22-smp-test1` | `137a1cb1` | test | S4 test | `test(pico2): smp-test2` |
+| 35 | `pr/C22-smp-test3` | `pr/C22-smp-test2` | `802c05fd` | test | S4 test | `test(pico2): smp-test3` |
+| 36 | `pr/C22-smp-test4` | `pr/C22-smp-test3` | `30d31e49` | test | S4 test | `test(pico2): smp-test4` |
+| 37 | `pr/C22-smp-test5` | `pr/C22-smp-test4` | `9367c2fa` | test | S4 test | `test(pico2): smp-test5` |
+| 38 | `pr/C23` | `pr/C22-smp-test5` | `1cffd384` | test | S4 board/harness | `test(pico2-rp2350b-psram): the RP2350B board with 16 MiB flash and PSRAM` |
+| 39 | `pr/C23-exc-test` | `pr/C23` | `ecbfb0b0` | test | S4 test | `test(pico2-rp2350b-psram): exc-test` |
+| 40 | `pr/C23-fp-switch` | `pr/C23-exc-test` | `f2708769` | test | S4 test | `test(pico2-rp2350b-psram): fp-switch` |
+| 41 | `pr/C23-sc-test-ko` | `pr/C23-fp-switch` | `9767e0dc` | test | S4 test | `test(pico2-rp2350b-psram): sc-test-ko` |
+| 42 | `pr/C23-smp-mat-test` | `pr/C23-sc-test-ko` | `5a78743c` | test | S4 test | `test(pico2-rp2350b-psram): smp-mat-test` |
+| 43 | `pr/C23-smp-test-ko` | `pr/C23-smp-mat-test` | `eb888556` | test | S4 test | `test(pico2-rp2350b-psram): smp-test-ko` |
+| 44 | `pr/C23-smp-test-nested-clock` | `pr/C23-smp-test-ko` | `1c50c6c1` | test | S4 test | `test(pico2-rp2350b-psram): smp-test-nested-clock` |
+| 45 | `pr/C23-smp-test-nested-clock_200` | `pr/C23-smp-test-nested-clock` | `dcc8fdf3` | test | S4 test | `test(pico2-rp2350b-psram): smp-test-nested-clock_200` |
+| 46 | `pr/C23-smp-test-nested-clock_250` | `pr/C23-smp-test-nested-clock_200` | `53e7990b` | test | S4 test | `test(pico2-rp2350b-psram): smp-test-nested-clock_250` |
+| 47 | `pr/C23-smp-test-nested` | `pr/C23-smp-test-nested-clock_250` | `03462dd0` | test | S4 test | `test(pico2-rp2350b-psram): smp-test-nested` |
+| 48 | `pr/C23-smp-test0` | `pr/C23-smp-test-nested` | `4fddd1a6` | test | S4 test | `test(pico2-rp2350b-psram): smp-test0` |
+| 49 | `pr/C23-smp-test1` | `pr/C23-smp-test0` | `38f862a7` | test | S4 test | `test(pico2-rp2350b-psram): smp-test1` |
+| 50 | `pr/C23-smp-test2` | `pr/C23-smp-test1` | `792ee80b` | test | S4 test | `test(pico2-rp2350b-psram): smp-test2` |
+| 51 | `pr/C23-smp-test3` | `pr/C23-smp-test2` | `fdcd879c` | test | S4 test | `test(pico2-rp2350b-psram): smp-test3` |
+| 52 | `pr/C23-smp-test4` | `pr/C23-smp-test3` | `0b2d5838` | test | S4 test | `test(pico2-rp2350b-psram): smp-test4` |
+| 53 | `pr/C23-smp-test5` | `pr/C23-smp-test4` | `15867310` | test | S4 test | `test(pico2-rp2350b-psram): smp-test5` |
+| 54 | `pr/C24` | `pr/C23-smp-test5` | `994cb864` | test | S4 board/harness | `test(pico2-pizero): the RP2350 on a Pi Zero form-factor carrier` |
+| 55 | `pr/C24-exc-test` | `pr/C24` | `e450aaff` | test | S4 test | `test(pico2-pizero): exc-test` |
+| 56 | `pr/C24-psram-exec` | `pr/C24-exc-test` | `ab90bf91` | test | S4 test | `test(pico2-pizero): psram-exec` |
+| 57 | `pr/C24-psram-mat-test-250` | `pr/C24-psram-exec` | `76a2d22f` | test | S4 test | `test(pico2-pizero): psram-mat-test-250` |
+| 58 | `pr/C24-sc-test-ko` | `pr/C24-psram-mat-test-250` | `25cb812e` | test | S4 test | `test(pico2-pizero): sc-test-ko` |
+| 59 | `pr/C24-smp-mat-test` | `pr/C24-sc-test-ko` | `43d09f78` | test | S4 test | `test(pico2-pizero): smp-mat-test` |
+| 60 | `pr/C24-smp-test-ko` | `pr/C24-smp-mat-test` | `395b0d10` | test | S4 test | `test(pico2-pizero): smp-test-ko` |
+| 61 | `pr/C24-smp-test-usb-cdc-acm` | `pr/C24-smp-test-ko` | `038509f6` | test | S4 test | `test(pico2-pizero): smp-test-usb-cdc-acm` |
+| 62 | `pr/C24-smp-test-usb-hid` | `pr/C24-smp-test-usb-cdc-acm` | `1eea852d` | test | S4 test | `test(pico2-pizero): smp-test-usb-hid` |
+| 63 | `pr/C24-smp-test0` | `pr/C24-smp-test-usb-hid` | `044c5bde` | test | S4 test | `test(pico2-pizero): smp-test0` |
+| 64 | `pr/C24-smp-test1` | `pr/C24-smp-test0` | `12570a64` | test | S4 test | `test(pico2-pizero): smp-test1` |
+| 65 | `pr/C24-smp-test2` | `pr/C24-smp-test1` | `924b36a0` | test | S4 test | `test(pico2-pizero): smp-test2` |
+| 66 | `pr/C24-smp-test3` | `pr/C24-smp-test2` | `807afed1` | test | S4 test | `test(pico2-pizero): smp-test3` |
+| 67 | `pr/C24-smp-test4` | `pr/C24-smp-test3` | `cb72fb3e` | test | S4 test | `test(pico2-pizero): smp-test4` |
+| 68 | `pr/C24-smp-test5` | `pr/C24-smp-test4` | `b6459bcb` | test | S4 test | `test(pico2-pizero): smp-test5` |
+| 69 | `pr/C25-cmsis-os-validator` | `pr/C24-smp-test5` | `14bba6b7` | test | S4 test | `test(nucleof411): cmsis-os-validator` |
+| 70 | `pr/C25-mos-test1` | `pr/C25-cmsis-os-validator` | `82c09863` | test | S4 test | `test(nucleof411): mos-test1` |
+| 71 | `pr/C25-mutex-stress` | `pr/C25-mos-test1` | `5a3c8ec6` | test | S4 test | `test(nucleof411): mutex-stress` |
+| 72 | `pr/C25-rtos-apis` | `pr/C25-mutex-stress` | `904bc935` | test | S4 test | `test(nucleof411): rtos-apis` |
+| 73 | `pr/C26` | `pr/C25-rtos-apis` | `b695919a` | test | S4 board/harness | `test(weactf411): the WeAct Black Pill F411 board` |
+| 74 | `pr/C26-cmsis-os-validator` | `pr/C26` | `3edc06c0` | test | S4 test | `test(weactf411): cmsis-os-validator` |
+| 75 | `pr/C26-mos-test1` | `pr/C26-cmsis-os-validator` | `900c9402` | test | S4 test | `test(weactf411): mos-test1` |
+| 76 | `pr/C26-mutex-stress` | `pr/C26-mos-test1` | `7b9526bb` | test | S4 test | `test(weactf411): mutex-stress` |
+| 77 | `pr/C26-rtos-apis` | `pr/C26-mutex-stress` | `c8d67d58` | test | S4 test | `test(weactf411): rtos-apis` |
+| 78 | `pr/C26-spi-pipeline` | `pr/C26-rtos-apis` | `6935c185` | test | S4 test | `test(weactf411): spi-pipeline` |
+| 79 | `pr/C27` | `pr/C26-spi-pipeline` | `dc22fcdb` | test | S4 board/harness | `test(weactf412): the WeAct F412 board` |
+| 80 | `pr/C27-cmsis-os-validator` | `pr/C27` | `a5f805b5` | test | S4 test | `test(weactf412): cmsis-os-validator` |
+| 81 | `pr/C27-mos-test1` | `pr/C27-cmsis-os-validator` | `f2f0695c` | test | S4 test | `test(weactf412): mos-test1` |
+| 82 | `pr/C27-mutex-stress` | `pr/C27-mos-test1` | `efa2b9a7` | test | S4 test | `test(weactf412): mutex-stress` |
+| 83 | `pr/C27-rtos-apis` | `pr/C27-mutex-stress` | `bc32b726` | test | S4 test | `test(weactf412): rtos-apis` |
+| 84 | `pr/C27-uart-test1` | `pr/C27-rtos-apis` | `efd8432c` | test | S4 test | `test(weactf412): uart-test1` |
+| 85 | `pr/C28` | `pr/C27-uart-test1` | `72149579` | chore | S5 docs/chore | `chore: ignore every build* directory, the build products and the USB host tool` |
+| 86 | `pr/C29` | `pr/C28` | `c5a71fbc` | docs | S5 docs/chore | `docs: README for the six boards and the generic QEMU cores` |
 
-#### micro-os-plus-iii-aarch32 (64 commits)
+#### micro-os-plus-iii-aarch32 -- 64 pull requests (github.com/dan-maio/micro-os-plus-iii-aarch32)
 
-| # | Commit-ID | SHA | Category | Stage / theme | Subject | Group |
+| PR | Head branch (Commit-ID) | Base branch | SHA | Category | Stage / theme | Subject |
 |---:|---|---|---|---|---|---|
-| 1 | A32-01 | `03a0cfc1` | new code | S0 devices | `feat(drivers): import the neutral SD, flatfs, USB and FatFs drivers` |  |
-| 2 | A32-02 | `c318b741` | new code | S0 devices | `feat(soc): import the BCM2837 (Raspberry Pi 3 B / Zero 2 W) SoC support` |  |
-| 3 | A32-03 | `58cff47a` | new code | S0 devices | `feat(soc): import the RK3506 (Luckfox Lyra) SoC support` |  |
-| 4 | A32-04 | `a8662d6e` | chore | S3 port | `chore: ignore every build* directory` |  |
-| 5 | A32-05 | `b0eb0ed7` | new code | S3 port | `feat(port): AArch32 port declarations, application config and device header` |  |
-| 6 | A32-06 | `81d97c4d` | new code | S3 port | `feat(port): ARMv7-A MMU bring-up` |  |
-| 7 | A32-07 | `583aa440` | new code | S3 port | `feat(port): AArch32 exception vectors, IRQ dispatch and fault dump` |  |
-| 8 | A32-08 | `4d9e3c1b` | new code | S3 port | `feat(port): ARM generic timer, and the high-resolution counter from CNTPCT` |  |
-| 9 | A32-09 | `e510bd9f` | new code | S3 port | `feat(port): AArch32 context switch and the port half of the SMP scheduler` |  |
-| 10 | A32-10 | `37b944cf` | new code | S3 port | `feat(port): secondary-core entry` |  |
-| 11 | A32-11 | `6eb8c2aa` | new code | S3 port | `feat(port): semihosting console and a strong _Exit()` |  |
-| 12 | A32-20 | `8cac0c56` | test | S4 board/harness | `test(rpi-zero-2w): the Raspberry Pi Zero 2 W board (BCM2837, 4x Cortex-A53, AArch32)` |  |
-| 13 | A32-21 | `576597f0` | build | S4 board/harness | `build(cmake): the AArch32 port project, its board model and its test builder` |  |
-| 14 | A32-T-smp_test0 | `0308bd45` | test | S4 test | `test(rpi-zero-2w): smp_test0` |  |
-| 15 | A32-T-smp-mat-test | `3f8b9a64` | test | S4 test | `test(rpi-zero-2w): smp-mat-test` |  |
-| 16 | A32-T-cmsis-os-validator | `8bccb4ee` | test | S4 test | `test(rpi-zero-2w): cmsis-os-validator` |  |
-| 17 | A32-T-mutex-stress | `cc8d43bb` | test | S4 test | `test(rpi-zero-2w): mutex-stress` |  |
-| 18 | A32-T-rtos-apis | `f53d5e9e` | test | S4 test | `test(rpi-zero-2w): rtos-apis` |  |
-| 19 | A32-T-sd_test | `286da73d` | test | S4 test | `test(rpi-zero-2w): sd_test` |  |
-| 20 | A32-T-smp-mat-sdcard-test | `2bd8db32` | test | S4 test | `test(rpi-zero-2w): smp-mat-sdcard-test` |  |
-| 21 | A32-T-smp-num-test | `4127ec3c` | test | S4 test | `test(rpi-zero-2w): smp-num-test` |  |
-| 22 | A32-T-smp-pipeline-test | `89a1b78c` | test | S4 test | `test(rpi-zero-2w): smp-pipeline-test` |  |
-| 23 | A32-T-smp-pro-cons-test | `87ca7814` | test | S4 test | `test(rpi-zero-2w): smp-pro-cons-test` |  |
-| 24 | A32-T-smp_test1 | `98efc7ea` | test | S4 test | `test(rpi-zero-2w): smp_test1` |  |
-| 25 | A32-T-smp_test2 | `3f4148c8` | test | S4 test | `test(rpi-zero-2w): smp_test2` |  |
-| 26 | A32-T-smp_test3 | `d4443aca` | test | S4 test | `test(rpi-zero-2w): smp_test3` |  |
-| 27 | A32-T-smp_test4 | `bd38979a` | test | S4 test | `test(rpi-zero-2w): smp_test4` |  |
-| 28 | A32-T-usb_test | `aa7fae53` | test | S4 test | `test(rpi-zero-2w): usb_test` |  |
-| 29 | A32-R3 | `aa0b83c0` | test | S4 board/harness | `test(rpi3b): the Raspberry Pi 3 B board (AArch32), sharing the Zero 2 W sources` |  |
-| 30 | A32-R3-smp_test0 | `22010a2c` | test | S4 test | `test(rpi3b): smp_test0` |  |
-| 31 | A32-R3-cmsis-os-validator | `e0df39c7` | test | S4 test | `test(rpi3b): cmsis-os-validator` |  |
-| 32 | A32-R3-mutex-stress | `b3666f39` | test | S4 test | `test(rpi3b): mutex-stress` |  |
-| 33 | A32-R3-rtos-apis | `832c71ae` | test | S4 test | `test(rpi3b): rtos-apis` |  |
-| 34 | A32-R3-sd_test | `8de31552` | test | S4 test | `test(rpi3b): sd_test` |  |
-| 35 | A32-R3-smp-mat-sdcard-test | `465e7d4a` | test | S4 test | `test(rpi3b): smp-mat-sdcard-test` |  |
-| 36 | A32-R3-smp-mat-test | `c80191d9` | test | S4 test | `test(rpi3b): smp-mat-test` |  |
-| 37 | A32-R3-smp-num-test | `4359e4ce` | test | S4 test | `test(rpi3b): smp-num-test` |  |
-| 38 | A32-R3-smp-pipeline-test | `385f0938` | test | S4 test | `test(rpi3b): smp-pipeline-test` |  |
-| 39 | A32-R3-smp-pro-cons-test | `b5235187` | test | S4 test | `test(rpi3b): smp-pro-cons-test` |  |
-| 40 | A32-R3-smp_test1 | `436d38c9` | test | S4 test | `test(rpi3b): smp_test1` |  |
-| 41 | A32-R3-smp_test2 | `a121a4ca` | test | S4 test | `test(rpi3b): smp_test2` |  |
-| 42 | A32-R3-smp_test3 | `6b56b17f` | test | S4 test | `test(rpi3b): smp_test3` |  |
-| 43 | A32-R3-smp_test4 | `bd4569eb` | test | S4 test | `test(rpi3b): smp_test4` |  |
-| 44 | A32-R3-usb_test | `a33a5cc0` | test | S4 test | `test(rpi3b): usb_test` |  |
-| 45 | A32-LL | `b468cbba` | test | S4 board/harness | `test(luckfox-lyra): the Luckfox Lyra B board (RK3506, 3x Cortex-A7, hardware only)` |  |
-| 46 | A32-LL-smp_test0 | `e617e017` | test | S4 test | `test(luckfox-lyra): smp_test0` |  |
-| 47 | A32-LL-smp_test_int5 | `067f4a19` | test | S4 test | `test(luckfox-lyra): smp_test_int5` |  |
-| 48 | A32-LL-sd_test | `79eca794` | test | S4 test | `test(luckfox-lyra): sd_test` |  |
-| 49 | A32-LL-smp-mat-sdcard-test | `aa5a77ac` | test | S4 test | `test(luckfox-lyra): smp-mat-sdcard-test` |  |
-| 50 | A32-LL-smp-mat-test | `fcaeda34` | test | S4 test | `test(luckfox-lyra): smp-mat-test` |  |
-| 51 | A32-LL-smp-num-test | `3f2f7a29` | test | S4 test | `test(luckfox-lyra): smp-num-test` |  |
-| 52 | A32-LL-smp-pipeline-test | `7c9a0205` | test | S4 test | `test(luckfox-lyra): smp-pipeline-test` |  |
-| 53 | A32-LL-smp-pro-cons-test | `b42eaf86` | test | S4 test | `test(luckfox-lyra): smp-pro-cons-test` |  |
-| 54 | A32-LL-smp_test1 | `bd934140` | test | S4 test | `test(luckfox-lyra): smp_test1` |  |
-| 55 | A32-LL-smp_test2 | `09b7ce26` | test | S4 test | `test(luckfox-lyra): smp_test2` |  |
-| 56 | A32-LL-smp_test3 | `0b58a238` | test | S4 test | `test(luckfox-lyra): smp_test3` |  |
-| 57 | A32-LL-smp_test4 | `9a0a34a0` | test | S4 test | `test(luckfox-lyra): smp_test4` |  |
-| 58 | A32-LL-smp_test5 | `979865e4` | test | S4 test | `test(luckfox-lyra): smp_test5` |  |
-| 59 | A32-LL-smp_test6 | `1cdf9eb1` | test | S4 test | `test(luckfox-lyra): smp_test6` |  |
-| 60 | A32-LL-smp_test7 | `0a1f7b1e` | test | S4 test | `test(luckfox-lyra): smp_test7` |  |
-| 61 | A32-LL-smp_test_int | `3ce4a94a` | test | S4 test | `test(luckfox-lyra): smp_test_int` |  |
-| 62 | A32-LL-smp_test_int2 | `d3f74a0f` | test | S4 test | `test(luckfox-lyra): smp_test_int2` |  |
-| 63 | A32-LL-smp_test_int3 | `d254ad93` | test | S4 test | `test(luckfox-lyra): smp_test_int3` |  |
-| 64 | A32-LL-smp_test_int4 | `0aa86aed` | test | S4 test | `test(luckfox-lyra): smp_test_int4` |  |
+| 1 | `pr/A32-01` | `xpack-development` | `03a0cfc1` | new code | S0 devices | `feat(drivers): import the neutral SD, flatfs, USB and FatFs drivers` |
+| 2 | `pr/A32-02` | `pr/A32-01` | `c318b741` | new code | S0 devices | `feat(soc): import the BCM2837 (Raspberry Pi 3 B / Zero 2 W) SoC support` |
+| 3 | `pr/A32-03` | `pr/A32-02` | `58cff47a` | new code | S0 devices | `feat(soc): import the RK3506 (Luckfox Lyra) SoC support` |
+| 4 | `pr/A32-04` | `pr/A32-03` | `a8662d6e` | chore | S3 port | `chore: ignore every build* directory` |
+| 5 | `pr/A32-05` | `pr/A32-04` | `b0eb0ed7` | new code | S3 port | `feat(port): AArch32 port declarations, application config and device header` |
+| 6 | `pr/A32-06` | `pr/A32-05` | `81d97c4d` | new code | S3 port | `feat(port): ARMv7-A MMU bring-up` |
+| 7 | `pr/A32-07` | `pr/A32-06` | `583aa440` | new code | S3 port | `feat(port): AArch32 exception vectors, IRQ dispatch and fault dump` |
+| 8 | `pr/A32-08` | `pr/A32-07` | `4d9e3c1b` | new code | S3 port | `feat(port): ARM generic timer, and the high-resolution counter from CNTPCT` |
+| 9 | `pr/A32-09` | `pr/A32-08` | `e510bd9f` | new code | S3 port | `feat(port): AArch32 context switch and the port half of the SMP scheduler` |
+| 10 | `pr/A32-10` | `pr/A32-09` | `37b944cf` | new code | S3 port | `feat(port): secondary-core entry` |
+| 11 | `pr/A32-11` | `pr/A32-10` | `6eb8c2aa` | new code | S3 port | `feat(port): semihosting console and a strong _Exit()` |
+| 12 | `pr/A32-20` | `pr/A32-11` | `8cac0c56` | test | S4 board/harness | `test(rpi-zero-2w): the Raspberry Pi Zero 2 W board (BCM2837, 4x Cortex-A53, AArch32)` |
+| 13 | `pr/A32-21` | `pr/A32-20` | `576597f0` | build | S4 board/harness | `build(cmake): the AArch32 port project, its board model and its test builder` |
+| 14 | `pr/A32-T-smp_test0` | `pr/A32-21` | `0308bd45` | test | S4 test | `test(rpi-zero-2w): smp_test0` |
+| 15 | `pr/A32-T-smp-mat-test` | `pr/A32-T-smp_test0` | `3f8b9a64` | test | S4 test | `test(rpi-zero-2w): smp-mat-test` |
+| 16 | `pr/A32-T-cmsis-os-validator` | `pr/A32-T-smp-mat-test` | `8bccb4ee` | test | S4 test | `test(rpi-zero-2w): cmsis-os-validator` |
+| 17 | `pr/A32-T-mutex-stress` | `pr/A32-T-cmsis-os-validator` | `cc8d43bb` | test | S4 test | `test(rpi-zero-2w): mutex-stress` |
+| 18 | `pr/A32-T-rtos-apis` | `pr/A32-T-mutex-stress` | `f53d5e9e` | test | S4 test | `test(rpi-zero-2w): rtos-apis` |
+| 19 | `pr/A32-T-sd_test` | `pr/A32-T-rtos-apis` | `286da73d` | test | S4 test | `test(rpi-zero-2w): sd_test` |
+| 20 | `pr/A32-T-smp-mat-sdcard-test` | `pr/A32-T-sd_test` | `2bd8db32` | test | S4 test | `test(rpi-zero-2w): smp-mat-sdcard-test` |
+| 21 | `pr/A32-T-smp-num-test` | `pr/A32-T-smp-mat-sdcard-test` | `4127ec3c` | test | S4 test | `test(rpi-zero-2w): smp-num-test` |
+| 22 | `pr/A32-T-smp-pipeline-test` | `pr/A32-T-smp-num-test` | `89a1b78c` | test | S4 test | `test(rpi-zero-2w): smp-pipeline-test` |
+| 23 | `pr/A32-T-smp-pro-cons-test` | `pr/A32-T-smp-pipeline-test` | `87ca7814` | test | S4 test | `test(rpi-zero-2w): smp-pro-cons-test` |
+| 24 | `pr/A32-T-smp_test1` | `pr/A32-T-smp-pro-cons-test` | `98efc7ea` | test | S4 test | `test(rpi-zero-2w): smp_test1` |
+| 25 | `pr/A32-T-smp_test2` | `pr/A32-T-smp_test1` | `3f4148c8` | test | S4 test | `test(rpi-zero-2w): smp_test2` |
+| 26 | `pr/A32-T-smp_test3` | `pr/A32-T-smp_test2` | `d4443aca` | test | S4 test | `test(rpi-zero-2w): smp_test3` |
+| 27 | `pr/A32-T-smp_test4` | `pr/A32-T-smp_test3` | `bd38979a` | test | S4 test | `test(rpi-zero-2w): smp_test4` |
+| 28 | `pr/A32-T-usb_test` | `pr/A32-T-smp_test4` | `aa7fae53` | test | S4 test | `test(rpi-zero-2w): usb_test` |
+| 29 | `pr/A32-R3` | `pr/A32-T-usb_test` | `aa0b83c0` | test | S4 board/harness | `test(rpi3b): the Raspberry Pi 3 B board (AArch32), sharing the Zero 2 W sources` |
+| 30 | `pr/A32-R3-smp_test0` | `pr/A32-R3` | `22010a2c` | test | S4 test | `test(rpi3b): smp_test0` |
+| 31 | `pr/A32-R3-cmsis-os-validator` | `pr/A32-R3-smp_test0` | `e0df39c7` | test | S4 test | `test(rpi3b): cmsis-os-validator` |
+| 32 | `pr/A32-R3-mutex-stress` | `pr/A32-R3-cmsis-os-validator` | `b3666f39` | test | S4 test | `test(rpi3b): mutex-stress` |
+| 33 | `pr/A32-R3-rtos-apis` | `pr/A32-R3-mutex-stress` | `832c71ae` | test | S4 test | `test(rpi3b): rtos-apis` |
+| 34 | `pr/A32-R3-sd_test` | `pr/A32-R3-rtos-apis` | `8de31552` | test | S4 test | `test(rpi3b): sd_test` |
+| 35 | `pr/A32-R3-smp-mat-sdcard-test` | `pr/A32-R3-sd_test` | `465e7d4a` | test | S4 test | `test(rpi3b): smp-mat-sdcard-test` |
+| 36 | `pr/A32-R3-smp-mat-test` | `pr/A32-R3-smp-mat-sdcard-test` | `c80191d9` | test | S4 test | `test(rpi3b): smp-mat-test` |
+| 37 | `pr/A32-R3-smp-num-test` | `pr/A32-R3-smp-mat-test` | `4359e4ce` | test | S4 test | `test(rpi3b): smp-num-test` |
+| 38 | `pr/A32-R3-smp-pipeline-test` | `pr/A32-R3-smp-num-test` | `385f0938` | test | S4 test | `test(rpi3b): smp-pipeline-test` |
+| 39 | `pr/A32-R3-smp-pro-cons-test` | `pr/A32-R3-smp-pipeline-test` | `b5235187` | test | S4 test | `test(rpi3b): smp-pro-cons-test` |
+| 40 | `pr/A32-R3-smp_test1` | `pr/A32-R3-smp-pro-cons-test` | `436d38c9` | test | S4 test | `test(rpi3b): smp_test1` |
+| 41 | `pr/A32-R3-smp_test2` | `pr/A32-R3-smp_test1` | `a121a4ca` | test | S4 test | `test(rpi3b): smp_test2` |
+| 42 | `pr/A32-R3-smp_test3` | `pr/A32-R3-smp_test2` | `6b56b17f` | test | S4 test | `test(rpi3b): smp_test3` |
+| 43 | `pr/A32-R3-smp_test4` | `pr/A32-R3-smp_test3` | `bd4569eb` | test | S4 test | `test(rpi3b): smp_test4` |
+| 44 | `pr/A32-R3-usb_test` | `pr/A32-R3-smp_test4` | `a33a5cc0` | test | S4 test | `test(rpi3b): usb_test` |
+| 45 | `pr/A32-LL` | `pr/A32-R3-usb_test` | `b468cbba` | test | S4 board/harness | `test(luckfox-lyra): the Luckfox Lyra B board (RK3506, 3x Cortex-A7, hardware only)` |
+| 46 | `pr/A32-LL-smp_test0` | `pr/A32-LL` | `e617e017` | test | S4 test | `test(luckfox-lyra): smp_test0` |
+| 47 | `pr/A32-LL-smp_test_int5` | `pr/A32-LL-smp_test0` | `067f4a19` | test | S4 test | `test(luckfox-lyra): smp_test_int5` |
+| 48 | `pr/A32-LL-sd_test` | `pr/A32-LL-smp_test_int5` | `79eca794` | test | S4 test | `test(luckfox-lyra): sd_test` |
+| 49 | `pr/A32-LL-smp-mat-sdcard-test` | `pr/A32-LL-sd_test` | `aa5a77ac` | test | S4 test | `test(luckfox-lyra): smp-mat-sdcard-test` |
+| 50 | `pr/A32-LL-smp-mat-test` | `pr/A32-LL-smp-mat-sdcard-test` | `fcaeda34` | test | S4 test | `test(luckfox-lyra): smp-mat-test` |
+| 51 | `pr/A32-LL-smp-num-test` | `pr/A32-LL-smp-mat-test` | `3f2f7a29` | test | S4 test | `test(luckfox-lyra): smp-num-test` |
+| 52 | `pr/A32-LL-smp-pipeline-test` | `pr/A32-LL-smp-num-test` | `7c9a0205` | test | S4 test | `test(luckfox-lyra): smp-pipeline-test` |
+| 53 | `pr/A32-LL-smp-pro-cons-test` | `pr/A32-LL-smp-pipeline-test` | `b42eaf86` | test | S4 test | `test(luckfox-lyra): smp-pro-cons-test` |
+| 54 | `pr/A32-LL-smp_test1` | `pr/A32-LL-smp-pro-cons-test` | `bd934140` | test | S4 test | `test(luckfox-lyra): smp_test1` |
+| 55 | `pr/A32-LL-smp_test2` | `pr/A32-LL-smp_test1` | `09b7ce26` | test | S4 test | `test(luckfox-lyra): smp_test2` |
+| 56 | `pr/A32-LL-smp_test3` | `pr/A32-LL-smp_test2` | `0b58a238` | test | S4 test | `test(luckfox-lyra): smp_test3` |
+| 57 | `pr/A32-LL-smp_test4` | `pr/A32-LL-smp_test3` | `9a0a34a0` | test | S4 test | `test(luckfox-lyra): smp_test4` |
+| 58 | `pr/A32-LL-smp_test5` | `pr/A32-LL-smp_test4` | `979865e4` | test | S4 test | `test(luckfox-lyra): smp_test5` |
+| 59 | `pr/A32-LL-smp_test6` | `pr/A32-LL-smp_test5` | `1cdf9eb1` | test | S4 test | `test(luckfox-lyra): smp_test6` |
+| 60 | `pr/A32-LL-smp_test7` | `pr/A32-LL-smp_test6` | `0a1f7b1e` | test | S4 test | `test(luckfox-lyra): smp_test7` |
+| 61 | `pr/A32-LL-smp_test_int` | `pr/A32-LL-smp_test7` | `3ce4a94a` | test | S4 test | `test(luckfox-lyra): smp_test_int` |
+| 62 | `pr/A32-LL-smp_test_int2` | `pr/A32-LL-smp_test_int` | `d3f74a0f` | test | S4 test | `test(luckfox-lyra): smp_test_int2` |
+| 63 | `pr/A32-LL-smp_test_int3` | `pr/A32-LL-smp_test_int2` | `d254ad93` | test | S4 test | `test(luckfox-lyra): smp_test_int3` |
+| 64 | `pr/A32-LL-smp_test_int4` | `pr/A32-LL-smp_test_int3` | `0aa86aed` | test | S4 test | `test(luckfox-lyra): smp_test_int4` |
 
-#### micro-os-plus-iii-aarch64 (43 commits)
+#### micro-os-plus-iii-aarch64 -- 43 pull requests (github.com/dan-maio/micro-os-plus-iii-aarch64)
 
-| # | Commit-ID | SHA | Category | Stage / theme | Subject | Group |
+| PR | Head branch (Commit-ID) | Base branch | SHA | Category | Stage / theme | Subject |
 |---:|---|---|---|---|---|---|
-| 1 | A64-01 | `b764bc98` | new code | S0 devices | `feat(drivers): import the neutral SD, flatfs, USB and FatFs drivers` |  |
-| 2 | A64-02 | `fe04ec15` | new code | S0 devices | `feat(soc): import the BCM2837 (Raspberry Pi 3 B / Zero 2 W) SoC support` |  |
-| 3 | A64-03 | `30822be2` | chore | S3 port | `chore: ignore every build* directory` |  |
-| 4 | A64-04 | `f04d5ef5` | new code | S3 port | `feat(port): AArch64 port declarations, application config and device header` |  |
-| 5 | A64-05 | `522cf173` | new code | S3 port | `feat(port): AArch64 MMU bring-up` |  |
-| 6 | A64-06 | `265ce322` | new code | S3 port | `feat(port): AArch64 exception reporting and the static constructor runners` |  |
-| 7 | A64-07 | `f5359a25` | new code | S3 port | `feat(port): ARM generic timer accessors (CNTFRQ_EL0, CNTPCT_EL0)` |  |
-| 8 | A64-08 | `e04efa95` | new code | S3 port | `feat(port): AArch64 context frame and the port half of the SMP scheduler` |  |
-| 9 | A64-09 | `ba24acc6` | new code | S3 port | `feat(port): secondary-core entry` |  |
-| 10 | A64-10 | `7e796801` | new code | S3 port | `feat(port): semihosting console` |  |
-| 11 | A64-20 | `9cafe2de` | test | S4 board/harness | `test(rpi-zero-2w): the Raspberry Pi Zero 2 W board (BCM2837, 4x Cortex-A53, AArch64)` |  |
-| 12 | A64-21 | `475d0604` | build | S4 board/harness | `build(cmake): the AArch64 port project, its board model and its test builder` |  |
-| 13 | A64-T-smp_test0 | `cca66872` | test | S4 test | `test(rpi-zero-2w): smp_test0` |  |
-| 14 | A64-T-smp-mat-test | `07d27cd6` | test | S4 test | `test(rpi-zero-2w): smp-mat-test` |  |
-| 15 | A64-T-cmsis-os-validator | `bc32bcd8` | test | S4 test | `test(rpi-zero-2w): cmsis-os-validator` |  |
-| 16 | A64-T-mutex-stress | `d87cebb7` | test | S4 test | `test(rpi-zero-2w): mutex-stress` |  |
-| 17 | A64-T-rtos-apis | `99c5a5bf` | test | S4 test | `test(rpi-zero-2w): rtos-apis` |  |
-| 18 | A64-T-sd_test | `d666d390` | test | S4 test | `test(rpi-zero-2w): sd_test` |  |
-| 19 | A64-T-smp-mat-sdcard-test | `1731d0b1` | test | S4 test | `test(rpi-zero-2w): smp-mat-sdcard-test` |  |
-| 20 | A64-T-smp-num-test | `edf06551` | test | S4 test | `test(rpi-zero-2w): smp-num-test` |  |
-| 21 | A64-T-smp-pipeline-test | `8750df6e` | test | S4 test | `test(rpi-zero-2w): smp-pipeline-test` |  |
-| 22 | A64-T-smp-pro-cons-test | `5e0e5a65` | test | S4 test | `test(rpi-zero-2w): smp-pro-cons-test` |  |
-| 23 | A64-T-smp_test1 | `ed02a26b` | test | S4 test | `test(rpi-zero-2w): smp_test1` |  |
-| 24 | A64-T-smp_test2 | `12c23d59` | test | S4 test | `test(rpi-zero-2w): smp_test2` |  |
-| 25 | A64-T-smp_test3 | `216918dd` | test | S4 test | `test(rpi-zero-2w): smp_test3` |  |
-| 26 | A64-T-smp_test4 | `87d619e3` | test | S4 test | `test(rpi-zero-2w): smp_test4` |  |
-| 27 | A64-T-usb_test | `5da24f9a` | test | S4 test | `test(rpi-zero-2w): usb_test` |  |
-| 28 | A64-R3 | `c84b8e00` | test | S4 board/harness | `test(rpi3b): the Raspberry Pi 3 B board (AArch64), sharing the Zero 2 W sources` |  |
-| 29 | A64-R3-smp_test0 | `b3fc5a12` | test | S4 test | `test(rpi3b): smp_test0` |  |
-| 30 | A64-R3-cmsis-os-validator | `031d8f52` | test | S4 test | `test(rpi3b): cmsis-os-validator` |  |
-| 31 | A64-R3-mutex-stress | `3ae3d571` | test | S4 test | `test(rpi3b): mutex-stress` |  |
-| 32 | A64-R3-rtos-apis | `e7bc6bc7` | test | S4 test | `test(rpi3b): rtos-apis` |  |
-| 33 | A64-R3-sd_test | `3e9f6e5a` | test | S4 test | `test(rpi3b): sd_test` |  |
-| 34 | A64-R3-smp-mat-sdcard-test | `ea725894` | test | S4 test | `test(rpi3b): smp-mat-sdcard-test` |  |
-| 35 | A64-R3-smp-mat-test | `0cce173e` | test | S4 test | `test(rpi3b): smp-mat-test` |  |
-| 36 | A64-R3-smp-num-test | `d4f629c3` | test | S4 test | `test(rpi3b): smp-num-test` |  |
-| 37 | A64-R3-smp-pipeline-test | `a8082ca9` | test | S4 test | `test(rpi3b): smp-pipeline-test` |  |
-| 38 | A64-R3-smp-pro-cons-test | `1ace669b` | test | S4 test | `test(rpi3b): smp-pro-cons-test` |  |
-| 39 | A64-R3-smp_test1 | `84bceba9` | test | S4 test | `test(rpi3b): smp_test1` |  |
-| 40 | A64-R3-smp_test2 | `c045d19b` | test | S4 test | `test(rpi3b): smp_test2` |  |
-| 41 | A64-R3-smp_test3 | `fe5a5489` | test | S4 test | `test(rpi3b): smp_test3` |  |
-| 42 | A64-R3-smp_test4 | `ebf7dce3` | test | S4 test | `test(rpi3b): smp_test4` |  |
-| 43 | A64-R3-usb_test | `a723ecc1` | test | S4 test | `test(rpi3b): usb_test` |  |
+| 1 | `pr/A64-01` | `xpack-development` | `b764bc98` | new code | S0 devices | `feat(drivers): import the neutral SD, flatfs, USB and FatFs drivers` |
+| 2 | `pr/A64-02` | `pr/A64-01` | `fe04ec15` | new code | S0 devices | `feat(soc): import the BCM2837 (Raspberry Pi 3 B / Zero 2 W) SoC support` |
+| 3 | `pr/A64-03` | `pr/A64-02` | `30822be2` | chore | S3 port | `chore: ignore every build* directory` |
+| 4 | `pr/A64-04` | `pr/A64-03` | `f04d5ef5` | new code | S3 port | `feat(port): AArch64 port declarations, application config and device header` |
+| 5 | `pr/A64-05` | `pr/A64-04` | `522cf173` | new code | S3 port | `feat(port): AArch64 MMU bring-up` |
+| 6 | `pr/A64-06` | `pr/A64-05` | `265ce322` | new code | S3 port | `feat(port): AArch64 exception reporting and the static constructor runners` |
+| 7 | `pr/A64-07` | `pr/A64-06` | `f5359a25` | new code | S3 port | `feat(port): ARM generic timer accessors (CNTFRQ_EL0, CNTPCT_EL0)` |
+| 8 | `pr/A64-08` | `pr/A64-07` | `e04efa95` | new code | S3 port | `feat(port): AArch64 context frame and the port half of the SMP scheduler` |
+| 9 | `pr/A64-09` | `pr/A64-08` | `ba24acc6` | new code | S3 port | `feat(port): secondary-core entry` |
+| 10 | `pr/A64-10` | `pr/A64-09` | `7e796801` | new code | S3 port | `feat(port): semihosting console` |
+| 11 | `pr/A64-20` | `pr/A64-10` | `9cafe2de` | test | S4 board/harness | `test(rpi-zero-2w): the Raspberry Pi Zero 2 W board (BCM2837, 4x Cortex-A53, AArch64)` |
+| 12 | `pr/A64-21` | `pr/A64-20` | `475d0604` | build | S4 board/harness | `build(cmake): the AArch64 port project, its board model and its test builder` |
+| 13 | `pr/A64-T-smp_test0` | `pr/A64-21` | `cca66872` | test | S4 test | `test(rpi-zero-2w): smp_test0` |
+| 14 | `pr/A64-T-smp-mat-test` | `pr/A64-T-smp_test0` | `07d27cd6` | test | S4 test | `test(rpi-zero-2w): smp-mat-test` |
+| 15 | `pr/A64-T-cmsis-os-validator` | `pr/A64-T-smp-mat-test` | `bc32bcd8` | test | S4 test | `test(rpi-zero-2w): cmsis-os-validator` |
+| 16 | `pr/A64-T-mutex-stress` | `pr/A64-T-cmsis-os-validator` | `d87cebb7` | test | S4 test | `test(rpi-zero-2w): mutex-stress` |
+| 17 | `pr/A64-T-rtos-apis` | `pr/A64-T-mutex-stress` | `99c5a5bf` | test | S4 test | `test(rpi-zero-2w): rtos-apis` |
+| 18 | `pr/A64-T-sd_test` | `pr/A64-T-rtos-apis` | `d666d390` | test | S4 test | `test(rpi-zero-2w): sd_test` |
+| 19 | `pr/A64-T-smp-mat-sdcard-test` | `pr/A64-T-sd_test` | `1731d0b1` | test | S4 test | `test(rpi-zero-2w): smp-mat-sdcard-test` |
+| 20 | `pr/A64-T-smp-num-test` | `pr/A64-T-smp-mat-sdcard-test` | `edf06551` | test | S4 test | `test(rpi-zero-2w): smp-num-test` |
+| 21 | `pr/A64-T-smp-pipeline-test` | `pr/A64-T-smp-num-test` | `8750df6e` | test | S4 test | `test(rpi-zero-2w): smp-pipeline-test` |
+| 22 | `pr/A64-T-smp-pro-cons-test` | `pr/A64-T-smp-pipeline-test` | `5e0e5a65` | test | S4 test | `test(rpi-zero-2w): smp-pro-cons-test` |
+| 23 | `pr/A64-T-smp_test1` | `pr/A64-T-smp-pro-cons-test` | `ed02a26b` | test | S4 test | `test(rpi-zero-2w): smp_test1` |
+| 24 | `pr/A64-T-smp_test2` | `pr/A64-T-smp_test1` | `12c23d59` | test | S4 test | `test(rpi-zero-2w): smp_test2` |
+| 25 | `pr/A64-T-smp_test3` | `pr/A64-T-smp_test2` | `216918dd` | test | S4 test | `test(rpi-zero-2w): smp_test3` |
+| 26 | `pr/A64-T-smp_test4` | `pr/A64-T-smp_test3` | `87d619e3` | test | S4 test | `test(rpi-zero-2w): smp_test4` |
+| 27 | `pr/A64-T-usb_test` | `pr/A64-T-smp_test4` | `5da24f9a` | test | S4 test | `test(rpi-zero-2w): usb_test` |
+| 28 | `pr/A64-R3` | `pr/A64-T-usb_test` | `c84b8e00` | test | S4 board/harness | `test(rpi3b): the Raspberry Pi 3 B board (AArch64), sharing the Zero 2 W sources` |
+| 29 | `pr/A64-R3-smp_test0` | `pr/A64-R3` | `b3fc5a12` | test | S4 test | `test(rpi3b): smp_test0` |
+| 30 | `pr/A64-R3-cmsis-os-validator` | `pr/A64-R3-smp_test0` | `031d8f52` | test | S4 test | `test(rpi3b): cmsis-os-validator` |
+| 31 | `pr/A64-R3-mutex-stress` | `pr/A64-R3-cmsis-os-validator` | `3ae3d571` | test | S4 test | `test(rpi3b): mutex-stress` |
+| 32 | `pr/A64-R3-rtos-apis` | `pr/A64-R3-mutex-stress` | `e7bc6bc7` | test | S4 test | `test(rpi3b): rtos-apis` |
+| 33 | `pr/A64-R3-sd_test` | `pr/A64-R3-rtos-apis` | `3e9f6e5a` | test | S4 test | `test(rpi3b): sd_test` |
+| 34 | `pr/A64-R3-smp-mat-sdcard-test` | `pr/A64-R3-sd_test` | `ea725894` | test | S4 test | `test(rpi3b): smp-mat-sdcard-test` |
+| 35 | `pr/A64-R3-smp-mat-test` | `pr/A64-R3-smp-mat-sdcard-test` | `0cce173e` | test | S4 test | `test(rpi3b): smp-mat-test` |
+| 36 | `pr/A64-R3-smp-num-test` | `pr/A64-R3-smp-mat-test` | `d4f629c3` | test | S4 test | `test(rpi3b): smp-num-test` |
+| 37 | `pr/A64-R3-smp-pipeline-test` | `pr/A64-R3-smp-num-test` | `a8082ca9` | test | S4 test | `test(rpi3b): smp-pipeline-test` |
+| 38 | `pr/A64-R3-smp-pro-cons-test` | `pr/A64-R3-smp-pipeline-test` | `1ace669b` | test | S4 test | `test(rpi3b): smp-pro-cons-test` |
+| 39 | `pr/A64-R3-smp_test1` | `pr/A64-R3-smp-pro-cons-test` | `84bceba9` | test | S4 test | `test(rpi3b): smp_test1` |
+| 40 | `pr/A64-R3-smp_test2` | `pr/A64-R3-smp_test1` | `c045d19b` | test | S4 test | `test(rpi3b): smp_test2` |
+| 41 | `pr/A64-R3-smp_test3` | `pr/A64-R3-smp_test2` | `fe5a5489` | test | S4 test | `test(rpi3b): smp_test3` |
+| 42 | `pr/A64-R3-smp_test4` | `pr/A64-R3-smp_test3` | `ebf7dce3` | test | S4 test | `test(rpi3b): smp_test4` |
+| 43 | `pr/A64-R3-usb_test` | `pr/A64-R3-smp_test4` | `a723ecc1` | test | S4 test | `test(rpi3b): usb_test` |
 
-#### micro-os-plus-iii-devices (1 commit)
 
-| # | Commit-ID | SHA | Category | Stage / theme | Subject | Group |
+#### micro-os-plus-iii-devices -- 1 pull request (github.com/dan-maio/micro-os-plus-iii-devices)
+
+| PR | Head branch (Commit-ID) | Base branch | SHA | Category | Stage / theme | Subject |
 |---:|---|---|---|---|---|---|
-| 1 | D01 | (bundle) | docs | S0 devices | `docs: retire the repository -- its contents moved to the architecture ports` |  |
+| 1 | `pr/D01` | `smp` | (bundle) | docs | S0 devices | `docs: retire the repository -- its contents moved to the architecture ports` |
 
-D01 is kept in `devices-retired.bundle` (the local clone was deleted after S0, §14.2). On GitHub, the repository is archived instead of being changed.
+D01 is kept in `devices-retired.bundle` (the local clone was deleted after S0, §14.2). After it is merged, the repository is archived on GitHub.
 
-### 22.3 Documentation updates after the migration (kernel)
-
-Made after the full test run, so that every document in `docs/` describes the executed state: Part III itself (K985); one commit per document (K986-*), which corrects stale facts in the reference documents (no `micro-os-plus-iii-devices`, no `UOS_DEVICES_DIR`, the current clone layout and the verified results) and adds a *Status 2026-10-06* note to the historical plans and reviews (their PDFs regenerated); and this section (K987). The upstream documents that do not concern the migration (`HISTORY`, `NOTES`, `TODO`, `posix-io-*`, `other-posix-systems`, `upstream-*`) are unchanged.
-
-| # | Commit-ID | SHA | Category | Subject |
-|---:|---|---|---|---|
-| 126 | K985 | `6fb211a9` | docs | `docs(smp): xpack-dev-smp.md Part III -- execution record, step summary, commit list` |
-| 127 | K986-STATUS | `e2a90a42` | docs | `docs: STATUS for the commit-only migration of 2026-10-06` |
-| 128 | K986-aarch32-second-board | `7bfb05be` | docs | `docs: aarch32-second-board -- the RK3506 SD driver is in the port` |
-| 129 | K986-building-aarch32-aarch64 | `a256bafe` | docs | `docs: building-aarch32-aarch64 without the devices repository` |
-| 130 | K986-posix-arch-port | `6c6a136a` | docs | `docs: posix-arch-port -- drivers and SD back-end are in the port` |
-| 131 | K986-cortexm-port | `a9c1ad47` | docs | `docs: cortexm-port -- the SoC directories and the verified results` |
-| 132 | K986-test-smpl | `c273abb1` | docs | `docs: test-smpl lists the verdict contract and the no-power-cycle configs` |
-| 133 | K986-tests-in-aarch32-aarch64 | `0ff357af` | docs | `docs: tests-in-aarch32-aarch64 shows drivers/ and soc/ in the port` |
-| 134 | K986-WORK-SMP-HARNESS-GUIDE | `359b2b73` | docs | `docs(tests): WORK-SMP harness guide -- no devices repository` |
-| 135 | K986-TESTS-XPACK-SYSTEM | `982522d7` | docs | `docs(tests): TESTS-XPACK-SYSTEM -- the four ports, devices dissolved` |
-| 136 | K986-HARNESS-TESTS-PARADIGM | `a8983cd6` | docs | `docs(tests): HARNESS-TESTS-PARADIGM -- no devices repository` |
-| 137 | K986-HARNESS-BOARD-TEST-CHEATSHEET | `ef3d8096` | docs | `docs(tests): HARNESS-BOARD-TEST-CHEATSHEET -- no devices repository` |
-| 138 | K986-AARCH32-RPI-ZERO-2W-TESTS | `997146ca` | docs | `docs(tests): AARCH32-RPI-ZERO-2W-TESTS -- drivers are in the port` |
-| 139 | K986-STEPS | `335b3416` | docs | `docs(tests): STEPS -- a port finds only the kernel as a sibling` |
-| 140 | K986-TESTS-DEVELOPER-GUIDE | `3ee23fe2` | docs | `docs(tests): TESTS-DEVELOPER-GUIDE -- the workspace without devices` |
-| 141 | K986-TESTS-CATALOG | `63f2b822` | docs | `docs(tests): TESTS-CATALOG -- four ports, and the last verified run` |
-| 142 | K986-tests-README-DEVELOPER | `d504cbc4` | docs | `docs(tests): README-DEVELOPER -- the current clone layout` |
-| 143 | K986-tests-README-MAINTAINER | `0ddf9763` | docs | `docs(tests): README-MAINTAINER -- the current clone layout` |
-| 144 | K986-test-framework | `b60858d1` | docs | `docs(tests): test-framework points to the smp side` |
-| 145 | K986-agy-review | `8c3477d2` | docs | `docs(smp): agy-review -- status note, superseded by xpack-dev-smp.md` |
-| 146 | K986-DeepSeek-review | `60e4d0ef` | docs | `docs(smp): DeepSeek-review -- status note, superseded by xpack-dev-smp.md` |
-| 147 | K986-files-modif-by-step | `1da601cd` | docs | `docs(smp): files-modif-by-step -- status note, superseded by xpack-dev-smp.md` |
-| 148 | K986-GITHUB-PROGRESSIVE-PR-GUIDE | `66ef2fa5` | docs | `docs(smp): GITHUB-PROGRESSIVE-PR-GUIDE -- status note, superseded by xpack-dev-smp.md` |
-| 149 | K986-Implementation-SMP-Integration | `440716ba` | docs | `docs(smp): Implementation-SMP-Integration -- status note, superseded by xpack-dev-smp.md` |
-| 150 | K986-micro-os-plus-iii-project-unification | `c6c7eebe` | docs | `docs(smp): project-unification -- status note` |
-| 151 | K986-MICRO-OS-PLUS-SMP-VS-SINGLECORE-ANALYSIS | `df0f0ed9` | docs | `docs(smp): SMP-VS-SINGLECORE-ANALYSIS -- status note` |
-| 152 | K986-new-modifications | `2be02079` | docs | `docs(smp): new-modifications -- status note` |
-| 153 | K986-pull-request | `0e1416d3` | docs | `docs(smp): pull-request -- status note, superseded by xpack-dev-smp.md` |
-| 154 | K986-smp-construction | `02e62612` | docs | `docs(smp): smp-construction -- status note` |
-| 155 | K986-SMP-UPSTREAM-INTEGRATION-PLAN | `21d772ad` | docs | `docs(smp): SMP-UPSTREAM-INTEGRATION-PLAN -- status note, superseded by xpack-dev-smp.md` |
-| 156 | K986-2026-09-20-micro-os-plus-iii-smp-unification-design | `039c42c6` | docs | `docs(specs): smp-unification-design -- status note` |
-| 157 | K987 | (this commit) | docs | `docs(smp): xpack-dev-smp.md lists the documentation updates` |
+### 22.4 Documentation updates after the migration (kernel PRs 126–158)
+Made after the full test run, so that every document in `docs/` describes the executed state: Part III itself (K985); one commit per document (K986-*), which corrects stale facts in the reference documents (no `micro-os-plus-iii-devices`, no `UOS_DEVICES_DIR`, the current clone layout and the verified results) and adds a *Status 2026-10-06* note to the historical plans and reviews (their PDFs regenerated); and the two commits that complete this section (K987, K988). The upstream documents that do not concern the migration (`HISTORY`, `NOTES`, `TODO`, `posix-io-*`, `other-posix-systems`, `upstream-*`) are unchanged.

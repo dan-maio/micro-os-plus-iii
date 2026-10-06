@@ -132,6 +132,7 @@
       "test-smp-cmake": [
         "xpm run test-aarch32-rpi-zero-2w-cmake",
         "xpm run test-aarch32-rpi3b-cmake",
+        "xpm run test-aarch64-rpi-zero-2w-cmake",
         "xpm run test-2xcortex-m33-cmake",
         "xpm run test-pico2-1cpu-cmake",
         "xpm run test-cortexm-pico2-cmake",
@@ -430,6 +431,14 @@
         "xpm run prepare --config aarch32-rpi-zero-2w-cmake-gcc-release",
         "xpm run build --config aarch32-rpi-zero-2w-cmake-gcc-release",
         "xpm run test --config aarch32-rpi-zero-2w-cmake-gcc-release"
+      ],
+      "test-aarch64-rpi-zero-2w-cmake": [
+        "xpm run prepare --config aarch64-rpi-zero-2w-cmake-gcc-debug",
+        "xpm run build --config aarch64-rpi-zero-2w-cmake-gcc-debug",
+        "xpm run test --config aarch64-rpi-zero-2w-cmake-gcc-debug",
+        "xpm run prepare --config aarch64-rpi-zero-2w-cmake-gcc-release",
+        "xpm run build --config aarch64-rpi-zero-2w-cmake-gcc-release",
+        "xpm run test --config aarch64-rpi-zero-2w-cmake-gcc-release"
       ],
       "test-aarch32-rpi3b-cmake": [
         "xpm run prepare --config aarch32-rpi3b-cmake-gcc-debug",
@@ -756,6 +765,26 @@
         "devDependencies": {
           "@xpack-dev-tools/arm-none-eabi-gcc": "15.2.1-1.1.1",
           "@xpack-dev-tools/openocd": "0.12.0-7.1"
+        }
+      },
+      "aarch64-actions": {
+        "hidden": true,
+        "actions": {
+          "install": [
+            "xpm install --config {{ configuration.name }}",
+            "xpm link @micro-os-plus/micro-os-plus-iii-aarch64 --config {{ configuration.name }}"
+          ],
+          "link-deps": [
+            "xpm link @micro-os-plus/micro-os-plus-iii-aarch64 --config {{ configuration.name }}"
+          ]
+        }
+      },
+      "aarch64-dependencies": {
+        "hidden": true,
+        "$devDependenciesUrl": "https://www.npmjs.com/package/@xpack-dev-tools/aarch64-none-elf-gcc",
+        "devDependencies": {
+          "@xpack-dev-tools/aarch64-none-elf-gcc": "15.2.1-1.1.1",
+          "@xpack-dev-tools/qemu-arm": "9.2.4-1.1"
         }
       },
       "short-win-paths-properties": {
@@ -1927,6 +1956,62 @@
         "properties": {
           "buildType": "MinSizeRel",
           "shortConfigurationName": "lyr"
+        }
+      },
+      "aarch64-rpi-zero-2w-cmake-gcc-debug": {
+        "inherit": [
+          "aarch64-actions",
+          "cmake-actions",
+          "aarch64-dependencies",
+          "short-win-paths-properties"
+        ],
+        "properties": {
+          "buildType": "Debug",
+          "platformName": "aarch64-rpi-zero-2w",
+          "toolchainFileName": "aarch64-none-elf-gcc.cmake",
+          "shortConfigurationName": "a64d"
+        },
+        "actions": {
+          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE hwd",
+          "test-sd_test-qemu": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch64-rpi-zero-2w-sd_test-qemu",
+          "test-sd_test-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch64-rpi-zero-2w-sd_test-hwd",
+          "test-smp-mat-sdcard-test-qemu": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch64-rpi-zero-2w-smp-mat-sdcard-test-qemu",
+          "test-smp-mat-sdcard-test-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch64-rpi-zero-2w-smp-mat-sdcard-test-hwd",
+          "test-smp-mat-test-qemu": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch64-rpi-zero-2w-smp-mat-test-qemu",
+          "test-smp-mat-test-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch64-rpi-zero-2w-smp-mat-test-hwd",
+          "test-smp-num-test-qemu": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch64-rpi-zero-2w-smp-num-test-qemu",
+          "test-smp-num-test-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch64-rpi-zero-2w-smp-num-test-hwd",
+          "test-smp-pipeline-test-qemu": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch64-rpi-zero-2w-smp-pipeline-test-qemu",
+          "test-smp-pipeline-test-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch64-rpi-zero-2w-smp-pipeline-test-hwd",
+          "test-smp-pro-cons-test-qemu": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch64-rpi-zero-2w-smp-pro-cons-test-qemu",
+          "test-smp-pro-cons-test-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch64-rpi-zero-2w-smp-pro-cons-test-hwd",
+          "test-smp_test0-qemu": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch64-rpi-zero-2w-smp_test0-qemu",
+          "test-smp_test0-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch64-rpi-zero-2w-smp_test0-hwd",
+          "test-smp_test1-qemu": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch64-rpi-zero-2w-smp_test1-qemu",
+          "test-smp_test1-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch64-rpi-zero-2w-smp_test1-hwd",
+          "test-smp_test2-qemu": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch64-rpi-zero-2w-smp_test2-qemu",
+          "test-smp_test2-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch64-rpi-zero-2w-smp_test2-hwd",
+          "test-smp_test3-qemu": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch64-rpi-zero-2w-smp_test3-qemu",
+          "test-smp_test3-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch64-rpi-zero-2w-smp_test3-hwd",
+          "test-smp_test4-qemu": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch64-rpi-zero-2w-smp_test4-qemu",
+          "test-smp_test4-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch64-rpi-zero-2w-smp_test4-hwd",
+          "test-usb_test-qemu": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch64-rpi-zero-2w-usb_test-qemu",
+          "test-usb_test-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch64-rpi-zero-2w-usb_test-hwd",
+          "test-mutex-stress-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch64-rpi-zero-2w-mutex-stress-hwd",
+          "test-mutex-stress-qemu": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch64-rpi-zero-2w-mutex-stress-qemu",
+          "test-rtos-apis-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch64-rpi-zero-2w-rtos-apis-hwd",
+          "test-rtos-apis-qemu": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch64-rpi-zero-2w-rtos-apis-qemu",
+          "test-cmsis-os-validator-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch64-rpi-zero-2w-cmsis-os-validator-hwd",
+          "test-cmsis-os-validator-qemu": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch64-rpi-zero-2w-cmsis-os-validator-qemu"
+        }
+      },
+      "aarch64-rpi-zero-2w-cmake-gcc-release": {
+        "inherit": [
+          "aarch64-rpi-zero-2w-cmake-gcc-debug"
+        ],
+        "properties": {
+          "buildType": "MinSizeRel",
+          "shortConfigurationName": "a64r"
         }
       }
     }

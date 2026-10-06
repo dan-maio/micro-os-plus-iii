@@ -1,19 +1,26 @@
 # platforms/qemu-cortex-m7f
 
-Support files for building application to run on the QEMU "mps2-an500"
-emulated board.
+Support files for building a Cortex-M7F (hard float) application to run on
+QEMU's `mps2-an500` emulated board.
+
+The library under test is the local Cortex-M port's generic single-core M7
+core, `micro-os-plus::cortexm-qemu-m7`, running the SMP kernel's non-SMP
+branch (`OS_NCPU=1`, no `OS_USE_SMP_SCHEDULER`). The platform links the
+generic device in `tests/device-qemu-cortexm` (vector table, CMSIS core,
+linker script) and registers three harness suites:
+`qemu-cortex-m7f-rtos-apis-test`, `qemu-cortex-m7f-mutex-stress-test` and
+`qemu-cortex-m7f-cmsis-os-validator-test`.
 
 ## Include folders
 
-The following folders should be passed to the compiler during the build:
-
-- none
+The platform supplies its own `include/` (`cmsis-plus/platform.h`); the build
+adds it automatically.
 
 ## Source files
 
-The source files to be added to user projects are:
-
-- none
+Provided by the local Cortex-M port (`micro-os-plus::cortexm-qemu-m7`) and the
+generic device `tests/device-qemu-cortexm` (vectors, CMSIS, linker script);
+the platform links them automatically.
 
 ## Memory range
 
@@ -21,7 +28,7 @@ The applications are built for the following memory range:
 
 - FLASH: 0x0000_0000-0x007F_FFFF (8 MB)
 - RAM: 0x2000_0000-0x207F_FFFF (8 MB)
-- HEAP: 0x6000_0000-0x60FF_FFFF (16 MB)
+- PSRAM (used as the heap via `SYS_HEAPINFO`): 0x6000_0000-0x60FF_FFFF (16 MB)
 - stack: 0x6100_0000
 
 The heap and stack are set automatically in `_startup()` to the values
@@ -29,16 +36,16 @@ returned by `SEMIHOSTING_SYS_HEAPINFO`.
 
 ## QEMU invocation
 
-To run tests, pass the ELF file and the arguments:
+Each test is registered with CTest; the command is:
 
 ```sh
-qemu-system-arm --machine mps2-an500 --cpu cortex-m7 --nographic -d unimp,guest_errors --kernel "unit-test.elf" --semihosting-config enable=on,target=native,arg=test
+qemu-system-arm --machine mps2-an500 --cpu cortex-m7 --nographic -d unimp,guest_errors --kernel "rtos-apis-test.elf" --semihosting-config enable=on,target=native
 ```
 
 For debug sessions start QEMU in GDB server mode by passing both `-s -S`:
 
 ```sh
-qemu-system-arm --machine mps2-an500 --cpu cortex-m7 --nographic -d unimp,guest_errors -s -S --semihosting-config enable=on,target=native,arg=test
+qemu-system-arm --machine mps2-an500 --cpu cortex-m7 --nographic -d unimp,guest_errors -s -S --semihosting-config enable=on,target=native
 ```
 
 ## Links

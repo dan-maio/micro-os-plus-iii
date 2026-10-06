@@ -17,6 +17,17 @@ pre code {
 
 # True Single-Theme Pull Request Playbook — µOS++ IIIe SMP Integration
 
+> **Status 2026-10-06.** This guide describes the earlier progressive-PR procedure; the project uses the commit-only procedure of xpack-dev-smp.md instead. The migration from `xpack-development` to `smp`
+> was then executed with the commit-only procedure of
+> [`xpack-dev-smp.md`](xpack-dev-smp.md) Part II: no `scripts/smp/`, no chunk recipes, one
+> subject per commit, only added or modified files. The result is recorded in
+> its Part III: 343 commits over `micro-os-plus-iii`, `-posix-arch`,
+> `-cortexm`, `-aarch32` and `-aarch64`; `micro-os-plus-iii-devices` dissolved
+> into the ports' `drivers/` and `soc/<chip>/` (no `UOS_DEVICES_DIR`); every
+> commit built; the full xpm test run (native, QEMU Cortex-M, `test-smp-cmake`)
+> green. Where this document disagrees with it (step or PR numbering, scripts,
+> the devices repository, test counts), `xpack-dev-smp.md` applies.
+
 *Exclusively Single-Subject Pull Requests on GitHub (`github.com/dan-maio` → `github.com/micro-os-plus`)*
 
 ---

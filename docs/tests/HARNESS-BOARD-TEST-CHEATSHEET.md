@@ -2,11 +2,18 @@
 
 > **Earlier layout — read as history.** This document describes an earlier
 > harness layout. The SMP kernel and test harness are now unified in
-> `micro-os-plus-iii` (branch `smp`) alongside sibling repositories
-> `micro-os-plus-iii-{cortexm,aarch32,aarch64,devices,posix-arch}`. For the
-> current framework see [`STEPS.md`](STEPS.md); for every test, board and
-> probe see [`TESTS-CATALOG.md`](TESTS-CATALOG.md). The code is the truth
-> where they disagree.
+> `micro-os-plus-iii` (branch `smp`) alongside the sibling ports
+> `micro-os-plus-iii-{posix-arch,cortexm,aarch32,aarch64}`. Since 2026-10-06
+> there is **no `micro-os-plus-iii-devices`**: its drivers and SoC support are
+> part of each port (`drivers/`, `soc/<chip>/`), so skip every clone, symlink
+> or `UOS_DEVICES_DIR` for it below. Everything runs from
+> `micro-os-plus-iii/tests`: `xpm run install-all`, then `xpm run test-all`
+> (native + cortex + `test-smp-cmake`). For the current framework see
+> [`STEPS.md`](STEPS.md); for every test, board and probe see
+> [`TESTS-CATALOG.md`](TESTS-CATALOG.md); for how the `smp` branches were
+> built, commit by commit, see
+> [`xpack-dev-smp.md`](../smp-integration/xpack-dev-smp.md) Parts II and III.
+> The code is the truth where they disagree.
 
 > Condensed from `WORK-SMP-AARCH32-AARCH64-HARNESS-GUIDE.md`. For an
 > architecture repository (like `micro-os-plus-iii-aarch32` / `-aarch64`) that

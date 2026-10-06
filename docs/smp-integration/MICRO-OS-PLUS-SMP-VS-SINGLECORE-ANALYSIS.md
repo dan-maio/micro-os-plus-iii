@@ -1,5 +1,16 @@
 # Technical Analysis & Architectural Guide: µOS++ III — Single-Core (`xpack-development`) vs. Multi-Core SMP (`smp`)
 
+> **Status 2026-10-06.** This analysis of the SMP and single-core differences is still the technical background of the kernel S2 commits (K30–K39b). The migration from `xpack-development` to `smp`
+> was then executed with the commit-only procedure of
+> [`xpack-dev-smp.md`](xpack-dev-smp.md) Part II: no `scripts/smp/`, no chunk recipes, one
+> subject per commit, only added or modified files. The result is recorded in
+> its Part III: 343 commits over `micro-os-plus-iii`, `-posix-arch`,
+> `-cortexm`, `-aarch32` and `-aarch64`; `micro-os-plus-iii-devices` dissolved
+> into the ports' `drivers/` and `soc/<chip>/` (no `UOS_DEVICES_DIR`); every
+> commit built; the full xpm test run (native, QEMU Cortex-M, `test-smp-cmake`)
+> green. Where this document disagrees with it (step or PR numbering, scripts,
+> the devices repository, test counts), `xpack-dev-smp.md` applies.
+
 **Author:** Antigravity AI Engineering Team  
 **Date:** September 2026  
 **Target Architectures:** ARMv8-A (AArch64), ARMv7-A (AArch32), ARMv8-M / ARMv7-M (Cortex-M), POSIX (Native Host Multi-Thread Emulation), RISC-V  

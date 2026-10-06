@@ -26,7 +26,10 @@
 
 #if defined(OS_USE_SMP_SCHEDULER)
 // Provided by the SMP port (e.g. Cortex-A7); returns the current core index.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wredundant-decls"
 extern "C" unsigned port_cpu_id(void);
+#pragma GCC diagnostic pop
 #endif /* defined(OS_USE_SMP_SCHEDULER) */
 
 namespace

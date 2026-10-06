@@ -20,7 +20,10 @@
 #include <stdexcept>
 
 #if defined(OS_USE_SMP_SCHEDULER)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wredundant-decls"
 extern "C" unsigned port_cpu_id(void);
+#pragma GCC diagnostic pop
 extern "C" void port_smp_ipi(unsigned cpu) __attribute__ ((weak));
 
 extern "C" void __attribute__ ((weak))

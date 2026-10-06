@@ -582,8 +582,13 @@ A project is one port repository, `micro-os-plus-iii-<port>.git`, cloned
 beside the others. Copy the closest existing port — `posix-arch` is the
 smallest — and keep its contract:
 
-1. **The root `CMakeLists.txt`** finds the kernel and devices as siblings
-   (`UOS_SMP_DIR`, `UOS_DEVICES_DIR`, accepting the `.git` suffix), adds both,
+1. **The root `CMakeLists.txt`** finds the kernel as a sibling
+   (`UOS_SMP_DIR`: `micro-os-plus-iii`, else `micro-os-plus-iii-smp`, each
+   accepting the `.git` suffix) and adds it. The drivers and SoC support it
+   needs are inside the port (`drivers/`, `soc/<chip>/`; the separate
+   `micro-os-plus-iii-devices` repository was dissolved on 2026-10-06), and
+   the root `CMakeLists.txt` defines their targets (`micro-os-plus::devices*`,
+   `micro-os-plus::soc-*`) itself. It
    selects `BOARD` among the `test/boards/*/board.cmake` it finds, loads that
    file and checks the required board facts (§12.7). It exports the port as
    an interface target with an alias `micro-os-plus::<port>`, and sets

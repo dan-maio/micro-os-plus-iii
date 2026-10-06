@@ -1160,7 +1160,7 @@ Part II was executed once from scratch on 2026-10-06. Fresh clones of `github.co
 ### 20.1 Starting point
 | Repository | Base (`origin/xpack-development`) | Result branch | Commits |
 |---|---|---|---:|
-| `micro-os-plus-iii` (kernel, K) | `7f1ce5ca` | `smp` | 125 (+ 33 documentation updates, §22.4) |
+| `micro-os-plus-iii` (kernel, K) | `7f1ce5ca` | `smp` | 125 (+ 34 documentation updates, §22.4) |
 | `micro-os-plus-iii-posix-arch` (P) | `86a6a1f` | `smp` | 24 |
 | `micro-os-plus-iii-cortexm` (C) | `687e975` | `smp` | 86 |
 | `micro-os-plus-iii-aarch32` (A32) | `307c62f` | `smp` | 64 |
@@ -1187,7 +1187,7 @@ Each commit carries the trailer `Commit-ID: <ID> (xpack-dev-smp.md Part II)`. Ea
 | 12 | S4 AArch32/AArch64 boards | A32-20, A32-21, A32-R3, A32-LL; A64-20, A64-21, A64-R3; K58–K62 | Port CMake, board models (rpi-zero-2w, rpi3b, luckfox-lyra), and the kernel platforms `aarch32-rpi-zero-2w`, `aarch32-rpi3b`, `aarch32-luckfox-lyra`, `aarch64-rpi-zero-2w`, `aarch64-rpi3b`. | build per commit |
 | 13 | S4 port tests | P21–P35, A32-T-*, A32-R3-*, A32-LL-*, A64-T-*, A64-R3-* | One commit per test directory, each adding one `ctest` entry: 15 native, 30 AArch32 Raspberry Pi, 20 Luckfox Lyra, 30 AArch64. | build per commit |
 | 14 | S4 remaining harness | K39c, K48-nucleo-f411re/-f767zi/-h743zi/-raspberrypi-pico | The validator host build uses glibc's `ucontext`. The legacy hardware platforms label their tests `hwd` and link the modular targets. | see §21.3 |
-| 15 | S5 docs and chores | K901–K935, K980–K984, P14, P36, C28, C29; after the run K985–K988 (§22.4) | One commit per document; `.clang-format`; `.gitignore` additions; the TSan probe; the cortexm board README; this document. | — |
+| 15 | S5 docs and chores | K901–K935, K980–K984, P14, P36, C28, C29; after the run K985–K989 (§22.4) | One commit per document; `.clang-format`; `.gitignore` additions; the TSan probe; the cortexm board README; this document. | — |
 | 16 | S6 parity | all (read-only diff with `golden/smp`) | §21.4. | — |
 | 17 | S6 full test | `micro-os-plus-iii/tests` | §21.5. | all green |
 
@@ -1260,6 +1260,25 @@ No other difference remains.
 
 All of them run on QEMU or on the host; `ctest -LE hwd` excludes the real-hardware tests. The hardware-only platforms are built but not run.
 
+### 21.6 Verification replay from golden (2026-10-06)
+To check that the procedure of Part II, as recorded here, rebuilds the `smp` branches, the whole series was executed again from scratch in an empty `/tmp`:
+
+1. **Clone.** Each repository was cloned from the golden working copies in `~/Work2/micro-os-plus/`, branch `xpack-development`, with the documented bases: kernel `7f1ce5ca`, cortexm `687e975`, posix-arch `86a6a1f`, aarch32 `307c62f`, aarch64 `fe904c0`, devices `e8e39d5`. The golden repositories are the read-only `golden` remote; the kernel's `golden/smp` is the commit before this document's own golden commit.
+2. **Install.** `xpm run install-all` in `micro-os-plus-iii/tests`, then `xpm install` and `xpm link` in each port (§13.3).
+3. **Commits.** Every commit of §22 was made again in the same order, with the same lifts and hunk selections, and built after each commit as in the first run (`xpm run build --config <cfg>`).
+4. **Result.** The same 375 commits (kernel 158, posix-arch 24, cortexm 86, aarch32 64, aarch64 43) plus devices D01, with the same Commit-IDs, order and subjects, and the same build result at every commit (the exceptions of §21.3 included). Only the SHAs differ, because the commit dates differ; the SHAs in §22.3 are those of this replay.
+5. **Parity with golden `smp`.** Exactly the intended differences of §21.4, plus the documentation updates of §22.4. This document itself differs from the golden copy only in the SHA columns.
+6. **Full test run** (latest compilers, `ctest -LE hwd`):
+
+| Action | Result |
+|---|---|
+| `xpm run install-all` | rc 0 |
+| `xpm run test-native-cmake-sys` | 16/16 in debug and release |
+| `xpm run test-cortex-cmake` | 3/3 in each of the 8 configurations |
+| `xpm run test-smp-cmake` | aarch32 and aarch64 `rpi-zero-2w`/`rpi3b` 15/15, `2xcortex-m33` 4/4, `pico2-1cpu` 4/4, `cortexm-pico2` 6/6, `cortexm-pico2-rp2350b-psram` 3/3 — debug and release, rc 0 |
+
+In the first pass of `test-smp-cmake`, `aarch32-rpi-zero-2w-smp-pipeline-test-qemu` (release) stopped printing after 26 s of guest time and was killed at its 1000 s timeout. Run alone it then passed 5 times in 5 (35 s each), and the complete second pass of `test-smp-cmake` was green. It is recorded as an intermittent stall of the SMP pipeline test under QEMU (`raspi3b`, 4 cores), to be investigated separately; it is not a defect of the migration series.
+
 ## 22. Complete Pull-Request and Commit List (all repositories)
 
 Every commit of every repository is one pull request. A PR's head is the local branch `pr/<Commit-ID>`, which points at that commit; its base is the previous PR's branch in the same repository (the first PR of a repository targets `xpack-development`). After a PR is merged, the next one is retargeted to `xpack-development` (§12.5). The branches exist locally in each `/tmp/<repository>` clone and are pushed to `github.com/dan-maio/<repository>` only when the PRs are opened.
@@ -1274,13 +1293,13 @@ Every commit of every repository is one pull request. A PR's head is the local b
 | Repository | Corrections | New code | Tests | Build | Docs | Chore / tool | PRs |
 |---|---:|---:|---:|---:|---:|---:|---:|
 | micro-os-plus-iii (migration) | 31 | 18 | 32 | 3 | 39 | 2 | 125 |
-| micro-os-plus-iii (documentation updates, §22.4) | 0 | 0 | 0 | 0 | 33 | 0 | 33 |
+| micro-os-plus-iii (documentation updates, §22.4) | 0 | 0 | 0 | 0 | 34 | 0 | 34 |
 | micro-os-plus-iii-posix-arch | 0 | 5 | 15 | 2 | 0 | 2 | 24 |
 | micro-os-plus-iii-cortexm | 1 | 9 | 72 | 2 | 1 | 1 | 86 |
 | micro-os-plus-iii-aarch32 | 0 | 10 | 52 | 1 | 0 | 1 | 64 |
 | micro-os-plus-iii-aarch64 | 0 | 9 | 32 | 1 | 0 | 1 | 43 |
 | micro-os-plus-iii-devices | 0 | 0 | 0 | 0 | 1 | 0 | 1 |
-| **Total** | **32** | **51** | **203** | **9** | **74** | **7** | **376** |
+| **Total** | **32** | **51** | **203** | **9** | **75** | **7** | **377** |
 
 ### 22.2 Cross-repository merge order
 The PRs of one repository merge in their own order (22.3). Across repositories, R6 (provider before consumer) adds these constraints:
@@ -1298,7 +1317,7 @@ The PRs of one repository merge in their own order (22.3). Across repositories, 
 
 ### 22.3 Pull requests per repository
 
-#### micro-os-plus-iii -- 158 pull requests (github.com/dan-maio/micro-os-plus-iii)
+#### micro-os-plus-iii -- 159 pull requests (github.com/dan-maio/micro-os-plus-iii)
 
 | PR | Head branch (Commit-ID) | Base branch | SHA | Category | Stage / theme | Subject |
 |---:|---|---|---|---|---|---|
@@ -1459,7 +1478,8 @@ The PRs of one repository merge in their own order (22.3). Across repositories, 
 | 155 | `pr/K986-SMP-UPSTREAM-INTEGRATION-PLAN` | `pr/K986-smp-construction` | `21d772ad` | docs | S5 docs/chore | `docs(smp): SMP-UPSTREAM-INTEGRATION-PLAN -- status note, superseded by xpack-dev-smp.md` |
 | 156 | `pr/K986-2026-09-20-micro-os-plus-iii-smp-unification-design` | `pr/K986-SMP-UPSTREAM-INTEGRATION-PLAN` | `039c42c6` | docs | S5 docs/chore | `docs(specs): smp-unification-design -- status note` |
 | 157 | `pr/K987` | `pr/K986-2026-09-20-micro-os-plus-iii-smp-unification-design` | `646a4904` | docs | S5 docs/chore | `docs(smp): xpack-dev-smp.md lists the documentation updates` |
-| 158 | `pr/K988` | `pr/K987` | (this commit) | docs | S5 docs/chore | `docs(smp): xpack-dev-smp.md -- the pull requests of every repository` |
+| 158 | `pr/K988` | `pr/K987` | `ec40386b` | docs | S5 docs/chore | `docs(smp): xpack-dev-smp.md -- the pull requests of every repository` |
+| 159 | `pr/K989` | `pr/K988` | (this commit) | docs | S5 docs/chore | `docs(smp): xpack-dev-smp.md -- the verification replay from golden` |
 
 #### micro-os-plus-iii-posix-arch -- 24 pull requests (github.com/dan-maio/micro-os-plus-iii-posix-arch)
 
@@ -1707,5 +1727,5 @@ The PRs of one repository merge in their own order (22.3). Across repositories, 
 
 D01 is kept in `devices-retired.bundle` (the local clone was deleted after S0, §14.2). After it is merged, the repository is archived on GitHub.
 
-### 22.4 Documentation updates after the migration (kernel PRs 126–158)
-Made after the full test run, so that every document in `docs/` describes the executed state: Part III itself (K985); one commit per document (K986-*), which corrects stale facts in the reference documents (no `micro-os-plus-iii-devices`, no `UOS_DEVICES_DIR`, the current clone layout and the verified results) and adds a *Status 2026-10-06* note to the historical plans and reviews (their PDFs regenerated); and the two commits that complete this section (K987, K988). The upstream documents that do not concern the migration (`HISTORY`, `NOTES`, `TODO`, `posix-io-*`, `other-posix-systems`, `upstream-*`) are unchanged.
+### 22.4 Documentation updates after the migration (kernel PRs 126–159)
+Made after the full test run, so that every document in `docs/` describes the executed state: Part III itself (K985); one commit per document (K986-*), which corrects stale facts in the reference documents (no `micro-os-plus-iii-devices`, no `UOS_DEVICES_DIR`, the current clone layout and the verified results) and adds a *Status 2026-10-06* note to the historical plans and reviews (their PDFs regenerated); the two commits that complete this section (K987, K988); and the verification record of §21.6 (K989). The upstream documents that do not concern the migration (`HISTORY`, `NOTES`, `TODO`, `posix-io-*`, `other-posix-systems`, `upstream-*`) are unchanged.

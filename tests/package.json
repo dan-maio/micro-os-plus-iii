@@ -129,6 +129,9 @@
         "xpm run test-qemu-cortex-m3-cmake",
         "xpm run test-qemu-cortex-m7f-cmake"
       ],
+      "test-smp-cmake": [
+        "xpm run test-2xcortex-m33-cmake"
+      ],
       "install-qemu-cortex-latest": [
         "xpm install",
         "xpm install --config qemu-cortex-m0-cmake-gcc-debug",
@@ -209,7 +212,8 @@
       ],
       "test-all": [
         "xpm run test-native-cmake",
-        "xpm run test-cortex-cmake"
+        "xpm run test-cortex-cmake",
+        "xpm run test-smp-cmake"
       ],
       "clean-all": [
         "xpm run clean --all-configs --ignore-errors"
@@ -413,6 +417,14 @@
         "xpm run prepare --config nucleo-h743zi-cmake-gcc-release",
         "xpm run build --config nucleo-h743zi-cmake-gcc-release",
         "xpm run test --config nucleo-h743zi-cmake-gcc-release"
+      ],
+      "test-2xcortex-m33-cmake": [
+        "xpm run prepare --config 2xcortex-m33-cmake-gcc-debug",
+        "xpm run build --config 2xcortex-m33-cmake-gcc-debug",
+        "xpm run test --config 2xcortex-m33-cmake-gcc-debug",
+        "xpm run prepare --config 2xcortex-m33-cmake-gcc-release",
+        "xpm run build --config 2xcortex-m33-cmake-gcc-release",
+        "xpm run test --config 2xcortex-m33-cmake-gcc-release"
       ],
       "clean-native-cmake": [
         "xpm run clean --config native-cmake-sys-debug --ignore-errors",
@@ -1259,6 +1271,40 @@
         "properties": {
           "buildType": "MinSizeRel",
           "shortConfigurationName": "rpr"
+        }
+      },
+      "2xcortex-m33-cmake-gcc-debug": {
+        "inherit": [
+          "cortexm-actions",
+          "cmake-actions",
+          "cortexm-dependencies",
+          "arm-cmsis-dependencies",
+          "arm-cmsis-core-dependencies",
+          "arm-none-eabi-gcc-dependencies",
+          "qemu-arm-dependencies",
+          "short-win-paths-properties"
+        ],
+        "properties": {
+          "buildType": "Debug",
+          "platformName": "2xcortex-m33",
+          "toolchainFileName": "arm-none-eabi-gcc.cmake",
+          "shortConfigurationName": "2cm33d"
+        },
+        "actions": {
+          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE hwd",
+          "test-rtos-apis-test": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R 2xcortex-m33-rtos-apis-test",
+          "test-mutex-stress-test": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R 2xcortex-m33-mutex-stress-test",
+          "test-fp-switch-test": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R 2xcortex-m33-fp-switch-test",
+          "test-cmsis-os-validator-test": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R 2xcortex-m33-cmsis-os-validator-test"
+        }
+      },
+      "2xcortex-m33-cmake-gcc-release": {
+        "inherit": [
+          "2xcortex-m33-cmake-gcc-debug"
+        ],
+        "properties": {
+          "buildType": "MinSizeRel",
+          "shortConfigurationName": "2cm33r"
         }
       },
       "nucleo-f411re-cmake-gcc-debug": {

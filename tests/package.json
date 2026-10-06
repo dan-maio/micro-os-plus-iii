@@ -471,6 +471,12 @@
         "xpm run build --config cortexm-pico2-rp2350b-psram-cmake-gcc-release",
         "xpm run test --config cortexm-pico2-rp2350b-psram-cmake-gcc-release"
       ],
+      "build-aarch32-luckfox-lyra-cmake": [
+        "xpm run prepare --config aarch32-luckfox-lyra-cmake-gcc-debug",
+        "xpm run build --config aarch32-luckfox-lyra-cmake-gcc-debug",
+        "xpm run prepare --config aarch32-luckfox-lyra-cmake-gcc-release",
+        "xpm run build --config aarch32-luckfox-lyra-cmake-gcc-release"
+      ],
       "clean-native-cmake": [
         "xpm run clean --config native-cmake-sys-debug --ignore-errors",
         "xpm run clean --config native-cmake-sys-release --ignore-errors",
@@ -742,6 +748,14 @@
         "devDependencies": {
           "@xpack-dev-tools/arm-none-eabi-gcc": "15.2.1-1.1.1",
           "@xpack-dev-tools/qemu-arm": "9.2.4-1.1"
+        }
+      },
+      "aarch32-luckfox-lyra-dependencies": {
+        "hidden": true,
+        "$devDependenciesUrl": "https://www.npmjs.com/package/@xpack-dev-tools/arm-none-eabi-gcc",
+        "devDependencies": {
+          "@xpack-dev-tools/arm-none-eabi-gcc": "15.2.1-1.1.1",
+          "@xpack-dev-tools/openocd": "0.12.0-7.1"
         }
       },
       "short-win-paths-properties": {
@@ -1866,6 +1880,53 @@
         "properties": {
           "buildType": "MinSizeRel",
           "shortConfigurationName": "a32p3r"
+        }
+      },
+      "aarch32-luckfox-lyra-cmake-gcc-debug": {
+        "inherit": [
+          "aarch32-actions",
+          "cmake-actions",
+          "aarch32-luckfox-lyra-dependencies",
+          "short-win-paths-properties"
+        ],
+        "properties": {
+          "buildType": "Debug",
+          "platformName": "aarch32-luckfox-lyra",
+          "toolchainFileName": "arm-none-eabi-gcc.cmake",
+          "shortConfigurationName": "lyd",
+          "commandCMakeReconfigure": "cmake -S . -B {{ properties.buildFolderRelativePathPosix }} -G Ninja -D CMAKE_BUILD_TYPE={{ properties.buildType }} -D PLATFORM_NAME={{ properties.platformName }} -D ENABLE_HW_TESTS=ON"
+        },
+        "actions": {
+          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE hwd",
+          "test-sd_test-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch32-luckfox-lyra-sd_test-hwd",
+          "test-smp-mat-sdcard-test-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch32-luckfox-lyra-smp-mat-sdcard-test-hwd",
+          "test-smp-mat-test-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch32-luckfox-lyra-smp-mat-test-hwd",
+          "test-smp-num-test-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch32-luckfox-lyra-smp-num-test-hwd",
+          "test-smp-pipeline-test-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch32-luckfox-lyra-smp-pipeline-test-hwd",
+          "test-smp-pro-cons-test-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch32-luckfox-lyra-smp-pro-cons-test-hwd",
+          "test-smp_test0-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch32-luckfox-lyra-smp_test0-hwd",
+          "test-smp_test1-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch32-luckfox-lyra-smp_test1-hwd",
+          "test-smp_test2-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch32-luckfox-lyra-smp_test2-hwd",
+          "test-smp_test3-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch32-luckfox-lyra-smp_test3-hwd",
+          "test-smp_test4-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch32-luckfox-lyra-smp_test4-hwd",
+          "test-smp_test5-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch32-luckfox-lyra-smp_test5-hwd",
+          "test-smp_test6-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch32-luckfox-lyra-smp_test6-hwd",
+          "test-smp_test7-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch32-luckfox-lyra-smp_test7-hwd",
+          "test-smp_test_int-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch32-luckfox-lyra-smp_test_int-hwd",
+          "test-smp_test_int2-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch32-luckfox-lyra-smp_test_int2-hwd",
+          "test-smp_test_int3-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch32-luckfox-lyra-smp_test_int3-hwd",
+          "test-smp_test_int4-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch32-luckfox-lyra-smp_test_int4-hwd",
+          "test-smp_test_int5-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch32-luckfox-lyra-smp_test_int5-hwd",
+          "test-mutex-stress-test-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R aarch32-luckfox-lyra-mutex-stress-test-hwd"
+        }
+      },
+      "aarch32-luckfox-lyra-cmake-gcc-release": {
+        "inherit": [
+          "aarch32-luckfox-lyra-cmake-gcc-debug"
+        ],
+        "properties": {
+          "buildType": "MinSizeRel",
+          "shortConfigurationName": "lyr"
         }
       }
     }

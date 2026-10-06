@@ -1,0 +1,122 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 290" width="100%" height="100%">
+  <defs>
+    <style>
+      .p-title { font-family: 'Source Sans 3', sans-serif; font-weight: 700; font-size: 12.5px; fill: #0f172a; }
+      .p-cat { font-family: 'Source Sans 3', sans-serif; font-weight: 600; font-size: 10px; fill: #64748b; }
+      .p-val { font-family: 'Hack Nerd Font', monospace; font-size: 10px; fill: #0369a1; }
+      .port-card { rx: 6; stroke-width: 1.2; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.03)); }
+    </style>
+  </defs>
+
+  <rect width="100%" height="100%" fill="#ffffff" />
+
+  <!-- Column 1: POSIX -->
+  <g transform="translate(15, 20)">
+    <rect width="145" height="250" fill="#f8fafc" stroke="#0284c7" class="port-card" />
+    <rect width="145" height="28" fill="#e0f2fe" rx="6" />
+    <text x="72.5" y="19" text-anchor="middle" class="p-title" fill="#0369a1">POSIX Host</text>
+    
+    <text x="10" y="48" class="p-cat">CPU MODEL</text>
+    <text x="10" y="63" class="p-val">1 pthread = 1 CPU</text>
+
+    <text x="10" y="88" class="p-cat">INTERRUPTS</text>
+    <text x="10" y="103" class="p-val">pthread_sigmask</text>
+
+    <text x="10" y="128" class="p-cat">TICK TIMER</text>
+    <text x="10" y="143" class="p-val">timer_create TID</text>
+
+    <text x="10" y="168" class="p-cat">IPI SIGNAL</text>
+    <text x="10" y="183" class="p-val">pthread_kill</text>
+
+    <text x="10" y="208" class="p-cat">CONTEXT</text>
+    <text x="10" y="223" class="p-val">ucontext_t</text>
+  </g>
+
+  <!-- Column 2: Cortex-M -->
+  <g transform="translate(170, 20)">
+    <rect width="145" height="250" fill="#f8fafc" stroke="#0284c7" class="port-card" />
+    <rect width="145" height="28" fill="#e0f2fe" rx="6" />
+    <text x="72.5" y="19" text-anchor="middle" class="p-title" fill="#0369a1">Cortex-M (RP2350)</text>
+
+    <text x="10" y="48" class="p-cat">CPU MODEL</text>
+    <text x="10" y="63" class="p-val">2x Cortex-M33</text>
+
+    <text x="10" y="88" class="p-cat">INTERRUPTS</text>
+    <text x="10" y="103" class="p-val">PRIMASK / BASEPRI</text>
+
+    <text x="10" y="128" class="p-cat">LOCK MECHANISM</text>
+    <text x="10" y="143" class="p-val">SIO Spinlock 0</text>
+
+    <text x="10" y="168" class="p-cat">IPI SIGNAL</text>
+    <text x="10" y="183" class="p-val">SIO FIFO IRQ 25</text>
+
+    <text x="10" y="208" class="p-cat">CONTEXT</text>
+    <text x="10" y="223" class="p-val">PendSV + Lazy FP</text>
+  </g>
+
+  <!-- Column 3: AArch32 -->
+  <g transform="translate(325, 20)">
+    <rect width="145" height="250" fill="#f8fafc" stroke="#0284c7" class="port-card" />
+    <rect width="145" height="28" fill="#e0f2fe" rx="6" />
+    <text x="72.5" y="19" text-anchor="middle" class="p-title" fill="#0369a1">ARMv7-A / A32</text>
+
+    <text x="10" y="48" class="p-cat">CPU MODEL</text>
+    <text x="10" y="63" class="p-val">BCM2837 / RK3506</text>
+
+    <text x="10" y="88" class="p-cat">INTERRUPTS</text>
+    <text x="10" y="103" class="p-val">CPSID / CPSIE</text>
+
+    <text x="10" y="128" class="p-cat">LOCK MECHANISM</text>
+    <text x="10" y="143" class="p-val">LDREX / STREX</text>
+
+    <text x="10" y="168" class="p-cat">IPI SIGNAL</text>
+    <text x="10" y="183" class="p-val">GIC SGI / Mailbox</text>
+
+    <text x="10" y="208" class="p-cat">CONTEXT</text>
+    <text x="10" y="223" class="p-val">Software Frame</text>
+  </g>
+
+  <!-- Column 4: AArch64 -->
+  <g transform="translate(480, 20)">
+    <rect width="145" height="250" fill="#f8fafc" stroke="#0284c7" class="port-card" />
+    <rect width="145" height="28" fill="#e0f2fe" rx="6" />
+    <text x="72.5" y="19" text-anchor="middle" class="p-title" fill="#0369a1">ARMv8-A / A64</text>
+
+    <text x="10" y="48" class="p-cat">CPU MODEL</text>
+    <text x="10" y="63" class="p-val">64-bit BCM2837</text>
+
+    <text x="10" y="88" class="p-cat">INTERRUPTS</text>
+    <text x="10" y="103" class="p-val">MSR DAIFSET/CLR</text>
+
+    <text x="10" y="128" class="p-cat">LOCK MECHANISM</text>
+    <text x="10" y="143" class="p-val">LDAXR / STLXR</text>
+
+    <text x="10" y="168" class="p-cat">IPI SIGNAL</text>
+    <text x="10" y="183" class="p-val">GIC SGI / Mailbox</text>
+
+    <text x="10" y="208" class="p-cat">CONTEXT</text>
+    <text x="10" y="223" class="p-val">64-bit x0-x30, Q</text>
+  </g>
+
+  <!-- Column 5: RISC-V -->
+  <g transform="translate(635, 20)">
+    <rect width="145" height="250" fill="#f8fafc" stroke="#0284c7" class="port-card" />
+    <rect width="145" height="28" fill="#e0f2fe" rx="6" />
+    <text x="72.5" y="19" text-anchor="middle" class="p-title" fill="#0369a1">RISC-V (RV32/64)</text>
+
+    <text x="10" y="48" class="p-cat">CPU MODEL</text>
+    <text x="10" y="63" class="p-val">Hart ID (mhartid)</text>
+
+    <text x="10" y="88" class="p-cat">INTERRUPTS</text>
+    <text x="10" y="103" class="p-val">CSR mstatus.MIE</text>
+
+    <text x="10" y="128" class="p-cat">LOCK MECHANISM</text>
+    <text x="10" y="143" class="p-val">AMO.SWAP / LR/SC</text>
+
+    <text x="10" y="168" class="p-cat">IPI SIGNAL</text>
+    <text x="10" y="183" class="p-val">CLINT (msip)</text>
+
+    <text x="10" y="208" class="p-cat">CONTEXT</text>
+    <text x="10" y="223" class="p-val">ra, sp, CSRs</text>
+  </g>
+</svg>

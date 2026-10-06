@@ -1117,6 +1117,30 @@ namespace os
           port::scheduler::reschedule ();
         }
 
+#if defined(OS_USE_SMP_SCHEDULER)
+      // On SMP, the joined thread may still be running on another CPU
+      // completing its final reschedule() context switch. Wait until it is
+      // no longer current on any CPU before returning, so the caller can
+      // safely reclaim the thread object and stack memory.
+      for (;;)
+        {
+          bool still_running = false;
+          for (unsigned c = 0; c < OS_NCPU; ++c)
+            {
+              if (__atomic_load_n (&scheduler::current_thread_[c],
+                                   __ATOMIC_ACQUIRE) == this)
+                {
+                  still_running = true;
+                  break;
+                }
+            }
+          if (!still_running)
+            {
+              break;
+            }
+          this_thread::yield ();
+        }
+#endif
 
 #if defined(OS_TRACE_RTOS_THREAD)
       trace::printf ("%s() @%p %s joined\n", __func__, this, name ());

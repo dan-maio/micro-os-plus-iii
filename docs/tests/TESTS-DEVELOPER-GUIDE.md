@@ -90,9 +90,13 @@ The kernel and its ports are separate repositories that must be **siblings**:
 ├── micro-os-plus-iii-aarch32/      AArch32 port   (Raspberry Pi, Luckfox Lyra)
 ├── micro-os-plus-iii-aarch64/      AArch64 port   (Raspberry Pi)
 ├── micro-os-plus-iii-cortexm/      Cortex-M port  (RP2350, STM32F4, QEMU cores)
-├── micro-os-plus-iii-posix-arch/   POSIX port     (native host process)
-└── micro-os-plus-iii-devices/      shared device drivers
+└── micro-os-plus-iii-posix-arch/   POSIX port     (native host process)
 ```
+
+Each port carries its own drivers and SoC support in `drivers/` and
+`soc/<chip>/`. They come from the former `micro-os-plus-iii-devices`
+repository, which was dissolved into the ports on 2026-10-06
+(`xpack-dev-smp.md` §14) and is no longer cloned.
 
 `tests/cmake/tests-main.cmake` finds the ports as
 `<tests>/../../micro-os-plus-iii-<port>`, and falls back to the old
@@ -105,9 +109,9 @@ To clone the workspace:
 ```sh
 mkdir -p ~/Work/micro-os-plus && cd ~/Work/micro-os-plus
 for r in micro-os-plus-iii micro-os-plus-iii-aarch32 micro-os-plus-iii-aarch64 \
-         micro-os-plus-iii-cortexm micro-os-plus-iii-posix-arch micro-os-plus-iii-devices
+         micro-os-plus-iii-cortexm micro-os-plus-iii-posix-arch
 do
-  git clone --branch smp "<origin>/$r.git" "$r"   # <origin>: your remote; devices uses master
+  git clone --branch smp "<origin>/$r.git" "$r"   # <origin>: your remote
 done
 ```
 

@@ -282,6 +282,9 @@ namespace os
       // Must be explicit here, since they are not done in the members
       // declarations to allow th_enable_assert_reuse.
       state_ = state::initializing;
+#if defined(OS_USE_SMP_SCHEDULER)
+      cpu_affinity_ = 0xFFFFFFFFu;
+#endif /* defined(OS_USE_SMP_SCHEDULER) */
 
       instrumentation::thread::create_return (this);
     }
@@ -296,6 +299,9 @@ namespace os
       // Must be explicit here, since they are not done in the members
       // declarations to allow th_enable_assert_reuse.
       state_ = state::initializing;
+#if defined(OS_USE_SMP_SCHEDULER)
+      cpu_affinity_ = 0xFFFFFFFFu;
+#endif /* defined(OS_USE_SMP_SCHEDULER) */
 
       instrumentation::thread::create_return (this);
     }
@@ -450,6 +456,9 @@ namespace os
 #endif /* DEBUG */
 
       state_ = state::initializing;
+#if defined(OS_USE_SMP_SCHEDULER)
+      cpu_affinity_ = attr.th_cpu_affinity;
+#endif /* defined(OS_USE_SMP_SCHEDULER) */
 
       allocator_ = &allocator;
 
@@ -722,6 +731,20 @@ namespace os
      *
      * @note Can be invoked from Interrupt Service Routines.
      */
+#if defined(OS_USE_SMP_SCHEDULER)
+    uint32_t
+    thread::cpu_affinity (void) const
+    {
+      return cpu_affinity_;
+    }
+
+    void
+    thread::cpu_affinity (uint32_t mask)
+    {
+      cpu_affinity_ = mask;
+    }
+#endif /* defined(OS_USE_SMP_SCHEDULER) */
+
     thread::priority_t
     thread::priority (void)
     {

@@ -879,6 +879,10 @@ namespace os
 
         bool th_enable_assert_reuse = false;
 
+#if defined(OS_USE_SMP_SCHEDULER)
+        uint32_t th_cpu_affinity = 0xFFFFFFFFu;
+#endif
+
         // Add more attributes here.
 
         /**
@@ -1195,6 +1199,14 @@ namespace os
        */
       priority_t
       priority_inherited (void);
+
+#if defined(OS_USE_SMP_SCHEDULER)
+      uint32_t
+      cpu_affinity (void) const;
+
+      void
+      cpu_affinity (uint32_t mask);
+#endif /* defined(OS_USE_SMP_SCHEDULER) */
 
 #if 0
       // ???
@@ -1692,6 +1704,10 @@ namespace os
       // priority is changed, such as by a POSIX call to sched_setparam().
       priority_t volatile prio_assigned_ = priority::none;
       priority_t volatile prio_inherited_ = priority::none;
+
+#if defined(OS_USE_SMP_SCHEDULER)
+      uint32_t cpu_affinity_ = 0xFFFFFFFFu;
+#endif /* defined(OS_USE_SMP_SCHEDULER) */
 
       bool volatile interrupted_ = false;
 

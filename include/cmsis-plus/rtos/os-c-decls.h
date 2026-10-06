@@ -545,6 +545,10 @@ extern "C"
      */
     bool th_enable_assert_reuse;
 
+#if defined(OS_USE_SMP_SCHEDULER)
+    uint32_t th_cpu_affinity;
+#endif
+
   } os_thread_attr_t;
 
   /**
@@ -591,6 +595,9 @@ extern "C"
     os_thread_state_t state;
     os_thread_prio_t prio_assigned;
     os_thread_prio_t prio_inherited;
+#if defined(OS_USE_SMP_SCHEDULER)
+    uint32_t cpu_affinity;
+#endif /* defined(OS_USE_SMP_SCHEDULER) */
     bool interrupted;
     os_internal_evflags_t event_flags;
 #if defined(OS_INCLUDE_RTOS_CUSTOM_THREAD_USER_STORAGE)

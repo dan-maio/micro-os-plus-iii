@@ -15,8 +15,9 @@ The sources of truth are the code, not other documents:
 | xpm actions | `tests/package.json` |
 
 The ports are the sibling repositories `micro-os-plus-iii-aarch32`,
-`-aarch64`, `-cortexm`, `-devices` and `-posix-arch` (checked with or without
-`.git` suffix); the unified SMP kernel and harness root is `micro-os-plus-iii`
+`-aarch64`, `-cortexm` and `-posix-arch` (checked with or without `.git`
+suffix); the drivers and SoC support of the former `-devices` repository are
+inside each port (`drivers/`, `soc/<chip>/`) since 2026-10-06; the unified SMP kernel and harness root is `micro-os-plus-iii`
 (branch `smp`), with tests driven from `package.json` at root or under `tests/`.
 
 ## 1. Legend
@@ -319,3 +320,27 @@ Pis choose the probe with `PROBE=jlink|olimex`:
 ```sh
 cd build/C && PROBE=olimex PATH="$PWD/xpacks/.bin:$PATH" ctest -V -R <platform>-<app>-hwd
 ```
+
+## 10. Last verified run
+
+2026-10-06, on the `smp` branches rebuilt commit by commit
+([`xpack-dev-smp.md`](../smp-integration/xpack-dev-smp.md) Part III), latest
+compilers, every QEMU and host case (`ctest -LE hwd`), debug and release:
+
+| Action / platform | Cases passed |
+|---|---|
+| `test-native-cmake-sys` (`native`, system gcc and clang) | 16/16 |
+| `test-cortex-cmake` (`qemu-cortex-m0/m3/m4f/m7f`, gcc and clang) | 3/3 in each of the 8 configurations |
+| `aarch32-rpi-zero-2w`, `aarch32-rpi3b` | 15/15 |
+| `aarch64-rpi-zero-2w`, `aarch64-rpi3b` | 15/15 |
+| `2xcortex-m33` | 4/4 |
+| `pico2-1cpu` | 4/4 |
+| `cortexm-pico2` | 6/6 |
+| `cortexm-pico2-rp2350b-psram` | 3/3 |
+
+The `-hwd` cases and the hardware-only platforms (`cortexm-pico2-pizero`,
+`cortexm-nucleof411`, `cortexm-weactf411`, `cortexm-weactf412`,
+`aarch32-luckfox-lyra`) were built but not run. The upstream `nucleo-f411re`,
+`nucleo-f767zi`, `nucleo-h743zi` and `raspberrypi-pico` platforms fail to
+configure (the cortexm port does not find the kernel through the xpacks path),
+as on the reference `smp` branch.

@@ -17,7 +17,15 @@
 # https://cmake.org/cmake/help/v3.20/
 cmake_minimum_required (VERSION 3.20)
 
-project (micro-os-plus-micro-os-plus-iii-tests DESCRIPTION "µOS++ IIIe tests")
+# The platform is passed by xpm (-D PLATFORM_NAME=...). Include it in the
+# project name so that a test runner which groups by the CMake project shows
+# aarch32 and aarch64 as distinct suites (they are otherwise identical).
+if (NOT DEFINED PLATFORM_NAME)
+  set (PLATFORM_NAME "unknown")
+endif ()
+
+project (micro-os-plus-micro-os-plus-iii-${PLATFORM_NAME}-tests
+         DESCRIPTION "µOS++ IIIe tests")
 
 # -----------------------------------------------------------------------------
 # Project wide setup.

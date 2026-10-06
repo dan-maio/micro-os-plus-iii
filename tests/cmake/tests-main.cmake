@@ -53,9 +53,73 @@ xpack_add_dependencies_subdirectories (
 
 # -----------------------------------------------------------------------------
 
-# Add the project library, defined one level above.
-message (VERBOSE "Adding top library...")
-add_subdirectory (".." "top-bin")
+# The library under test is the architecture port, which itself adds the SMP
+# kernel (micro-os-plus::iii) and the devices package. Do NOT add the kernel
+# separately: both the kernel and the port define micro-os-plus::iii, and
+# adding it twice fails on the duplicate alias. The port is chosen from the
+# platform name.
+message (VERBOSE "Selecting the library under test for ${PLATFORM_NAME}...")
+get_filename_component (_uos_siblings "${CMAKE_SOURCE_DIR}/../.." ABSOLUTE)
+
+set (UOS_SMP_DIR "${CMAKE_SOURCE_DIR}/.."
+     CACHE PATH "µOS++ III SMP kernel working copy" FORCE)
+set (UOS_AARCH32_DIR "${_uos_siblings}/micro-os-plus-iii-aarch32"
+     CACHE PATH "µOS++ III AArch32 port working copy")
+set (UOS_AARCH64_DIR "${_uos_siblings}/micro-os-plus-iii-aarch64"
+     CACHE PATH "µOS++ III AArch64 port working copy")
+set (UOS_POSIX_ARCH_DIR "${_uos_siblings}/micro-os-plus-iii-posix-arch"
+     CACHE PATH "µOS++ III POSIX-arch port working copy")
+set (UOS_CORTEXM_DIR "${_uos_siblings}/micro-os-plus-iii-cortexm"
+     CACHE PATH "µOS++ III Cortex-M port working copy")
+
+foreach (_dep_var IN ITEMS UOS_AARCH32_DIR UOS_AARCH64_DIR UOS_POSIX_ARCH_DIR UOS_CORTEXM_DIR)
+  if (NOT EXISTS "${${_dep_var}}/CMakeLists.txt"
+      AND EXISTS "${${_dep_var}}.git/CMakeLists.txt")
+    set (${_dep_var} "${${_dep_var}}.git" CACHE PATH
+         "µOS++ III sibling working copy" FORCE)
+  endif ()
+endforeach ()
+
+if (PLATFORM_NAME MATCHES "^aarch32")
+  message (VERBOSE "Adding the AArch32 port (brings iii + devices)...")
+  if (NOT EXISTS "${UOS_AARCH32_DIR}/CMakeLists.txt")
+    message (FATAL_ERROR "Cannot find the AArch32 port at ${UOS_AARCH32_DIR}")
+  endif ()
+  add_subdirectory ("${UOS_AARCH32_DIR}" "port-bin")
+elseif (PLATFORM_NAME MATCHES "^aarch64")
+  message (VERBOSE "Adding the AArch64 port (brings iii + devices)...")
+  if (NOT EXISTS "${UOS_AARCH64_DIR}/CMakeLists.txt")
+    message (FATAL_ERROR "Cannot find the AArch64 port at ${UOS_AARCH64_DIR}")
+  endif ()
+  add_subdirectory ("${UOS_AARCH64_DIR}" "port-bin")
+elseif (PLATFORM_NAME MATCHES "^native")
+  # The POSIX-arch port: the same kernel and devices, on the host compiler.
+  message (VERBOSE "Adding the POSIX-arch port (brings iii + devices)...")
+  if (NOT EXISTS "${UOS_POSIX_ARCH_DIR}/CMakeLists.txt")
+    message (FATAL_ERROR "Cannot find the POSIX-arch port at ${UOS_POSIX_ARCH_DIR}")
+  endif ()
+  add_subdirectory ("${UOS_POSIX_ARCH_DIR}" "port-bin")
+elseif (PLATFORM_NAME MATCHES "^cortexm" OR PLATFORM_NAME MATCHES "^qemu-cortex")
+  # The Cortex-M port (RP2040/RP2350, STM32F4...) and the generic QEMU
+  # Cortex-M machines (qemu-cortex-m0/m3/m4f/m7f): brings iii + devices.
+  message (VERBOSE "Adding the Cortex-M port (brings iii + devices)...")
+  if (NOT EXISTS "${UOS_CORTEXM_DIR}/CMakeLists.txt")
+    message (FATAL_ERROR "Cannot find the Cortex-M port at ${UOS_CORTEXM_DIR}")
+  endif ()
+  add_subdirectory ("${UOS_CORTEXM_DIR}" "port-bin")
+elseif (PLATFORM_NAME MATCHES "^pico2" OR PLATFORM_NAME MATCHES "^2xcortex")
+  # The pico2's Cortex-M33 run emulated (pico2-1cpu, 2xcortex-m33). Same port,
+  # but the platform links its GENERIC M33 core; no board sources are used.
+  message (VERBOSE "Adding the Cortex-M port for the emulated pico2...")
+  if (NOT EXISTS "${UOS_CORTEXM_DIR}/CMakeLists.txt")
+    message (FATAL_ERROR "Cannot find the Cortex-M port at ${UOS_CORTEXM_DIR}")
+  endif ()
+  add_subdirectory ("${UOS_CORTEXM_DIR}" "port-bin")
+else ()
+  # Fallback: the plain kernel, one level above (upstream behaviour).
+  message (VERBOSE "Adding the top library...")
+  add_subdirectory (".." "top-bin")
+endif ()
 
 # -----------------------------------------------------------------------------
 # Platform specifics.

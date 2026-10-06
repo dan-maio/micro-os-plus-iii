@@ -60,19 +60,19 @@
         "rm -rf ${HOME}/Work/micro-os-plus/build-helper-xpack.git",
         "git clone --branch xpack-development https://github.com/micro-os-plus/build-helper-xpack.git ${HOME}/Work/micro-os-plus/build-helper-xpack.git",
         "xpm link -C ${HOME}/Work/micro-os-plus/build-helper-xpack.git",
-        "rm -rf ${HOME}/Work/micro-os-plus/micro-os-plus-iii-posix-arch.git",
+        "rm -rf ${HOME}/Work/micro-os-plus/micro-os-plus-iii-posix-arch-xpack.git",
         "git clone --branch xpack-development https://github.com/micro-os-plus/micro-os-plus-iii-posix-arch.git ${HOME}/Work/micro-os-plus/micro-os-plus-iii-posix-arch.git",
         "xpm link -C ${HOME}/Work/micro-os-plus/micro-os-plus-iii-posix-arch.git",
         "rm -rf ${HOME}/Work/micro-os-plus/micro-os-plus-iii-cortexm.git",
         "git clone --branch xpack-development https://github.com/micro-os-plus/micro-os-plus-iii-cortexm.git ${HOME}/Work/micro-os-plus/micro-os-plus-iii-cortexm.git",
         "xpm link -C ${HOME}/Work/micro-os-plus/micro-os-plus-iii-cortexm.git",
-        "rm -rf ${HOME}/Work/micro-os-plus-iii/arm-cmsis-rtos-validator.git",
+        "rm -rf ${HOME}/Work/micro-os-plus-iii/arm-cmsis-rtos-validator-xpack.git",
         "git clone --branch xpack-development https://github.com/xpacks/arm-cmsis-rtos-validator.git ${HOME}/Work/micro-os-plus-iii/arm-cmsis-rtos-validator.git",
         "xpm link -C ${HOME}/Work/micro-os-plus-iii/arm-cmsis-rtos-validator.git",
-        "rm -rf ${HOME}/Work/micro-os-plus-iii/chan-fatfs.git",
+        "rm -rf ${HOME}/Work/micro-os-plus-iii/chan-fatfs-xpack.git",
         "git clone --branch xpack-development https://github.com/xpacks/chan-fatfs.git ${HOME}/Work/micro-os-plus-iii/chan-fatfs.git",
         "xpm link -C ${HOME}/Work/micro-os-plus-iii/chan-fatfs.git",
-        "rm -rf ${HOME}/Work/micro-os-plus-iii/arm-cmsis.git",
+        "rm -rf ${HOME}/Work/micro-os-plus-iii/arm-cmsis-xpack.git",
         "git clone --branch xpack-development https://github.com/xpacks/arm-cmsis.git ${HOME}/Work/micro-os-plus-iii/arm-cmsis.git",
         "xpm link -C ${HOME}/Work/micro-os-plus-iii/arm-cmsis.git",
         "rm -rf ${HOME}/Work/xpack-3rd-party/libucontext-xpack.git",
@@ -118,19 +118,13 @@
       "install-ci": [
         "xpm install",
         "{% if os.platform == 'linux' %}xpm install --config native-cmake-gcc-debug{% endif %}",
-        "{% if os.platform == 'linux' %}xpm install --config native-cmake-gcc-release{% endif %}",
         "{% if os.platform == 'linux' or os.platform == 'darwin' %}xpm install --config native-cmake-clang-debug{% endif %}",
-        "{% if os.platform == 'linux' or os.platform == 'darwin'%}xpm install --config native-cmake-clang-release{% endif %}",
         "xpm install --config qemu-cortex-m0-cmake-gcc-debug",
-        "xpm install --config qemu-cortex-m0-cmake-gcc-release",
         "xpm install --config qemu-cortex-m3-cmake-gcc-debug",
-        "xpm install --config qemu-cortex-m3-cmake-gcc-release",
-        "xpm install --config qemu-cortex-m7f-cmake-gcc-debug",
-        "xpm install --config qemu-cortex-m7f-cmake-gcc-release"
+        "xpm install --config qemu-cortex-m7f-cmake-gcc-debug"
       ],
       "test-ci": [
-        "{% if os.platform == 'linux' %}xpm run test-native-cmake-gcc{% endif %}",
-        "{% if os.platform == 'linux' or os.platform == 'darwin' %}xpm run test-native-cmake-clang{% endif %}",
+        "{% if os.platform == 'linux' %}xpm run test-native-cmake-sys{% endif %}",
         "xpm run test-qemu-cortex-m0-cmake",
         "xpm run test-qemu-cortex-m3-cmake",
         "xpm run test-qemu-cortex-m7f-cmake"
@@ -202,11 +196,19 @@
         "xpm run link-deps --config nucleo-f767zi-cmake-gcc-release",
         "xpm run link-deps --config nucleo-h743zi-cmake-gcc-debug",
         "xpm run link-deps --config nucleo-h743zi-cmake-gcc-release",
-        "xpm run link-deps --config raspberrypi-pico-cmake-gcc-debug",
-        "xpm run link-deps --config raspberrypi-pico-cmake-gcc-release"
+        "xpm run link-deps --config aarch32-rpi-zero-2w-cmake-gcc-debug",
+        "xpm run link-deps --config aarch32-rpi-zero-2w-cmake-gcc-release",
+        "xpm run link-deps --config aarch32-rpi3b-cmake-gcc-debug",
+        "xpm run link-deps --config aarch32-rpi3b-cmake-gcc-release",
+        "xpm run link-deps --config aarch32-luckfox-lyra-cmake-gcc-debug",
+        "xpm run link-deps --config aarch32-luckfox-lyra-cmake-gcc-release",
+        "xpm run link-deps --config aarch64-rpi-zero-2w-cmake-gcc-debug",
+        "xpm run link-deps --config aarch64-rpi-zero-2w-cmake-gcc-release",
+        "xpm run link-deps --config aarch64-rpi3b-cmake-gcc-debug",
+        "xpm run link-deps --config aarch64-rpi3b-cmake-gcc-release"
       ],
       "test-all": [
-        "{% if os.platform != 'win32' %}xpm run test-native-cmake{% endif %}",
+        "xpm run test-native-cmake",
         "xpm run test-cortex-cmake"
       ],
       "clean-all": [
@@ -229,10 +231,6 @@
       "install-native-cmake-sys": [
         "xpm install --config native-cmake-sys-debug",
         "xpm install --config native-cmake-sys-release"
-      ],
-      "link-deps-native-cmake-sys": [
-        "xpm run link-deps --config native-cmake-sys-debug",
-        "xpm run link-deps --config native-cmake-sys-release"
       ],
       "test-native-cmake-sys": [
         "xpm run prepare --config native-cmake-sys-debug",
@@ -533,11 +531,17 @@
           }
         }
       },
+      "arm-cmsis-core-dependencies": {
+        "hidden": true,
+        "devDependencies": {
+          "@xpack-3rd-party/arm-cmsis-core": "5.4.0-6"
+        }
+      },
       "arm-none-eabi-gcc-dependencies": {
         "hidden": true,
         "$devDependenciesUrl": "https://www.npmjs.com/package/@xpack-dev-tools/arm-none-eabi-gcc",
         "devDependencies": {
-          "@xpack-dev-tools/arm-none-eabi-gcc": "14.2.1-1.1.1"
+          "@xpack-dev-tools/arm-none-eabi-gcc": "15.2.1-1.1.1"
         }
       },
       "gcc-latest-dependencies": {
@@ -641,6 +645,14 @@
           "@xpack-dev-tools/clang": "19.1.7-1.1"
         }
       },
+      "clang-gcc14-properties": {
+        "hidden": true,
+        "$comment": "clang < 19 cannot parse the libstdc++ of a newer host GCC (GCC 16: __builtin_popcountg); build against the xPack GCC 14 (gcc14-dependencies) instead.",
+        "properties": {
+          "clangGccToolchain": "${PWD}/{{ properties.buildFolderRelativePathPosix }}/xpacks/@xpack-dev-tools/gcc/.content",
+          "commandCMakePrepareWithToolchain": "{{ properties.commandCMakePrepare }} -D CMAKE_TOOLCHAIN_FILE=xpacks/@micro-os-plus/build-helper/cmake/toolchains/{{ properties.toolchainFileName }} -D CMAKE_C_FLAGS=--gcc-toolchain={{ properties.clangGccToolchain }} -D CMAKE_CXX_FLAGS=--gcc-toolchain={{ properties.clangGccToolchain }}"
+        }
+      },
       "qemu-arm-dependencies": {
         "hidden": true,
         "$devDependenciesUrl": "https://www.npmjs.com/package/@xpack-dev-tools/qemu-arm",
@@ -673,7 +685,23 @@
           "platformName": "native"
         },
         "actions": {
-          "prepare": "{{ properties.commandCMakePrepare }}"
+          "prepare": "{{ properties.commandCMakePrepare }}",
+          "test-cmsis-os-validator-host": "{{ properties.commandCMakePrepare }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R native-cmsis-os-validator-host",
+          "test-mutex-stress-host": "{{ properties.commandCMakePrepare }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R native-mutex-stress-host",
+          "test-rtos-apis-host": "{{ properties.commandCMakePrepare }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R native-rtos-apis-host",
+          "test-smp-mat-test-host": "{{ properties.commandCMakePrepare }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R native-smp-mat-test-host",
+          "test-smp-mutex-stress-host": "{{ properties.commandCMakePrepare }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R native-smp-mutex-stress-host",
+          "test-smp-num-test-host": "{{ properties.commandCMakePrepare }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R native-smp-num-test-host",
+          "test-flatfs-test-host": "{{ properties.commandCMakePrepare }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R native-flatfs-test-host",
+          "test-mutex-ceiling-test-host": "{{ properties.commandCMakePrepare }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R native-mutex-ceiling-test-host",
+          "test-smp-pipeline-test-host": "{{ properties.commandCMakePrepare }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R native-smp-pipeline-test-host",
+          "test-smp-pro-cons-test-host": "{{ properties.commandCMakePrepare }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R native-smp-pro-cons-test-host",
+          "test-smp-rtos-apis-host": "{{ properties.commandCMakePrepare }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R native-smp-rtos-apis-host",
+          "test-smp_test0-host": "{{ properties.commandCMakePrepare }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R native-smp_test0-host",
+          "test-smp_test1-host": "{{ properties.commandCMakePrepare }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R native-smp_test1-host",
+          "test-smp_test2-host": "{{ properties.commandCMakePrepare }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R native-smp_test2-host",
+          "test-smp_test3-host": "{{ properties.commandCMakePrepare }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R native-smp_test3-host",
+          "test-smp_test4-host": "{{ properties.commandCMakePrepare }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R native-smp_test4-host"
         }
       },
       "native-cmake-sys-release": {
@@ -695,6 +723,25 @@
           "buildType": "Debug",
           "platformName": "native",
           "toolchainFileName": "gcc.cmake"
+        },
+        "actions": {
+          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE hwd",
+          "test-cmsis-os-validator-host": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R native-cmsis-os-validator-host",
+          "test-mutex-stress-host": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R native-mutex-stress-host",
+          "test-rtos-apis-host": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R native-rtos-apis-host",
+          "test-smp-mat-test-host": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R native-smp-mat-test-host",
+          "test-smp-mutex-stress-host": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R native-smp-mutex-stress-host",
+          "test-smp-num-test-host": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R native-smp-num-test-host",
+          "test-flatfs-test-host": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R native-flatfs-test-host",
+          "test-mutex-ceiling-test-host": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R native-mutex-ceiling-test-host",
+          "test-smp-pipeline-test-host": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R native-smp-pipeline-test-host",
+          "test-smp-pro-cons-test-host": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R native-smp-pro-cons-test-host",
+          "test-smp-rtos-apis-host": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R native-smp-rtos-apis-host",
+          "test-smp_test0-host": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R native-smp_test0-host",
+          "test-smp_test1-host": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R native-smp_test1-host",
+          "test-smp_test2-host": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R native-smp_test2-host",
+          "test-smp_test3-host": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R native-smp_test3-host",
+          "test-smp_test4-host": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R native-smp_test4-host"
         }
       },
       "native-cmake-gcc-release": {
@@ -878,7 +925,9 @@
           "native-actions",
           "cmake-actions",
           "native-dependencies",
-          "clang16-dependencies"
+          "clang16-dependencies",
+          "gcc14-dependencies",
+          "clang-gcc14-properties"
         ],
         "properties": {
           "buildType": "Debug",
@@ -899,7 +948,9 @@
           "native-actions",
           "cmake-actions",
           "native-dependencies",
-          "clang17-dependencies"
+          "clang17-dependencies",
+          "gcc14-dependencies",
+          "clang-gcc14-properties"
         ],
         "properties": {
           "buildType": "Debug",
@@ -920,7 +971,9 @@
           "native-actions",
           "cmake-actions",
           "native-dependencies",
-          "clang18-dependencies"
+          "clang18-dependencies",
+          "gcc14-dependencies",
+          "clang-gcc14-properties"
         ],
         "properties": {
           "buildType": "Debug",
@@ -963,6 +1016,7 @@
           "cmake-actions",
           "cortexm-dependencies",
           "arm-cmsis-dependencies",
+          "arm-cmsis-core-dependencies",
           "arm-none-eabi-gcc-dependencies",
           "qemu-arm-dependencies",
           "short-win-paths-properties"
@@ -972,6 +1026,12 @@
           "platformName": "qemu-cortex-m0",
           "toolchainFileName": "arm-none-eabi-gcc.cmake",
           "shortConfigurationName": "m0d"
+        },
+        "actions": {
+          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE hwd",
+          "test-rtos-apis-test": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R qemu-cortex-m0-rtos-apis-test",
+          "test-mutex-stress-test": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R qemu-cortex-m0-mutex-stress-test",
+          "test-cmsis-os-validator-test": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R qemu-cortex-m0-cmsis-os-validator-test"
         }
       },
       "qemu-cortex-m0-cmake-gcc-release": {
@@ -989,6 +1049,7 @@
           "cmake-actions",
           "cortexm-dependencies",
           "arm-cmsis-dependencies",
+          "arm-cmsis-core-dependencies",
           "arm-none-eabi-gcc-dependencies",
           "qemu-arm-dependencies",
           "short-win-paths-properties"
@@ -998,6 +1059,12 @@
           "platformName": "qemu-cortex-m3",
           "toolchainFileName": "arm-none-eabi-gcc.cmake",
           "shortConfigurationName": "m3d"
+        },
+        "actions": {
+          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE hwd",
+          "test-rtos-apis-test": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R qemu-cortex-m3-rtos-apis-test",
+          "test-mutex-stress-test": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R qemu-cortex-m3-mutex-stress-test",
+          "test-cmsis-os-validator-test": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R qemu-cortex-m3-cmsis-os-validator-test"
         }
       },
       "qemu-cortex-m3-cmake-gcc-release": {
@@ -1015,6 +1082,7 @@
           "cmake-actions",
           "cortexm-dependencies",
           "arm-cmsis-dependencies",
+          "arm-cmsis-core-dependencies",
           "arm-none-eabi-gcc-dependencies",
           "qemu-arm-dependencies",
           "short-win-paths-properties"
@@ -1024,6 +1092,12 @@
           "platformName": "qemu-cortex-m4f",
           "toolchainFileName": "arm-none-eabi-gcc.cmake",
           "shortConfigurationName": "m4fd"
+        },
+        "actions": {
+          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE hwd",
+          "test-rtos-apis-test": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R qemu-cortex-m4f-rtos-apis-test",
+          "test-mutex-stress-test": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R qemu-cortex-m4f-mutex-stress-test",
+          "test-cmsis-os-validator-test": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R qemu-cortex-m4f-cmsis-os-validator-test"
         }
       },
       "qemu-cortex-m4f-cmake-gcc-release": {
@@ -1041,6 +1115,7 @@
           "cmake-actions",
           "cortexm-dependencies",
           "arm-cmsis-dependencies",
+          "arm-cmsis-core-dependencies",
           "arm-none-eabi-gcc-dependencies",
           "qemu-arm-dependencies",
           "short-win-paths-properties"
@@ -1050,6 +1125,12 @@
           "platformName": "qemu-cortex-m7f",
           "toolchainFileName": "arm-none-eabi-gcc.cmake",
           "shortConfigurationName": "m7fd"
+        },
+        "actions": {
+          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE hwd",
+          "test-rtos-apis-test": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R qemu-cortex-m7f-rtos-apis-test",
+          "test-mutex-stress-test": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R qemu-cortex-m7f-mutex-stress-test",
+          "test-cmsis-os-validator-test": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R qemu-cortex-m7f-cmsis-os-validator-test"
         }
       },
       "qemu-cortex-m7f-cmake-gcc-release": {
@@ -1060,6 +1141,86 @@
           "buildType": "MinSizeRel",
           "shortConfigurationName": "m7fr"
         }
+      },
+      "qemu-cortex-m0-cmake-debug": {
+        "inherit": [
+          "qemu-cortex-m0-cmake-gcc-debug"
+        ]
+      },
+      "qemu-cortex-m0-cmake-release": {
+        "inherit": [
+          "qemu-cortex-m0-cmake-gcc-release"
+        ]
+      },
+      "qemu-cortex-m3-cmake-debug": {
+        "inherit": [
+          "qemu-cortex-m3-cmake-gcc-debug"
+        ]
+      },
+      "qemu-cortex-m3-cmake-release": {
+        "inherit": [
+          "qemu-cortex-m3-cmake-gcc-release"
+        ]
+      },
+      "qemu-cortex-m4f-cmake-debug": {
+        "inherit": [
+          "qemu-cortex-m4f-cmake-gcc-debug"
+        ]
+      },
+      "qemu-cortex-m4f-cmake-release": {
+        "inherit": [
+          "qemu-cortex-m4f-cmake-gcc-release"
+        ]
+      },
+      "qemu-cortex-m7f-cmake-debug": {
+        "inherit": [
+          "qemu-cortex-m7f-cmake-gcc-debug"
+        ]
+      },
+      "qemu-cortex-m7f-cmake-release": {
+        "inherit": [
+          "qemu-cortex-m7f-cmake-gcc-release"
+        ]
+      },
+      "raspberrypi-pico-cmake-debug": {
+        "inherit": [
+          "raspberrypi-pico-cmake-gcc-debug"
+        ]
+      },
+      "raspberrypi-pico-cmake-release": {
+        "inherit": [
+          "raspberrypi-pico-cmake-gcc-release"
+        ]
+      },
+      "nucleo-f411re-cmake-debug": {
+        "inherit": [
+          "nucleo-f411re-cmake-gcc-debug"
+        ]
+      },
+      "nucleo-f411re-cmake-release": {
+        "inherit": [
+          "nucleo-f411re-cmake-gcc-release"
+        ]
+      },
+      "nucleo-f767zi-cmake-debug": {
+        "inherit": [
+          "nucleo-f767zi-cmake-gcc-debug"
+        ]
+      },
+      "nucleo-f767zi-cmake-release": {
+        "inherit": [
+          "nucleo-f767zi-cmake-gcc-release"
+        ]
+      },
+      "nucleo-h743zi-cmake-debug": {
+        "inherit": [
+          "nucleo-h743zi-cmake-gcc-debug"
+        ]
+      },
+      "nucleo-h743zi-cmake-release": {
+        "inherit": [
+          "nucleo-h743zi-cmake-gcc-release"
+        ]
       },
       "raspberrypi-pico-cmake-gcc-debug": {
         "inherit": [
@@ -1084,6 +1245,7 @@
           }
         },
         "actions": {
+          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE hwd",
           "link-deps": [
             "xpm link @micro-os-plus/micro-os-plus-iii-cortexm --config {{ configuration.name }}",
             "xpm link @xpack-3rd-party/raspberrypi-pico-sdk --config {{ configuration.name }}"
@@ -1117,7 +1279,8 @@
         "actions": {
           "link-deps": [
             "xpm link @micro-os-plus/micro-os-plus-iii-cortexm @xpack-segger/rtt @xpack-segger/system-view --config {{ configuration.name }}"
-          ]
+          ],
+          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE hwd"
         },
         "devDependencies": {
           "@xpack-segger/rtt": {
@@ -1157,6 +1320,7 @@
           "shortConfigurationName": "nf7d"
         },
         "actions": {
+          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE hwd",
           "link-deps": [
             "xpm link @micro-os-plus/micro-os-plus-iii-cortexm --config {{ configuration.name }}"
           ]
@@ -1187,6 +1351,7 @@
           "shortConfigurationName": "nh7d"
         },
         "actions": {
+          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE hwd",
           "link-deps": [
             "xpm link @micro-os-plus/micro-os-plus-iii-cortexm --config {{ configuration.name }}"
           ]

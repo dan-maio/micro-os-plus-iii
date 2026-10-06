@@ -5,7 +5,7 @@ on GNU/Linux and macOS.
 
 The platform specific include header is currently empty:
 
-- `platform/include/micro-os-plus/platform.h`
+- `include/cmsis-plus/platform.h`
 
 ## RPATH
 

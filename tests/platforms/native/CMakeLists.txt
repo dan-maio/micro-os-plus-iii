@@ -1,142 +1,95 @@
 # -----------------------------------------------------------------------------
+# Test executables — µOS++ III on the host (the POSIX-arch port).
 #
-# This file is part of the µOS++ project (https://micro-os-plus.github.io/).
-# Copyright (c) 2022-2025 Liviu Ionescu. All rights reserved.
+# The port is micro-os-plus-iii-posix-arch.git (selected by tests-main.cmake
+# for a `native*` platform). Its tests are host executables -- the "CPUs" are
+# host threads -- so its builder emits one image per test, `<app>-host`, and
+# the shared runner is test_smpl/run-host.sh.
 #
-# Permission to use, copy, modify, and/or distribute this software for any
-# purpose is hereby granted, under the terms of the MIT license.
-#
-# If a copy of the license was not distributed with this file, it can be
-# obtained from https://opensource.org/licenses/mit.
-#
+# As on the AArch32 platforms, the tests are not re-listed: the port's builder
+# is add_subdirectory()'d and the targets it produced are registered, one CTest
+# case per test.
 # -----------------------------------------------------------------------------
 
-# This file creates the platform specific test executables.
-
-message (VERBOSE "Processing 'tests/platforms/native'...")
-
-# -----------------------------------------------------------------------------
-
-# set(xpack_create_listing true)
+message (VERBOSE "Processing 'tests/platforms/${PLATFORM_NAME}'...")
 
 # -----------------------------------------------------------------------------
 include ("cmake/platform-library.cmake")
 
+# The port publishes its board facts; read the board declaration so the port's
+# own builder sees UOS_BOARD_DEVICES and the rest.
+if (NOT DEFINED BOARD)
+  set (BOARD "native" CACHE STRING "Target board (the port's board id)")
+endif ()
+include ("${UOS_POSIX_ARCH_DIR}/test/boards/${BOARD}/board.cmake")
+
 # -----------------------------------------------------------------------------
-function (add_test_executable name)
-  add_executable (${name})
+# Build every port test by reusing the port's builder (<app>-host).
+add_subdirectory ("${UOS_POSIX_ARCH_DIR}/test" "port-tests")
 
-  # https://cmake.org/cmake/help/v3.20/manual/cmake-generator-expressions.7.html
-  # The link options were defined in `platform-native-interface`.
-  target_link_options (
-    ${name} PRIVATE
-    $<$<PLATFORM_ID:Linux,Windows>:-Wl,-Map,platform-bin/${name}-map.txt>
-    $<$<PLATFORM_ID:Linux,Darwin>:${rpath_options_list}> # -v
-  )
+set (_port_bin "${CMAKE_CURRENT_BINARY_DIR}/port-tests")
+set (_port_test_dir "${UOS_POSIX_ARCH_DIR}/test/${BOARD}")
+set (_runner "${CMAKE_SOURCE_DIR}/../test_smpl")
 
-  if (xpack_create_listing)
-    add_custom_command (
-      TARGET ${name}
-      POST_BUILD
-      # --all-headers -> Invalid/Unsupported object file format
-      COMMAND ${CMAKE_OBJDUMP} --source --demangle --line-numbers --wide
-              "$<TARGET_FILE:${name}>" > ${name}-list.txt
-      VERBATIM
-    )
+# -----------------------------------------------------------------------------
+# One CTest case per port test: <platform>-<app>-host.
+file (GLOB _test_dirs LIST_DIRECTORIES true "${_port_test_dir}/*")
+foreach (_dir IN LISTS _test_dirs)
+  if (NOT IS_DIRECTORY "${_dir}")
+    continue ()
   endif ()
-endfunction ()
+  get_filename_component (_app "${_dir}" NAME)
+  if (_app STREQUAL "include" OR _app STREQUAL "src")
+    continue ()
+  endif ()
+  file (GLOB _srcs "${_dir}/*.cpp")
+  if (NOT _srcs)
+    continue ()
+  endif ()
+
+  add_test (
+    NAME "${PLATFORM_NAME}-${_app}-host"
+    COMMAND bash "${_runner}/run-host.sh" "${_port_bin}"
+  )
+  set_tests_properties (
+    "${PLATFORM_NAME}-${_app}-host"
+    PROPERTIES ENVIRONMENT "UOS_RUN_ONLY=${_app}" LABELS "host" TIMEOUT 1200
+  )
+endforeach ()
 
 # -----------------------------------------------------------------------------
-if (ENABLE_RTOS_APIS_TEST)
-  add_test_executable (rtos-apis-test)
-
-  target_compile_definitions (
-    rtos-apis-test
-    PRIVATE # Use buffered write with caution, it occasionally hangs.
-            # OS_USE_TRACE_POSIX_FWRITE_STDOUT
-            OS_USE_TRACE_POSIX_STDOUT
-  )
-
-  target_link_libraries (
-    rtos-apis-test
-    PRIVATE micro-os-plus::common-options
-            # Current test library.
-            test::rtos-apis
-            # Tested library.
-            micro-os-plus::iii
-            # Portable dependencies.
-            xpacks::chan-fatfs
-            # Platform specific dependencies.
-            micro-os-plus::platform
-  )
-
-  message (VERBOSE "A> rtos-apis-test")
-
-  add_test (NAME "rtos-apis-test" COMMAND rtos-apis-test)
-endif ()
-
-# -----------------------------------------------------------------------------
-if (ENABLE_MUTEX_STRESS_TEST)
-  add_test_executable (mutex-stress-test)
-
-  target_compile_definitions (
-    mutex-stress-test
-    PRIVATE # Use buffered write with caution, it occasionally hangs.
-            # OS_USE_TRACE_POSIX_FWRITE_STDOUT
-            OS_USE_TRACE_POSIX_STDOUT
-  )
-
-  target_link_libraries (
-    mutex-stress-test
-    PRIVATE micro-os-plus::common-options
-            # Current test library.
-            test::mutex-stress
-            # Tested library.
-            micro-os-plus::iii
-            # Platform specific dependencies.
-            micro-os-plus::platform
-  )
-
-  message (VERBOSE "A> mutex-stress-test")
-
-  add_test (NAME "mutex-stress-test" COMMAND mutex-stress-test)
-endif ()
+# Harness suite: the Arm CMSIS RTOS validator. On the host the validator xpack
+# supplies the NVIC_* shims (SIGUSR1/SIGALRM), so it runs as an ordinary host
+# test, no probe and no board. Two port fixes were needed for it to pass:
+#   * in_handler_mode() must also report true while the validator's SIGUSR1
+#     handler runs (it bumps signal_nesting), or the kernel does not see ISR
+#     context and TC_ThreadInterrupts fails;
+#   * the message queue's send()/receive() must reschedule after their critical
+#     section, or a receiver resumed by a send() waits for the next tick and
+#     TC_MsgQWait's immediate assert fails.
+add_executable (cmsis-os-validator-test)
+target_compile_definitions (
+  cmsis-os-validator-test PRIVATE TRACE OS_USE_TRACE_POSIX_STDOUT
+)
+# The port's own sources carry warnings the strict harness options promote to
+# errors (they are compiled here through the interface library).
+target_compile_options (
+  cmsis-os-validator-test
+  PRIVATE -Wno-redundant-decls -Wno-sign-conversion -Wno-missing-declarations
+)
+target_link_libraries (
+  cmsis-os-validator-test
+  PRIVATE test::cmsis-os-validator micro-os-plus::iii
+          xpacks::arm-cmsis-os-validator micro-os-plus::platform
+)
+add_test (
+  NAME "${PLATFORM_NAME}-cmsis-os-validator-host"
+  COMMAND cmsis-os-validator-test
+)
+set_tests_properties (
+  "${PLATFORM_NAME}-cmsis-os-validator-host"
+  PROPERTIES LABELS "host" TIMEOUT 600
+)
 
 # -----------------------------------------------------------------------------
-if (ENABLE_CMSIS_OS_VALIDATOR_TEST)
-  add_test_executable (cmsis-os-validator-test)
-
-  target_compile_definitions (
-    cmsis-os-validator-test
-    PRIVATE # Use buffered write with caution, it occasionally hangs.
-            # OS_USE_TRACE_POSIX_FWRITE_STDOUT
-            OS_USE_TRACE_POSIX_STDOUT
-  )
-
-  # https://cmake.org/cmake/help/v3.20/manual/cmake-generator-expressions.7.html
-  target_link_options (
-    cmsis-os-validator-test
-    PRIVATE
-    $<$<PLATFORM_ID:Linux,Windows>:-Wl,-Map,platform-bin/cmsis-os-validator-test-map.txt>
-    $<$<PLATFORM_ID:Linux,Darwin>:${rpath_options_list}>
-  )
-
-  target_link_libraries (
-    cmsis-os-validator-test
-    PRIVATE micro-os-plus::common-options
-            # Current test library.
-            test::cmsis-os-validator
-            # Tested library.
-            micro-os-plus::iii
-            # Portable dependencies.
-            xpacks::arm-cmsis-os-validator
-            # Platform specific dependencies.
-            micro-os-plus::platform
-  )
-
-  message (VERBOSE "A> cmsis-os-validator-test")
-
-  add_test (NAME "cmsis-os-validator-test" COMMAND cmsis-os-validator-test)
-endif ()
-
-# -----------------------------------------------------------------------------
+message (STATUS "native (posix-arch): port tests registered (${PLATFORM_NAME})")

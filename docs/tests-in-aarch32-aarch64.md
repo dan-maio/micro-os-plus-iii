@@ -14,6 +14,8 @@ reaches exactly one board.
 ```
 micro-os-plus-iii-aarch{32,64}/
 ├── src/  include/                    the ISA — no board, no test
+├── drivers/  soc/<chip>/             SD, flatfs, DWC2 USB, FatFs; BCM2837 (and RK3506
+│                                     on aarch32) — formerly micro-os-plus-iii-devices
 └── test/
     ├── CMakeLists.txt  hw.sh  qemu.sh   the builder and the two dispatchers
     ├── boards/<id>/

@@ -2,9 +2,12 @@
 
 > **Current layout.** The SMP development and test framework is unified in
 > `micro-os-plus/micro-os-plus-iii` on branch `smp`, alongside sibling
-> architecture repositories `micro-os-plus-iii-{cortexm,aarch32,aarch64,devices,posix-arch}`.
-> For the step-by-step guide see [`STEPS.md`](STEPS.md); for every test, board,
-> and probe see [`TESTS-CATALOG.md`](TESTS-CATALOG.md).
+> architecture repositories `micro-os-plus-iii-{posix-arch,cortexm,aarch32,aarch64}`.
+> The former `micro-os-plus-iii-devices` is dissolved into the ports
+> (`drivers/`, `soc/<chip>/`) since 2026-10-06. For the step-by-step guide see
+> [`STEPS.md`](STEPS.md); for every test, board, and probe see
+> [`TESTS-CATALOG.md`](TESTS-CATALOG.md); for how the `smp` branches were built
+> see [`xpack-dev-smp.md`](../smp-integration/xpack-dev-smp.md) Parts II and III.
 
 > A structured, reproducible and extensible test harness for
 > `@micro-os-plus/micro-os-plus-iii`, built on top of **xpm**, **xPacks**,

@@ -24,6 +24,8 @@ micro-os-plus-iii-cortexm/
 ├── src/rtos/os-core-rp2350.cpp       the same, plus the SMP branch
 ├── src/semihosting-exit.cpp          strong _Exit() through SYS_EXIT
 ├── src/libc/getentropy.c             getentropy() for libstdc++
+├── soc/stm32f4xx/  soc/rp2350/       the SoC support (formerly micro-os-plus-iii-devices),
+│                                     targets soc-stm32f411xe, soc-stm32f412rx, soc-rp2350
 └── test/
     ├── CMakeLists.txt  hw.sh  qemu.sh
     ├── boards/<id>/     board.cmake, include/, src/, linker.ld,
@@ -52,6 +54,15 @@ On RP2350, `pico2` and `pico2-rp2350b-psram` build `-qemu` images on `mps2-an500
 `smp-test1`, `sc-test-ko`). `pico2` also provides pure-RAM resident test targets
 (`smp-mat-test-ram`, `rtos-apis-ram`, `mutex-stress-ram`, `cmsis-os-validator-ram`).
 What each test does is in [`tests/TESTS-CATALOG.md`](tests/TESTS-CATALOG.md).
+
+**Verified on 2026-10-06** (rebuilt `smp` branches, xpack-dev-smp.md Part III),
+through `xpm run test-smp-cmake` in `micro-os-plus-iii/tests`, `ctest -LE hwd`,
+debug and release: `2xcortex-m33` 4/4, `pico2-1cpu` 4/4, `cortexm-pico2` 6/6,
+`cortexm-pico2-rp2350b-psram` 3/3; and `xpm run test-cortex-cmake` 3/3 on each
+of `qemu-cortex-m0/m3/m4f/m7f` (gcc and clang, debug and release). The
+`hwd` tests and the hardware-only platforms (`cortexm-pico2-pizero`,
+`cortexm-nucleof411`, `cortexm-weactf411`, `cortexm-weactf412`) were built, not
+run.
 
 The port also exports **generic QEMU cores** beside the board ones:
 `micro-os-plus::cortexm-qemu-m0`, `-m3`, `-m4f` and `-m7` (with

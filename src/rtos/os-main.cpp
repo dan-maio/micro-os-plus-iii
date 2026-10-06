@@ -165,6 +165,9 @@ int
 
   thread::attributes attr = thread::initializer;
   attr.th_stack_size_bytes = OS_INTEGER_RTOS_MAIN_STACK_SIZE_BYTES;
+#if defined(OS_USE_SMP_SCHEDULER)
+  attr.th_cpu_affinity = (1u << 0);
+#endif
 #pragma GCC diagnostic push
 #if defined(__clang__)
 #pragma clang diagnostic ignored "-Wcast-function-type-strict"
@@ -175,6 +178,12 @@ int
 #pragma GCC diagnostic pop
 
 #endif /* defined(OS_EXCLUDE_DYNAMIC_MEMORY_ALLOCATIONS) */
+
+#if defined(OS_USE_SMP_SCHEDULER)
+  // Pin main thread to core 0 so per-core peripherals (NVIC, SysTick) initialized
+  // on the boot core remain consistent for the main thread lifecycle.
+  os_main_thread->cpu_affinity (1u << 0);
+#endif
 
 #if !defined(OS_USE_RTOS_PORT_SCHEDULER)
   os_startup_create_thread_idle ();

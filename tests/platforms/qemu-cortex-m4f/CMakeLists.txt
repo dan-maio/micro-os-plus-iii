@@ -1,127 +1,54 @@
 # -----------------------------------------------------------------------------
+# Test executables — µOS++ III Cortex-M4F on QEMU (single core).
 #
-# This file is part of the µOS++ project (https://micro-os-plus.github.io/).
-# Copyright (c) 2022-2025 Liviu Ionescu. All rights reserved.
-#
-# Permission to use, copy, modify, and/or distribute this software for any
-# purpose is hereby granted, under the terms of the MIT license.
-#
-# If a copy of the license was not distributed with this file, it can be
-# obtained from https://opensource.org/licenses/mit.
-#
+# The harness suites (rtos-apis, mutex-stress, cmsis-os-validator) run on one
+# emulated Cortex-M4F via the generic M4F port core, on QEMU's mps2-an386
+# machine.
 # -----------------------------------------------------------------------------
 
-message (VERBOSE "Processing 'tests/platforms/qemu-cortex-m4f'...")
-
-# -----------------------------------------------------------------------------
-
-# set(xpack_create_listing true) set(xpack_create_hex true)
+message (VERBOSE "Processing 'tests/platforms/${PLATFORM_NAME}'...")
 
 # -----------------------------------------------------------------------------
 include ("cmake/platform-library.cmake")
 
+# The QEMU binary, from the newest installed qemu-arm xpack.
+file (GLOB _qemu_bins
+      "$ENV{HOME}/.local/xPacks/@xpack-dev-tools/qemu-arm/*/.content/bin")
+if (_qemu_bins)
+  list (SORT _qemu_bins COMPARE NATURAL ORDER DESCENDING)
+  list (GET _qemu_bins 0 _qemu_bin)
+  set (_qemu "${_qemu_bin}/qemu-system-arm")
+else ()
+  set (_qemu "qemu-system-arm")
+endif ()
+
+set (_qemu_machine mps2-an386)
+set (_qemu_cpu cortex-m4)
+
 # -----------------------------------------------------------------------------
-
-# Define the tests executables.
-function (add_test_executable name)
+function (add_suite_executable name suite)
   add_executable (${name})
-
-  set_target_properties (${name} PROPERTIES OUTPUT_NAME "${name}")
-
-  target_compile_definitions (${name} PRIVATE OS_USE_TRACE_SEMIHOSTING_STDOUT)
-
-  # No other common compile or link options, all were defined in the libraries
-  # and will be inherited.
-  target_link_options (
-    ${name} PRIVATE -Wl,-Map,platform-bin/${name}-map.txt # -v
+  target_link_libraries (
+    ${name}
+    PRIVATE micro-os-plus::common-options test::${suite} micro-os-plus::iii
+            micro-os-plus::platform ${ARGN}
   )
-
-  xpack_add_cross_custom_commands (${name})
+  set_target_properties (${name} PROPERTIES OUTPUT_NAME "${name}")
+  add_test (
+    NAME "${PLATFORM_NAME}-${name}"
+    COMMAND
+      "${_qemu}" --machine ${_qemu_machine} --cpu ${_qemu_cpu} --kernel
+      "$<TARGET_FILE:${name}>" --nographic -d unimp,guest_errors
+      --semihosting-config enable=on,target=native
+  )
+  set_tests_properties ("${PLATFORM_NAME}-${name}" PROPERTIES LABELS "qemu" TIMEOUT 1200)
 endfunction ()
 
 # -----------------------------------------------------------------------------
-if (ENABLE_RTOS_APIS_TEST)
-  add_test_executable (rtos-apis-test)
-
-  target_link_libraries (
-    rtos-apis-test
-    PRIVATE micro-os-plus::common-options
-            # Current test library.
-            test::rtos-apis
-            # Tested library.
-            micro-os-plus::iii
-            # Portable dependencies.
-            xpacks::chan-fatfs
-            # Platform specific dependencies.
-            micro-os-plus::platform
-  )
-
-  message (VERBOSE "A> rtos-apis-test")
-
-  add_test (
-    NAME "rtos-apis-test"
-    COMMAND
-      qemu-system-arm${extension} --machine mps2-an386 --cpu cortex-m4 --kernel
-      rtos-apis-test.elf --nographic -d unimp,guest_errors --semihosting-config
-      enable=on,target=native,arg=rtos-apis-test
-    # --semihosting-config arg=--verbose
-  )
-endif ()
+add_suite_executable (rtos-apis-test rtos-apis xpacks::chan-fatfs)
+add_suite_executable (mutex-stress-test mutex-stress)
+add_suite_executable (cmsis-os-validator-test cmsis-os-validator
+                      xpacks::arm-cmsis-os-validator)
 
 # -----------------------------------------------------------------------------
-if (ENABLE_MUTEX_STRESS_TEST)
-  add_test_executable (mutex-stress-test)
-
-  target_link_libraries (
-    mutex-stress-test
-    PRIVATE micro-os-plus::common-options
-            # Current test library.
-            test::mutex-stress
-            # Tested library.
-            micro-os-plus::iii
-            # Platform specific dependencies.
-            micro-os-plus::platform
-  )
-
-  message (VERBOSE "A> mutex-stress-test")
-
-  add_test (
-    NAME "mutex-stress-test"
-    COMMAND
-      qemu-system-arm${extension} --machine mps2-an386 --cpu cortex-m4 --kernel
-      mutex-stress-test.elf --nographic -d unimp,guest_errors
-      --semihosting-config enable=on,target=native,arg=mutex-stress-test
-    # --semihosting-config arg=--verbose
-  )
-endif ()
-
-# -----------------------------------------------------------------------------
-if (ENABLE_CMSIS_OS_VALIDATOR_TEST)
-  add_test_executable (cmsis-os-validator-test)
-
-  target_link_libraries (
-    cmsis-os-validator-test
-    PRIVATE micro-os-plus::common-options
-            # Current test library.
-            test::cmsis-os-validator
-            # Tested library.
-            micro-os-plus::iii
-            # Portable dependencies.
-            xpacks::arm-cmsis-os-validator
-            # Platform specific dependencies.
-            micro-os-plus::platform
-  )
-
-  message (VERBOSE "A> cmsis-os-validator-test")
-
-  add_test (
-    NAME "cmsis-os-validator-test"
-    COMMAND
-      qemu-system-arm${extension} --machine mps2-an386 --cpu cortex-m4 --kernel
-      cmsis-os-validator-test.elf --nographic -d unimp,guest_errors
-      --semihosting-config enable=on,target=native,arg=cmsis-os-validator-test
-    # --semihosting-config arg=--verbose
-  )
-endif ()
-
-# -----------------------------------------------------------------------------
+message (STATUS "Cortex-M qemu-cortex-m4f: harness suites registered (${PLATFORM_NAME})")

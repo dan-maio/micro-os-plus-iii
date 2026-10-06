@@ -7,6 +7,13 @@
 > reference. The SMP kernel and test harness are unified in
 > `micro-os-plus-iii` (branch `smp`); the current guides are
 > [`STEPS.md`](STEPS.md) and [`TESTS-CATALOG.md`](TESTS-CATALOG.md).
+> The commands below still use the old clone name `micro-os-plus-iii-smp.git`.
+> On the current layout use `micro-os-plus-iii` (branch `smp`), with the ports
+> `micro-os-plus-iii-{posix-arch,cortexm,aarch32,aarch64}` cloned beside it
+> (there is no `micro-os-plus-iii-devices` any more), and run the same actions
+> with `-C micro-os-plus-iii/tests`. How those branches were built, commit by
+> commit, is [`xpack-dev-smp.md`](../smp-integration/xpack-dev-smp.md) Parts II
+> and III.
 
 
 ## Prerequisites

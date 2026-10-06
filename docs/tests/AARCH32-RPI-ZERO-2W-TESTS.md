@@ -2,11 +2,18 @@
 
 > **Earlier layout — read as history.** This document describes an earlier
 > harness layout. The SMP kernel and test harness are now unified in
-> `micro-os-plus-iii` (branch `smp`) alongside sibling repositories
-> `micro-os-plus-iii-{cortexm,aarch32,aarch64,devices,posix-arch}`. For the
-> current framework see [`STEPS.md`](STEPS.md); for every test, board and
-> probe see [`TESTS-CATALOG.md`](TESTS-CATALOG.md). The code is the truth
-> where they disagree.
+> `micro-os-plus-iii` (branch `smp`) alongside the sibling ports
+> `micro-os-plus-iii-{posix-arch,cortexm,aarch32,aarch64}`. Since 2026-10-06
+> there is **no `micro-os-plus-iii-devices`**: its drivers and SoC support are
+> part of each port (`drivers/`, `soc/<chip>/`), so skip every clone, symlink
+> or `UOS_DEVICES_DIR` for it below. Everything runs from
+> `micro-os-plus-iii/tests`: `xpm run install-all`, then `xpm run test-all`
+> (native + cortex + `test-smp-cmake`). For the current framework see
+> [`STEPS.md`](STEPS.md); for every test, board and probe see
+> [`TESTS-CATALOG.md`](TESTS-CATALOG.md); for how the `smp` branches were
+> built, commit by commit, see
+> [`xpack-dev-smp.md`](../smp-integration/xpack-dev-smp.md) Parts II and III.
+> The code is the truth where they disagree.
 
 > How to take the test folder from
 > `/home/dan/Work/micro-os-plus-iii/micro-os-plus-iii.git/tests` (the
@@ -1179,7 +1186,7 @@ xpm run test-aarch32-rpi-zero-2w-cmake -C tests
 | Toolchains | `micro-os-plus-iii-smp/cmake/toolchains/` |
 | QEMU runner | `micro-os-plus-iii-smp/test_smpl/run-qemu.sh` |
 | Hardware runner | `micro-os-plus-iii-smp/test_smpl/run-hw.sh` |
-| Drivers / BCM2837 | `micro-os-plus-iii-devices/` |
+| Drivers / BCM2837 | `micro-os-plus-iii-aarch32/{drivers,soc/bcm2837}/` (formerly `micro-os-plus-iii-devices/`) |
 | AArch32 port | `micro-os-plus-iii-aarch32/` (`test/boards/rpi-zero-2w/`, `test/hw.sh`) |
 | AArch32 board config | `test/boards/rpi-zero-2w/{config.txt,linker.ld,qemu-raspi3-shim/,openocd-*.cfg}` |
 | Build guide (canonical) | `micro-os-plus-iii-smp/docs/building-aarch32-aarch64.md` |

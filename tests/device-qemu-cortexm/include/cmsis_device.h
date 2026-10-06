@@ -31,13 +31,19 @@ extern "C"
     /******  Cortex-M4 Processor Exceptions Numbers
      ****************************************************************/
     NonMaskableInt_IRQn = -14, /*!< 2 Non Maskable Interrupt */
-#if defined(__ARM_ARCH_7M__) || defined(__ARM_ARCH_7EM__)
+#if defined(__ARM_ARCH_8M_MAIN__)
+    MemoryManagement_IRQn = -12, /*!< 4 Memory Management Interrupt */
+    BusFault_IRQn = -11, /*!< 5 Bus Fault Interrupt */
+    UsageFault_IRQn = -10, /*!< 6 Usage Fault Interrupt */
+    SecureFault_IRQn = -9, /*!< 7 Secure Fault Interrupt */
+#elif defined(__ARM_ARCH_7M__) || defined(__ARM_ARCH_7EM__)
     MemoryManagement_IRQn = -12, /*!< 4 Memory Management Interrupt */
     BusFault_IRQn = -11, /*!< 5 Bus Fault Interrupt */
     UsageFault_IRQn = -10, /*!< 6 Usage Fault Interrupt */
 #endif
     SVCall_IRQn = -5, /*!< 11 SV Call Interrupt */
-#if defined(__ARM_ARCH_7M__) || defined(__ARM_ARCH_7EM__)
+#if defined(__ARM_ARCH_8M_MAIN__) || defined(__ARM_ARCH_7M__) \
+    || defined(__ARM_ARCH_7EM__)
     DebugMonitor_IRQn = -4, /*!< 12 Debug Monitor Interrupt */
 #endif
     PendSV_IRQn = -2, /*!< 14 Pend SV Interrupt */
@@ -112,6 +118,21 @@ extern "C"
 #define __DCACHE_PRESENT 1U
 
 #include "core_cm7.h"
+
+#elif defined(MICRO_OS_PLUS_DEVICE_QEMU_CORTEX_M33)
+
+#define __CM33_REV 0x0000U /*!< Core revision r0p0 */
+#define __MPU_PRESENT 1U /*!< MPU present */
+#define __NVIC_PRIO_BITS 4U /*!< Uses 4 Bits for the Priority Levels */
+#define __Vendor_SysTickConfig \
+  0U /*!< Set to 1 if different SysTick Config is used  */
+#define __FPU_PRESENT 1U /*!< FPU present */
+#define __DSP_PRESENT 1U /*!< DSP present */
+#define __ICACHE_PRESENT 1U
+#define __DCACHE_PRESENT 1U
+#define __SAUREGION_PRESENT 0U /*!< SAU regions not used */
+
+#include "core_cm33.h"
 
 #else
 #error "Device not supported"

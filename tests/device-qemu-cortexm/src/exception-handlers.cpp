@@ -18,6 +18,10 @@
 #include <cmsis-plus/cortexm/exception-handlers.h>
 #include <cmsis-plus/rtos/os-c-decls.h>
 
+// The SMP Cortex-M33 port provides its own, per-core SysTick handler (only
+// core 0 may advance the RTOS clock); compiling this one in as well would be a
+// duplicate definition.
+#if !defined(OS_USE_SMP_SCHEDULER)
 void __attribute__ ((section (".after_vectors")))
 SysTick_Handler (void)
 {
@@ -26,5 +30,6 @@ SysTick_Handler (void)
 
   os_systick_handler ();
 }
+#endif
 
 // ----------------------------------------------------------------------------

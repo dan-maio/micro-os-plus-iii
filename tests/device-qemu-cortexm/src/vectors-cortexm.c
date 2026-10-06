@@ -41,6 +41,21 @@ typedef void
 void __attribute__ ((weak, alias("Default_Handler")))
 WDT_IRQHandler(void);
 
+// SSE-200 Message Handling Unit interrupts, used by the Cortex-M33 SMP port as
+// the cross-core reschedule IPI: MHU0 (IRQ 6) belongs to core 1, MHU1 (IRQ 7)
+// to core 0. Weak here so the single-core images simply keep Default_Handler.
+void __attribute__ ((weak, alias("Default_Handler")))
+MHU0_IRQHandler(void);
+void __attribute__ ((weak, alias("Default_Handler")))
+MHU1_IRQHandler(void);
+
+// The ARMv8-M SecureFault has no handler in the shared startup; fall back to
+// Default_Handler (a weak alias the kernel's own weak handlers may override).
+#if defined(__ARM_ARCH_8M_MAIN__)
+void __attribute__ ((weak, alias("Default_Handler")))
+SecureFault_Handler(void);
+#endif
+
 // ----------------------------------------------------------------------------
 
 #pragma GCC diagnostic push
@@ -62,21 +77,34 @@ handler_ptr_t _interrupt_vectors[] =
     NMI_Handler,                       // The NMI handler
     HardFault_Handler,                 // The hard fault handler
 
-#if defined(__ARM_ARCH_7M__) || defined(__ARM_ARCH_7EM__)
+#if defined(__ARM_ARCH_8M_MAIN__)
     MemManage_Handler,                 // The MPU fault handler
     BusFault_Handler,                  // The bus fault handler
     UsageFault_Handler,                // The usage fault handler
+    SecureFault_Handler,               // The secure fault handler
+    0,                                 // Reserved
+    0,                                 // Reserved
+    0,                                 // Reserved
+#elif defined(__ARM_ARCH_7M__) || defined(__ARM_ARCH_7EM__)
+    MemManage_Handler,                 // The MPU fault handler
+    BusFault_Handler,                  // The bus fault handler
+    UsageFault_Handler,                // The usage fault handler
+    0,                                 // Reserved
+    0,                                 // Reserved
+    0,                                 // Reserved
+    0,                                 // Reserved
 #else
     0,                                 // Reserved
     0,                                 // Reserved
     0,                                 // Reserved
+    0,                                 // Reserved
+    0,                                 // Reserved
+    0,                                 // Reserved
+    0,                                 // Reserved
 #endif
-    0,                                 // Reserved
-    0,                                 // Reserved
-    0,                                 // Reserved
-    0,                                 // Reserved
     SVC_Handler,                       // SVCall handler
-#if defined(__ARM_ARCH_7M__) || defined(__ARM_ARCH_7EM__)
+#if defined(__ARM_ARCH_8M_MAIN__) || defined(__ARM_ARCH_7M__) \
+    || defined(__ARM_ARCH_7EM__)
     DebugMon_Handler,                  // Debug monitor handler
 #else
     0,                                 // Reserved
@@ -88,8 +116,14 @@ handler_ptr_t _interrupt_vectors[] =
     // ------------------------------------------------------------------------
     // External Interrupts
     // WDT is the name used by the generic Arm CM devices.
-    // Here
-    WDT_IRQHandler
+    WDT_IRQHandler,                    // IRQ 0
+    0,                                 // IRQ 1, reserved
+    0,                                 // IRQ 2, reserved
+    0,                                 // IRQ 3, reserved
+    0,                                 // IRQ 4, reserved
+    0,                                 // IRQ 5, reserved
+    MHU0_IRQHandler,                   // IRQ 6, SSE-200 MHU0 (core 1 IPI)
+    MHU1_IRQHandler                    // IRQ 7, SSE-200 MHU1 (core 0 IPI)
 };
 
 #pragma GCC diagnostic pop

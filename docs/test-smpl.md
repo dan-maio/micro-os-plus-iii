@@ -12,8 +12,17 @@
 test_smpl/
 ├── run-qemu.sh      run a build's *-qemu images under an emulator
 ├── run-host.sh      run a build's *-host executables (the POSIX port)
-└── run-hw.sh        run one *-hwd image on silicon, through OpenOCD
+├── run-hw.sh        run one *-hwd image on silicon, through OpenOCD
+├── include/hw_result.hpp       the verdict contract every board shares
+├── src/board-contract.cpp      its default implementation (the kernel's
+│                               micro-os-plus::test-support target)
+└── no-power-cycle/             OpenOCD configs and run-hw-simple.sh for
+                                boards that need no power cycle
 ```
+
+On the rebuilt `smp` branch these arrive as four commits (xpack-dev-smp.md
+K43a–K43d): the verdict contract, then each runner. `test_smpl/` stays a real
+directory at the kernel root, referenced by the platforms as `../test_smpl`.
 
 No script knows a board or a port. They are called two ways: a board's
 `test/boards/<id>/{qemu,hw,run}.sh` supplies the facts and execs one of them,

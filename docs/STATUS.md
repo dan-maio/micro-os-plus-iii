@@ -1,15 +1,53 @@
 # Migration status
 
-**Updated:** 2026-10-01 · **Phase:** Upstream-integration runbook written and
-**dry-run end-to-end** (all 30 steps, locally, no push). Repositories unified under
-`micro-os-plus/`, xPack test system restored and verified. Six repositories: the
-kernel (`micro-os-plus-iii`), the devices library (`micro-os-plus-iii-devices`) and
-four architecture ports (`cortexm`, `aarch32`, `aarch64`, `posix-arch`).
+**Updated:** 2026-10-06 · **Phase:** commit-only migration executed from scratch
+(343 single-subject commits, local `smp` branches, nothing pushed) and verified
+with the full xPack test run. Five repositories: the kernel (`micro-os-plus-iii`)
+and four architecture ports (`cortexm`, `aarch32`, `aarch64`, `posix-arch`). The
+devices library (`micro-os-plus-iii-devices`) is dissolved into the ports and
+retired.
 
 This file is the cold-start entry point. Read it, then
 `docs/specs/2026-09-20-micro-os-plus-iii-smp-unification-design.md` for the
 full design and the measurements behind it. The sections after *Today* are
 the migration log, dated where they were measured.
+
+---
+
+## Today (2026-10-06)
+
+The migration from `xpack-development` (single CPU) to `smp` (SMP) was rebuilt
+from scratch with **commits only**, as described in
+`docs/smp-integration/xpack-dev-smp.md` Part II. Its Part III holds the step
+summary, the execution record and the complete commit list.
+
+- **Source and method.** Fresh clones of `github.com/dan-maio/*` in `/tmp`,
+  with `~/Work2/micro-os-plus/*` as a read-only `golden` remote. Every commit
+  covers one subject, only adds or modifies files, and becomes one pull request
+  (local branch `pr/<ID>`). No `scripts/smp/` and no chunk recipes are committed.
+- **Commits.** kernel 125 (+ K985, Part III of xpack-dev-smp.md), posix-arch 24,
+  cortexm 86, aarch32 64, aarch64 43, devices 1 (retirement README, kept in a
+  bundle) — 343 in all.
+- **Devices dissolved.** The SD, flatfs, DWC2 USB and FatFs drivers are in
+  `drivers/`, and the SoC support in `soc/<chip>/`, of each port that uses them:
+  posix-arch `soc/native`; cortexm `soc/stm32f4xx`, `soc/rp2350`; aarch32
+  `soc/bcm2837`, `soc/rk3506`; aarch64 `soc/bcm2837`. `UOS_DEVICES_DIR` no longer
+  exists; the ports define `micro-os-plus::devices*` / `soc-*` themselves.
+- **Built at every commit** (`xpm run build`), except the members of the two
+  groups that only build together (G-hrclock, G-harness), the add-only aarch
+  port commits before their first board, and the legacy hardware platforms
+  `nucleo-*` / `raspberrypi-pico`, whose configure fails in golden as well.
+- **Parity.** Identical to golden `smp` except the intended differences listed
+  in xpack-dev-smp.md §21.4.
+- **Full test run (latest compilers):** `install-all` rc 0;
+  `test-native-cmake-sys` 16/16 (debug, release); `test-cortex-cmake` 3/3 in all
+  8 configurations; `test-smp-cmake` — aarch32 and aarch64 rpi-zero-2w/rpi3b
+  15/15, `2xcortex-m33` 4/4, `pico2-1cpu` 4/4, `cortexm-pico2` 6/6,
+  `cortexm-pico2-rp2350b-psram` 3/3, each in debug and release.
+
+The sections below are the earlier log. Where they mention
+`micro-os-plus-iii-devices`, `UOS_DEVICES_DIR` or `scripts/smp/`, read them as
+history: those no longer exist on the rebuilt `smp` branches.
 
 ---
 
@@ -344,10 +382,8 @@ up in [`cortexm-port.md`](cortexm-port.md).
 │       ├── verify-kernel-compiles.sh        kernel builds on a port's headers
 │       ├── verify-no-duplicate-sources.py   spec Section 9, cross-repo
 │       └── verify-no-absolute-paths.sh      spec Section 9
-├── micro-os-plus-iii-devices/    flatfs, FatFs; SD per SoC (BCM2837, RK3506,
-│                                 native — an image file);
-│                                 silicon support per SoC (BCM2837, STM32F4,
-│                                 RP2350)
+│   (micro-os-plus-iii-devices — retired 2026-10-06: its drivers/ and
+│    soc/<chip>/ now live in each port that uses them)
 ├── micro-os-plus-iii-aarch64/    ARMv8-A port
 │   ├── src/ include/             ARMv8-A, every board
 │   └── test/                     everything board- or test-specific
@@ -394,12 +430,14 @@ trees. How that is laid out and how to run it is
 | Remotes | `GIT/micro-os-plus-iii-{smp,devices,aarch32,aarch64,cortexm,posix-arch}.git` |
 | Old remote | `GIT/micro-os-plus-iii-smp-old.git` |
 
-An architecture project holds **no copy** of the kernel or the devices repo.
-CMake resolves both as sibling directories, overridable with `-DUOS_SMP_DIR=`
-and `-DUOS_DEVICES_DIR=`. Whoever builds one clones what it needs. One working
+An architecture project holds **no copy** of the kernel. CMake resolves it as
+a sibling directory (`micro-os-plus-iii`, else `micro-os-plus-iii-smp`, with or
+without `.git`), overridable with `-DUOS_SMP_DIR=`. Since 2026-10-06 the
+drivers and SoC support are inside each port (`drivers/`, `soc/<chip>/`), so
+`-DUOS_DEVICES_DIR=` is gone. Whoever builds one clones what it needs. One working
 copy of the kernel serves every architecture project on the machine, so an
 edit to it is visible to all of them at once. The dependency runs one way:
-neither the kernel nor the devices repo knows an architecture project exists.
+the kernel does not know an architecture project exists.
 
 ## Done
 

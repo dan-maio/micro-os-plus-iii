@@ -1729,3 +1729,62 @@ D01 is kept in `devices-retired.bundle` (the local clone was deleted after S0, �
 
 ### 22.4 Documentation updates after the migration (kernel PRs 126–159)
 Made after the full test run, so that every document in `docs/` describes the executed state: Part III itself (K985); one commit per document (K986-*), which corrects stale facts in the reference documents (no `micro-os-plus-iii-devices`, no `UOS_DEVICES_DIR`, the current clone layout and the verified results) and adds a *Status 2026-10-06* note to the historical plans and reviews (their PDFs regenerated); the two commits that complete this section (K987, K988); and the verification record of §21.6 (K989). The upstream documents that do not concern the migration (`HISTORY`, `NOTES`, `TODO`, `posix-io-*`, `other-posix-systems`, `upstream-*`) are unchanged.
+
+## 23. Regeneration of 2026-10-07: from the clone to the last `pr/` commit
+
+The `smp` branches of all repositories were regenerated once more from `xpack-development`, in an empty `/tmp`. This section records how, the branches that resulted, and the test run.
+
+### 23.1 Summary of the generation
+| Step | What was done | Result |
+|---:|---|---|
+| 1 | **Clone** (§12.1): the six repositories from `github.com/dan-maio`; in the five code repositories the read-only `golden` remote (`~/Work2/micro-os-plus/<repo>`) and `git fetch golden smp`. | rc 0 |
+| 2 | **Branch** `smp` from `origin/xpack-development`. In `micro-os-plus-iii` and `micro-os-plus-iii-posix-arch` the GitHub default branch is `smp`, so the clone already has a local `smp`; there `git switch -C smp origin/xpack-development` replaces `git switch -c`. | bases as §20.1 (table 23.2) |
+| 3 | **aarch64 base check**: `git log --oneline 366c957...fe904c0` gives one commit, `fe904c0 package.json update`; `fe904c0` is used, as in §20.1. | — |
+| 4 | **Install** (§13.3): `xpm install && xpm link` in posix-arch and cortexm, `xpm run install-all` in `micro-os-plus-iii/tests`; aarch32 and aarch64 `xpm install && xpm link` before the test run. | rc 0 for all |
+| 5 | **Commits**: the commits of §22.3 were applied in §22.3 order with `git cherry-pick`, from the recorded branches of the 2026-10-06 replay (§21.6). Each new commit was compared with its recorded commit: the tree is identical at every commit, and Commit-ID, subject and order match §22.3 (376 rows; K989's SHA column reads "(this commit)"). | 376 commits, 0 tree differences |
+| 6 | **Branches**: one local branch `pr/<Commit-ID>` per commit (table 23.3). | 376 branches |
+| 7 | **Devices** (§14.2): D01 applied to the fresh devices clone, branch `pr/D01`, kept in `devices-retired-2026-10-07.bundle`; then the local devices clone was deleted. | — |
+| 8 | **Full test run** (latest compilers, `ctest -LE hwd`): table 23.4. | all green |
+
+Only the SHAs differ from §22.3, because the commit dates differ. Nothing was pushed.
+
+### 23.2 Bases and results
+| Repository | Base (`origin/xpack-development`) | Commits on `smp` | First PR branch | Last PR branch (`smp` tip) |
+|---|---|---:|---|---|
+| `micro-os-plus-iii` | `7f1ce5ca` | 159 | `pr/K01` `deb7dba1` | `pr/K989` `ccf87e89` |
+| `micro-os-plus-iii-posix-arch` | `86a6a1f` | 24 | `pr/P01` `a2455e0a` | `pr/P36` `4ed05ad9` |
+| `micro-os-plus-iii-cortexm` | `687e975` | 86 | `pr/C01` `995592d4` | `pr/C29` `71e98ff7` |
+| `micro-os-plus-iii-aarch32` | `307c62f` | 64 | `pr/A32-01` `fba3b274` | `pr/A32-LL-smp_test_int4` `e721deab` |
+| `micro-os-plus-iii-aarch64` | `fe904c0` | 43 | `pr/A64-01` `fd554718` | `pr/A64-R3-usb_test` `8151c26a` |
+| `micro-os-plus-iii-devices` | `e8e39d5` (`smp`) | 1 | `pr/D01` (bundle) | `pr/D01` (bundle) |
+
+This section is one more kernel commit after K989, `K990` (`pr/K990`), so the kernel `smp` tip is K990.
+
+### 23.3 The `pr/` branches
+- **One branch per commit.** Every commit of `smp` has a local branch `pr/<Commit-ID>`, where `<Commit-ID>` is the ID in the commit trailer `Commit-ID: <ID> (xpack-dev-smp.md Part II)`. Checked in each repository: number of `pr/*` branches = number of commits, no commit without a branch, no two branches on the same commit.
+- **Stacked.** `pr/<ID>` points at its commit, whose parent is the previous commit, i.e. the previous `pr/` branch. The first branch of a repository sits on `xpack-development`; the last one is the `smp` tip.
+- **One branch = one PR.** The PR for `pr/<ID>` has the previous `pr/` branch as its base (the first one has `xpack-development`); after a merge, the next PR is retargeted (§12.5). The cross-repository merge order is §22.2.
+- **Local only.** The branches exist in each `/tmp/<repository>` clone; they are pushed to `github.com/dan-maio/<repository>` only when the PRs are opened.
+- **This run's SHAs.** §22.3 lists the SHAs of the 2026-10-06 replay. The SHAs of this run are listed in each clone with:
+
+```bash
+git for-each-ref --sort=committerdate --format='%(refname:short) %(objectname:short=8) %(subject)' 'refs/heads/pr/*'
+```
+
+### 23.4 Full test run (µOS++ test framework, `ctest -LE hwd`)
+Compilers: host gcc 16.2.1 for `native-cmake-sys`; xPack `arm-none-eabi-gcc` and `aarch64-none-elf-gcc` 15.2.1 for the cross builds.
+
+| Action (in `micro-os-plus-iii/tests`) | Debug | Release |
+|---|---|---|
+| `xpm run test-native-cmake-sys` | 16/16 | 16/16 |
+| `xpm run test-cortex-cmake` (qemu-cortex-m0, m3, m4f, m7f) | 3/3 each | 3/3 each |
+| `test-aarch32-rpi-zero-2w-cmake` | 15/15 | 15/15 |
+| `test-aarch32-rpi3b-cmake` | 15/15 | 15/15 |
+| `test-aarch64-rpi-zero-2w-cmake` | 15/15 | 15/15 |
+| `test-aarch64-rpi3b-cmake` | 15/15 | 15/15 (see below) |
+| `test-2xcortex-m33-cmake` | 4/4 | 4/4 |
+| `test-pico2-1cpu-cmake` | 4/4 | 4/4 |
+| `test-cortexm-pico2-cmake` | 6/6 | 6/6 |
+| `test-cortexm-pico2-rp2350b-psram-cmake` | 3/3 | 3/3 |
+
+In the `xpm run test-smp-cmake` pass, `aarch64-rpi3b-smp-pipeline-test-qemu` (release) stopped after 5.5 s: QEMU exited with rc 1 after the `t= 4347 ms` progress line, without a `RESULT` line, and the action stopped there. Re-run alone, unchanged, it passed (35.6 s). The four remaining platforms were then run with their own `xpm run test-<platform>-cmake` actions, all rc 0. Like the stall recorded in §21.6, this is an intermittent behaviour of the SMP pipeline test under QEMU, to be investigated separately.

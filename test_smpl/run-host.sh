@@ -75,10 +75,10 @@ for exe in "${BUILD_DIR}"/*-host; do
     # A pipeline, not `> >(tee ...)`: a process substitution runs
     # asynchronously, so a short test's RESULT line could still be on its way
     # to the log when it is read below (NO RESULT).
-    timeout "$tmo" env "${env[@]}" "$exe" 2>&1 | tee "$log"
+    timeout "$tmo" /usr/bin/env "${env[@]}" "$exe" 2>&1 | tee "$log"
     rc=${PIPESTATUS[0]}
   else
-    timeout "$tmo" env "${env[@]}" "$exe" > "$log" 2>&1
+    timeout "$tmo" /usr/bin/env "${env[@]}" "$exe" > "$log" 2>&1
     rc=$?
   fi
 

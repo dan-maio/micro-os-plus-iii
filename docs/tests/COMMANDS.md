@@ -76,7 +76,7 @@ xpm run build   --config native-cmake-sys-release
 xpm run test    --config native-cmake-sys-release
 ```
 
-The compiler is the host's (`gcc (GCC) 16.2.1`); `test` runs `ctest -V -LE hwd`
+The compiler is the host's (`gcc (GCC) 16.2.1`); `test` runs `ctest -V`
 in `build/<config>`.
 
 ## 4. Results

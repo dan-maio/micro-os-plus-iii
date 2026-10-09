@@ -108,21 +108,25 @@ OpenOCD never uses this port, so it can stay open all the time.
 ### Step 4 — reset the board
 
 ```bash
-$OPENOCD -s $CFG -f $CFG/openocd-jlink-rpi3.cfg -c "init" \
-  -c "targets bcm2837.cpu0" \
-  -c "halt" \
-  -c "mww 0x3f100024 0x5a000001" \
-  -c "mww 0x3f10001c 0x5a000020" \
-  -c "shutdown"
+$OPENOCD -s $CFG -f $CFG/openocd-jlink-rpi3.cfg -f $CFG/reset.cfg
 ```
 
 - `-s $CFG -f $CFG/openocd-jlink-rpi3.cfg` — the J-Link and the board
   description (4 Cortex-A53 cores, JTAG at 1000 kHz). The file only
   describes the hardware; it does not connect by itself.
-- `-c "init"` — connect to the board through the probe. Every OpenOCD
-  command below needs it first.
-- `targets bcm2837.cpu0` — talk to core 0.
-- `halt` — stop core 0.
+- `-f $CFG/reset.cfg` — the commands, one per line:
+
+```
+init
+targets bcm2837.cpu0; halt
+mww 0x3f100024 0x5a000001
+mww 0x3f10001c 0x5a000020
+shutdown
+```
+
+- `init` — connect to the board through the probe. Every command after it
+  needs it first.
+- `targets bcm2837.cpu0; halt` — talk to core 0, and stop it.
 - `mww 0x3f100024 0x5a000001` — set the watchdog timer to (almost) zero.
 - `mww 0x3f10001c 0x5a000020` — tell the watchdog to reset the chip when
   it expires. The board reboots.
@@ -139,27 +143,34 @@ sleep 12
 
 ### Step 6 — load the test and start it
 
-This is one OpenOCD command. The options run in order, from top to bottom.
-
 ```bash
-$OPENOCD -s $CFG -f $CFG/openocd-jlink-rpi3.cfg -c "init" \
-  -c "targets bcm2837.cpu0" -c "halt" \
-  -c "targets bcm2837.cpu1" -c "halt" \
-  -c "targets bcm2837.cpu2" -c "halt" \
-  -c "targets bcm2837.cpu3" -c "halt" \
-  -c "targets bcm2837.cpu0" -c "arm semihosting enable" \
-  -c "targets bcm2837.cpu1" -c "arm semihosting enable" \
-  -c "targets bcm2837.cpu2" -c "arm semihosting enable" \
-  -c "targets bcm2837.cpu3" -c "arm semihosting enable" \
-  -c "targets bcm2837.cpu0" -c "load_image $ELF" \
-  -c "targets bcm2837.cpu0" -c "reg cpsr 0x600001da" -c "resume 0x1003c" \
-  -c "targets bcm2837.cpu1" -c "resume" \
-  -c "targets bcm2837.cpu2" -c "resume" \
-  -c "targets bcm2837.cpu3" -c "resume"
+$OPENOCD -s $CFG -f $CFG/openocd-jlink-rpi3.cfg -c "set ELF $ELF" -f $CFG/run-test.cfg
+```
+
+OpenOCD reads its options in order: first the board description, then
+`set ELF …` (the test to load, used by `run-test.cfg` as `$ELF`), then
+`run-test.cfg`, which holds the commands, one per line:
+
+```
+init
+targets bcm2837.cpu0; halt
+targets bcm2837.cpu1; halt
+targets bcm2837.cpu2; halt
+targets bcm2837.cpu3; halt
+targets bcm2837.cpu0; arm semihosting enable
+targets bcm2837.cpu1; arm semihosting enable
+targets bcm2837.cpu2; arm semihosting enable
+targets bcm2837.cpu3; arm semihosting enable
+targets bcm2837.cpu0; load_image $ELF
+targets bcm2837.cpu0; reg cpsr 0x600001da; resume 0x1003c
+targets bcm2837.cpu1; resume
+targets bcm2837.cpu2; resume
+targets bcm2837.cpu3; resume
 ```
 
 What each part does:
 
+0. **Connect** (`init`).
 1. **Stop the 4 cores** (`targets` … `halt`, for cores 0–3), so nothing
    runs while the program is copied.
 2. **Turn semihosting on for each core.** The test prints by stopping the
@@ -227,15 +238,11 @@ Nothing to read from the ELF: the entry is always `0x80000`.
 ### Step 4 (AArch64) — reset the board
 
 ```bash
-$OPENOCD -s $CFG -f $CFG/openocd-jlink-rpi3.cfg -c "init" \
-  -c "targets bcm2837.cpu0" \
-  -c "halt" \
-  -c "mww 0x3f100024 0x5a000001" \
-  -c "mww 0x3f10001c 0x5a000020" \
-  -c "shutdown"
+$OPENOCD -s $CFG -f $CFG/openocd-jlink-rpi3.cfg -f $CFG/reset.cfg
 ```
 
-The same as for AArch32, with the 64-bit port's config folder.
+The same as for AArch32, with the 64-bit port's config folder (its
+`reset.cfg` has the same lines).
 
 ### Step 5 (AArch64)
 
@@ -246,20 +253,14 @@ sleep 12
 ### Step 6 (AArch64) — load the test and start it
 
 ```bash
-$OPENOCD -s $CFG -f $CFG/openocd-jlink-rpi3.cfg -c "init" \
-  -c "targets bcm2837.cpu0" -c "halt" \
-  -c "targets bcm2837.cpu1" -c "halt" \
-  -c "targets bcm2837.cpu2" -c "halt" \
-  -c "targets bcm2837.cpu3" -c "halt" \
-  -c "targets bcm2837.cpu0" -c "arm semihosting enable" \
-  -c "targets bcm2837.cpu1" -c "arm semihosting enable" \
-  -c "targets bcm2837.cpu2" -c "arm semihosting enable" \
-  -c "targets bcm2837.cpu3" -c "arm semihosting enable" \
-  -c "targets bcm2837.cpu0" -c "load_image $ELF" \
-  -c "targets bcm2837.cpu0" -c "reg pc 0x80000" -c "reg pc" -c "resume" \
-  -c "targets bcm2837.cpu1" -c "resume" \
-  -c "targets bcm2837.cpu2" -c "resume" \
-  -c "targets bcm2837.cpu3" -c "resume"
+$OPENOCD -s $CFG -f $CFG/openocd-jlink-rpi3.cfg -c "set ELF $ELF" -f $CFG/run-test.cfg
+```
+
+The 64-bit port's `run-test.cfg` differs from the 32-bit one in one line,
+the start of core 0:
+
+```
+targets bcm2837.cpu0; reg pc 0x80000; reg pc; resume
 ```
 
 The same parts as for AArch32, except:

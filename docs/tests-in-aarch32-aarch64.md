@@ -245,8 +245,8 @@ board-specific is in them and nothing generic is in the board scripts.
 
 ```sh
 UOS_HW_ENTRY=0x1003c            # where the image is linked
-UOS_HW_SPIN_WORDS=4             # __smp_spin words to zero before release
-UOS_HW_RESUME=cpsr              # cpsr | pc | entry
+UOS_HW_SPIN_WORDS=0             # __smp_spin words to zero before release
+UOS_HW_RESUME=cpsr-first        # cpsr | pc | entry | cpsr-first | pc-first
 UOS_HW_NCPU=4
 UOS_HW_TARGET_FMT="bcm2837.cpu%d"
 UOS_HW_CFG=…/openocd-jlink-rpi3.cfg
@@ -255,10 +255,19 @@ UOS_HW_PRELOAD="…Tcl…"          # run between halt and load (the Lyra's
                                 # MMU/cache sanitize)
 ```
 
-The AArch64 Pi differs from the AArch32 Pi on the same silicon by four of
-these: entry `0x80000`, **eight** spin words (`__smp_spin` is `uint64_t[4]`),
-resume by PC because a core keeps the exception level it was halted in, and
-`CFG_INIT=1`.
+The AArch64 Pi differs from the AArch32 Pi on the same silicon by three of
+these: entry `0x80000`, `pc-first` (core 0 is started by PC, because a core
+keeps the exception level it was halted in), and `CFG_INIT=1`.
+
+On both Pi ports only core 0 is started (`cpsr-first` / `pc-first`); cores
+1–3 are resumed where they were halted — after the watchdog reset, in the
+firmware's own loop — and the kernel releases them itself once it has written
+their `__smp_spin` slot, so no spin words are zeroed (`UOS_HW_SPIN_WORDS=0`).
+That needs an SD card whose kernel leaves cores 1–3 in that loop and boots
+the port's width (`arm_64bit=0` for AArch32, `arm_64bit=1` for AArch64).
+The previous flow — all four cores started at the entry, after zeroing 4
+(AArch32) or 8 (AArch64) `__smp_spin` words — is kept in each port's
+`test/boards/rpi-zero-2w/hw.sh.bak`.
 
 ---
 

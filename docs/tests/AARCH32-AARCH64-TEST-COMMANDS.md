@@ -23,8 +23,8 @@ of the kernel platforms — without the scripts.
 | `cortexm-weactf412` | `micro-os-plus-iii-cortexm` | — | 5 | — | 7.4 |
 | `native` (`native-cmake-sys`) | `micro-os-plus-iii-posix-arch` | — | — | 16 | 8 |
 
-The image names, the test lists and the AArch32/AArch64 addresses
-(`__smp_spin`, section 4) were read on 2026-10-09 from the **debug** builds
+The image names and the test lists were read on 2026-10-09 from the
+**debug** builds
 (`*-cmake-gcc-debug`, `native-cmake-sys-debug`) made from:
 
 | Repository | Branch | Commit |
@@ -34,9 +34,6 @@ The image names, the test lists and the AArch32/AArch64 addresses
 | `micro-os-plus-iii-aarch64` | `smp` | `8151c26` |
 | `micro-os-plus-iii-cortexm` | `smp` | `71e98ff` |
 | `micro-os-plus-iii-posix-arch` | `smp` | `4ed05ad` |
-
-The addresses change whenever a test is built differently (release, another
-commit); section 4.1 shows how to read them again.
 
 ## 1. Paths and tools
 
@@ -755,27 +752,36 @@ timeout 200 $QEMU -M raspi3b -smp 4 -nographic -serial none \
 
 ### 4.1 What a hardware run does
 
-One test per power cycle: the image is loaded into RAM over whatever the
-previous test left there, and neither board has a reset a script can drive.
-Power-cycle the board before each test. These commands do not use the UART
-console; keep your own terminal on it (for example
-`tio -b 115200 /dev/ttyACM0`). The test's semihosting output appears in the
-OpenOCD output; the test passed when it prints `RESULT: PASS`. Then stop
-OpenOCD (Ctrl-C).
+One test at a time: the image is loaded into RAM over whatever was there
+before, and the Pi has no reset a script can drive, so each test starts with
+a reset through the watchdog. These commands do not use the UART console;
+keep your own terminal on it (for example `tio -b 115200 /dev/ttyACM0`). The
+test's semihosting output appears in the OpenOCD output; the test passed when
+it prints `RESULT: PASS`. Then stop OpenOCD (Ctrl-C).
 
 The session file is written with a quoted here-document (so that the Tcl
 `$core` stays literal); the ELF path is then put in with `sed`.
 
-The two values in each test's session come from its ELF:
+Only core 0 is started at the entry. Cores 1–3 are resumed where they were
+halted: after the watchdog reset they wait in the firmware's own loop, and
+the test releases them itself (`release_one()` in
+`test/boards/rpi-zero-2w/src/smp.cpp`) after it has written their
+`__smp_spin` slot. So nothing is read from the ELF and nothing is written to
+`__smp_spin`. This is what `hw.sh` does (`UOS_HW_RESUME=cpsr-first` /
+`pc-first`, `UOS_HW_SPIN_WORDS=0`); the previous flow, which started all four
+cores and zeroed `__smp_spin`, is kept in `hw.sh.bak`.
 
-```bash
-$TC32/arm-none-eabi-readelf -h $D/<test>-hwd | awk '/Entry point/{print $NF}'   # entry
-$TC32/arm-none-eabi-nm $D/<test>-hwd | awk '$3 == "__smp_spin" {print $1}'      # __smp_spin
-# AArch64: $TC64/aarch64-none-elf-readelf and $TC64/aarch64-none-elf-nm
-```
+It needs an SD card whose kernel leaves cores 1–3 in the firmware's loop,
+booting the same width as the port, because the two ports release the cores
+differently:
 
-`__smp_spin` is zeroed after the load: 4 32-bit words on AArch32
-(`uint32_t[4]`), 8 on AArch64 (`uint64_t[4]`).
+| Port | SD card `config.txt` | Cores 1–3 wait for | After the reset, cores 1–3 are at |
+|---|---|---|---|
+| AArch32 | `arm_64bit=0` | their mailbox 3 | `pc=0x7a`, Thumb, Hypervisor |
+| AArch64 | `arm_64bit=1` (e.g. `$A64/test/boards/rpi-zero-2w/hw-park/`) | their release word at `0xd8 + 8*core` | `pc=0x7c`, EL2H |
+
+Tested on a Pi Zero 2 W on 2026-10-09: every test below except `usb_test`
+passed this way, on both ports.
 
 ### 4.2 Raspberry Pi (Zero 2 W and 3 B), both ports
 
@@ -785,7 +791,8 @@ $TC32/arm-none-eabi-nm $D/<test>-hwd | awk '$3 == "__smp_spin" {print $1}'      
 | OpenOCD config, Olimex ARM-USB-OCD | `$A32/test/boards/rpi-zero-2w/openocd-olimex.cfg` | `$A64/test/boards/rpi-zero-2w/openocd-olimex.cfg` |
 | `-c init` | no (the config runs `init` itself) | yes (the config is declarative) |
 | entry | `0x1003c` | `0x80000` |
-| resume | set CPSR to `0x600001da`, then resume at the entry | set PC to the entry, then resume |
+| start core 0 | set CPSR to `0x600001da`, then resume at the entry | set PC to the entry, then resume |
+| cores 1–3 | `resume` where they are | `resume` where they are |
 
 The Pi 3 B uses the Zero 2 W's configs (same BCM2837). Each test is three
 steps:
@@ -793,7 +800,8 @@ steps:
 1. **Reset** through the watchdog (`PM_RSTC`/`PM_WDOG` at `0x3f10001c` and
    `0x3f100024`), then wait 12 s for the board to boot.
 2. **Write the session** (`/tmp/session.tcl`): halt the four cores, enable
-   semihosting on each, load the ELF, zero `__smp_spin`, resume the cores.
+   semihosting on each, load the ELF, start core 0 at the entry, let cores
+   1–3 go on where they are.
 3. **Run OpenOCD** with the config and the session.
 
 The sections below write every test with the J-Link config; for the Olimex
@@ -819,16 +827,13 @@ foreach core {0 1 2 3} { targets [format {bcm2837.cpu%d} $core]; arm semihosting
 echo "--- stage: load_image __ELF__ ---"
 targets bcm2837.cpu0
 load_image __ELF__
-echo "--- stage: zero __smp_spin at 0x0003d400 (4 words) ---"
-mww 0x3d400 0
-mww 0x3d404 0
-mww 0x3d408 0
-mww 0x3d40c 0
 echo "--- stage: resume cores 0 1 2 3 at 0x1003c ---"
-foreach core {0 1 2 3} {
+targets bcm2837.cpu0
+reg cpsr 0x600001da
+resume 0x1003c
+foreach core {1 2 3} {
   targets [format {bcm2837.cpu%d} $core]
-  reg cpsr 0x600001da
-  resume 0x1003c
+  resume
 }
 EOF
 sed -i "s|__ELF__|$D/cmsis-os-validator-hwd|g" /tmp/session.tcl
@@ -849,16 +854,13 @@ foreach core {0 1 2 3} { targets [format {bcm2837.cpu%d} $core]; arm semihosting
 echo "--- stage: load_image __ELF__ ---"
 targets bcm2837.cpu0
 load_image __ELF__
-echo "--- stage: zero __smp_spin at 0x0002bfc0 (4 words) ---"
-mww 0x2bfc0 0
-mww 0x2bfc4 0
-mww 0x2bfc8 0
-mww 0x2bfcc 0
 echo "--- stage: resume cores 0 1 2 3 at 0x1003c ---"
-foreach core {0 1 2 3} {
+targets bcm2837.cpu0
+reg cpsr 0x600001da
+resume 0x1003c
+foreach core {1 2 3} {
   targets [format {bcm2837.cpu%d} $core]
-  reg cpsr 0x600001da
-  resume 0x1003c
+  resume
 }
 EOF
 sed -i "s|__ELF__|$D/mutex-stress-hwd|g" /tmp/session.tcl
@@ -879,16 +881,13 @@ foreach core {0 1 2 3} { targets [format {bcm2837.cpu%d} $core]; arm semihosting
 echo "--- stage: load_image __ELF__ ---"
 targets bcm2837.cpu0
 load_image __ELF__
-echo "--- stage: zero __smp_spin at 0x00051b68 (4 words) ---"
-mww 0x51b68 0
-mww 0x51b6c 0
-mww 0x51b70 0
-mww 0x51b74 0
 echo "--- stage: resume cores 0 1 2 3 at 0x1003c ---"
-foreach core {0 1 2 3} {
+targets bcm2837.cpu0
+reg cpsr 0x600001da
+resume 0x1003c
+foreach core {1 2 3} {
   targets [format {bcm2837.cpu%d} $core]
-  reg cpsr 0x600001da
-  resume 0x1003c
+  resume
 }
 EOF
 sed -i "s|__ELF__|$D/rtos-apis-hwd|g" /tmp/session.tcl
@@ -909,16 +908,13 @@ foreach core {0 1 2 3} { targets [format {bcm2837.cpu%d} $core]; arm semihosting
 echo "--- stage: load_image __ELF__ ---"
 targets bcm2837.cpu0
 load_image __ELF__
-echo "--- stage: zero __smp_spin at 0x0004a070 (4 words) ---"
-mww 0x4a070 0
-mww 0x4a074 0
-mww 0x4a078 0
-mww 0x4a07c 0
 echo "--- stage: resume cores 0 1 2 3 at 0x1003c ---"
-foreach core {0 1 2 3} {
+targets bcm2837.cpu0
+reg cpsr 0x600001da
+resume 0x1003c
+foreach core {1 2 3} {
   targets [format {bcm2837.cpu%d} $core]
-  reg cpsr 0x600001da
-  resume 0x1003c
+  resume
 }
 EOF
 sed -i "s|__ELF__|$D/sd_test-hwd|g" /tmp/session.tcl
@@ -939,16 +935,13 @@ foreach core {0 1 2 3} { targets [format {bcm2837.cpu%d} $core]; arm semihosting
 echo "--- stage: load_image __ELF__ ---"
 targets bcm2837.cpu0
 load_image __ELF__
-echo "--- stage: zero __smp_spin at 0x000e76c0 (4 words) ---"
-mww 0xe76c0 0
-mww 0xe76c4 0
-mww 0xe76c8 0
-mww 0xe76cc 0
 echo "--- stage: resume cores 0 1 2 3 at 0x1003c ---"
-foreach core {0 1 2 3} {
+targets bcm2837.cpu0
+reg cpsr 0x600001da
+resume 0x1003c
+foreach core {1 2 3} {
   targets [format {bcm2837.cpu%d} $core]
-  reg cpsr 0x600001da
-  resume 0x1003c
+  resume
 }
 EOF
 sed -i "s|__ELF__|$D/smp-mat-sdcard-test-hwd|g" /tmp/session.tcl
@@ -969,16 +962,13 @@ foreach core {0 1 2 3} { targets [format {bcm2837.cpu%d} $core]; arm semihosting
 echo "--- stage: load_image __ELF__ ---"
 targets bcm2837.cpu0
 load_image __ELF__
-echo "--- stage: zero __smp_spin at 0x0006fca0 (4 words) ---"
-mww 0x6fca0 0
-mww 0x6fca4 0
-mww 0x6fca8 0
-mww 0x6fcac 0
 echo "--- stage: resume cores 0 1 2 3 at 0x1003c ---"
-foreach core {0 1 2 3} {
+targets bcm2837.cpu0
+reg cpsr 0x600001da
+resume 0x1003c
+foreach core {1 2 3} {
   targets [format {bcm2837.cpu%d} $core]
-  reg cpsr 0x600001da
-  resume 0x1003c
+  resume
 }
 EOF
 sed -i "s|__ELF__|$D/smp-mat-test-hwd|g" /tmp/session.tcl
@@ -999,16 +989,13 @@ foreach core {0 1 2 3} { targets [format {bcm2837.cpu%d} $core]; arm semihosting
 echo "--- stage: load_image __ELF__ ---"
 targets bcm2837.cpu0
 load_image __ELF__
-echo "--- stage: zero __smp_spin at 0x00092630 (4 words) ---"
-mww 0x92630 0
-mww 0x92634 0
-mww 0x92638 0
-mww 0x9263c 0
 echo "--- stage: resume cores 0 1 2 3 at 0x1003c ---"
-foreach core {0 1 2 3} {
+targets bcm2837.cpu0
+reg cpsr 0x600001da
+resume 0x1003c
+foreach core {1 2 3} {
   targets [format {bcm2837.cpu%d} $core]
-  reg cpsr 0x600001da
-  resume 0x1003c
+  resume
 }
 EOF
 sed -i "s|__ELF__|$D/smp-num-test-hwd|g" /tmp/session.tcl
@@ -1029,16 +1016,13 @@ foreach core {0 1 2 3} { targets [format {bcm2837.cpu%d} $core]; arm semihosting
 echo "--- stage: load_image __ELF__ ---"
 targets bcm2837.cpu0
 load_image __ELF__
-echo "--- stage: zero __smp_spin at 0x00083f30 (4 words) ---"
-mww 0x83f30 0
-mww 0x83f34 0
-mww 0x83f38 0
-mww 0x83f3c 0
 echo "--- stage: resume cores 0 1 2 3 at 0x1003c ---"
-foreach core {0 1 2 3} {
+targets bcm2837.cpu0
+reg cpsr 0x600001da
+resume 0x1003c
+foreach core {1 2 3} {
   targets [format {bcm2837.cpu%d} $core]
-  reg cpsr 0x600001da
-  resume 0x1003c
+  resume
 }
 EOF
 sed -i "s|__ELF__|$D/smp-pipeline-test-hwd|g" /tmp/session.tcl
@@ -1059,16 +1043,13 @@ foreach core {0 1 2 3} { targets [format {bcm2837.cpu%d} $core]; arm semihosting
 echo "--- stage: load_image __ELF__ ---"
 targets bcm2837.cpu0
 load_image __ELF__
-echo "--- stage: zero __smp_spin at 0x000412d0 (4 words) ---"
-mww 0x412d0 0
-mww 0x412d4 0
-mww 0x412d8 0
-mww 0x412dc 0
 echo "--- stage: resume cores 0 1 2 3 at 0x1003c ---"
-foreach core {0 1 2 3} {
+targets bcm2837.cpu0
+reg cpsr 0x600001da
+resume 0x1003c
+foreach core {1 2 3} {
   targets [format {bcm2837.cpu%d} $core]
-  reg cpsr 0x600001da
-  resume 0x1003c
+  resume
 }
 EOF
 sed -i "s|__ELF__|$D/smp-pro-cons-test-hwd|g" /tmp/session.tcl
@@ -1089,16 +1070,13 @@ foreach core {0 1 2 3} { targets [format {bcm2837.cpu%d} $core]; arm semihosting
 echo "--- stage: load_image __ELF__ ---"
 targets bcm2837.cpu0
 load_image __ELF__
-echo "--- stage: zero __smp_spin at 0x0002ce80 (4 words) ---"
-mww 0x2ce80 0
-mww 0x2ce84 0
-mww 0x2ce88 0
-mww 0x2ce8c 0
 echo "--- stage: resume cores 0 1 2 3 at 0x1003c ---"
-foreach core {0 1 2 3} {
+targets bcm2837.cpu0
+reg cpsr 0x600001da
+resume 0x1003c
+foreach core {1 2 3} {
   targets [format {bcm2837.cpu%d} $core]
-  reg cpsr 0x600001da
-  resume 0x1003c
+  resume
 }
 EOF
 sed -i "s|__ELF__|$D/smp_test0-hwd|g" /tmp/session.tcl
@@ -1119,16 +1097,13 @@ foreach core {0 1 2 3} { targets [format {bcm2837.cpu%d} $core]; arm semihosting
 echo "--- stage: load_image __ELF__ ---"
 targets bcm2837.cpu0
 load_image __ELF__
-echo "--- stage: zero __smp_spin at 0x0003c3f0 (4 words) ---"
-mww 0x3c3f0 0
-mww 0x3c3f4 0
-mww 0x3c3f8 0
-mww 0x3c3fc 0
 echo "--- stage: resume cores 0 1 2 3 at 0x1003c ---"
-foreach core {0 1 2 3} {
+targets bcm2837.cpu0
+reg cpsr 0x600001da
+resume 0x1003c
+foreach core {1 2 3} {
   targets [format {bcm2837.cpu%d} $core]
-  reg cpsr 0x600001da
-  resume 0x1003c
+  resume
 }
 EOF
 sed -i "s|__ELF__|$D/smp_test1-hwd|g" /tmp/session.tcl
@@ -1149,16 +1124,13 @@ foreach core {0 1 2 3} { targets [format {bcm2837.cpu%d} $core]; arm semihosting
 echo "--- stage: load_image __ELF__ ---"
 targets bcm2837.cpu0
 load_image __ELF__
-echo "--- stage: zero __smp_spin at 0x00040680 (4 words) ---"
-mww 0x40680 0
-mww 0x40684 0
-mww 0x40688 0
-mww 0x4068c 0
 echo "--- stage: resume cores 0 1 2 3 at 0x1003c ---"
-foreach core {0 1 2 3} {
+targets bcm2837.cpu0
+reg cpsr 0x600001da
+resume 0x1003c
+foreach core {1 2 3} {
   targets [format {bcm2837.cpu%d} $core]
-  reg cpsr 0x600001da
-  resume 0x1003c
+  resume
 }
 EOF
 sed -i "s|__ELF__|$D/smp_test2-hwd|g" /tmp/session.tcl
@@ -1179,16 +1151,13 @@ foreach core {0 1 2 3} { targets [format {bcm2837.cpu%d} $core]; arm semihosting
 echo "--- stage: load_image __ELF__ ---"
 targets bcm2837.cpu0
 load_image __ELF__
-echo "--- stage: zero __smp_spin at 0x0003dc30 (4 words) ---"
-mww 0x3dc30 0
-mww 0x3dc34 0
-mww 0x3dc38 0
-mww 0x3dc3c 0
 echo "--- stage: resume cores 0 1 2 3 at 0x1003c ---"
-foreach core {0 1 2 3} {
+targets bcm2837.cpu0
+reg cpsr 0x600001da
+resume 0x1003c
+foreach core {1 2 3} {
   targets [format {bcm2837.cpu%d} $core]
-  reg cpsr 0x600001da
-  resume 0x1003c
+  resume
 }
 EOF
 sed -i "s|__ELF__|$D/smp_test3-hwd|g" /tmp/session.tcl
@@ -1209,16 +1178,13 @@ foreach core {0 1 2 3} { targets [format {bcm2837.cpu%d} $core]; arm semihosting
 echo "--- stage: load_image __ELF__ ---"
 targets bcm2837.cpu0
 load_image __ELF__
-echo "--- stage: zero __smp_spin at 0x00054490 (4 words) ---"
-mww 0x54490 0
-mww 0x54494 0
-mww 0x54498 0
-mww 0x5449c 0
 echo "--- stage: resume cores 0 1 2 3 at 0x1003c ---"
-foreach core {0 1 2 3} {
+targets bcm2837.cpu0
+reg cpsr 0x600001da
+resume 0x1003c
+foreach core {1 2 3} {
   targets [format {bcm2837.cpu%d} $core]
-  reg cpsr 0x600001da
-  resume 0x1003c
+  resume
 }
 EOF
 sed -i "s|__ELF__|$D/smp_test4-hwd|g" /tmp/session.tcl
@@ -1239,16 +1205,13 @@ foreach core {0 1 2 3} { targets [format {bcm2837.cpu%d} $core]; arm semihosting
 echo "--- stage: load_image __ELF__ ---"
 targets bcm2837.cpu0
 load_image __ELF__
-echo "--- stage: zero __smp_spin at 0x00161848 (4 words) ---"
-mww 0x161848 0
-mww 0x16184c 0
-mww 0x161850 0
-mww 0x161854 0
 echo "--- stage: resume cores 0 1 2 3 at 0x1003c ---"
-foreach core {0 1 2 3} {
+targets bcm2837.cpu0
+reg cpsr 0x600001da
+resume 0x1003c
+foreach core {1 2 3} {
   targets [format {bcm2837.cpu%d} $core]
-  reg cpsr 0x600001da
-  resume 0x1003c
+  resume
 }
 EOF
 sed -i "s|__ELF__|$D/usb_test-hwd|g" /tmp/session.tcl
@@ -1277,16 +1240,13 @@ foreach core {0 1 2 3} { targets [format {bcm2837.cpu%d} $core]; arm semihosting
 echo "--- stage: load_image __ELF__ ---"
 targets bcm2837.cpu0
 load_image __ELF__
-echo "--- stage: zero __smp_spin at 0x0003d400 (4 words) ---"
-mww 0x3d400 0
-mww 0x3d404 0
-mww 0x3d408 0
-mww 0x3d40c 0
 echo "--- stage: resume cores 0 1 2 3 at 0x1003c ---"
-foreach core {0 1 2 3} {
+targets bcm2837.cpu0
+reg cpsr 0x600001da
+resume 0x1003c
+foreach core {1 2 3} {
   targets [format {bcm2837.cpu%d} $core]
-  reg cpsr 0x600001da
-  resume 0x1003c
+  resume
 }
 EOF
 sed -i "s|__ELF__|$D/cmsis-os-validator-hwd|g" /tmp/session.tcl
@@ -1307,16 +1267,13 @@ foreach core {0 1 2 3} { targets [format {bcm2837.cpu%d} $core]; arm semihosting
 echo "--- stage: load_image __ELF__ ---"
 targets bcm2837.cpu0
 load_image __ELF__
-echo "--- stage: zero __smp_spin at 0x0002bfc0 (4 words) ---"
-mww 0x2bfc0 0
-mww 0x2bfc4 0
-mww 0x2bfc8 0
-mww 0x2bfcc 0
 echo "--- stage: resume cores 0 1 2 3 at 0x1003c ---"
-foreach core {0 1 2 3} {
+targets bcm2837.cpu0
+reg cpsr 0x600001da
+resume 0x1003c
+foreach core {1 2 3} {
   targets [format {bcm2837.cpu%d} $core]
-  reg cpsr 0x600001da
-  resume 0x1003c
+  resume
 }
 EOF
 sed -i "s|__ELF__|$D/mutex-stress-hwd|g" /tmp/session.tcl
@@ -1337,16 +1294,13 @@ foreach core {0 1 2 3} { targets [format {bcm2837.cpu%d} $core]; arm semihosting
 echo "--- stage: load_image __ELF__ ---"
 targets bcm2837.cpu0
 load_image __ELF__
-echo "--- stage: zero __smp_spin at 0x00051b68 (4 words) ---"
-mww 0x51b68 0
-mww 0x51b6c 0
-mww 0x51b70 0
-mww 0x51b74 0
 echo "--- stage: resume cores 0 1 2 3 at 0x1003c ---"
-foreach core {0 1 2 3} {
+targets bcm2837.cpu0
+reg cpsr 0x600001da
+resume 0x1003c
+foreach core {1 2 3} {
   targets [format {bcm2837.cpu%d} $core]
-  reg cpsr 0x600001da
-  resume 0x1003c
+  resume
 }
 EOF
 sed -i "s|__ELF__|$D/rtos-apis-hwd|g" /tmp/session.tcl
@@ -1367,16 +1321,13 @@ foreach core {0 1 2 3} { targets [format {bcm2837.cpu%d} $core]; arm semihosting
 echo "--- stage: load_image __ELF__ ---"
 targets bcm2837.cpu0
 load_image __ELF__
-echo "--- stage: zero __smp_spin at 0x0004a070 (4 words) ---"
-mww 0x4a070 0
-mww 0x4a074 0
-mww 0x4a078 0
-mww 0x4a07c 0
 echo "--- stage: resume cores 0 1 2 3 at 0x1003c ---"
-foreach core {0 1 2 3} {
+targets bcm2837.cpu0
+reg cpsr 0x600001da
+resume 0x1003c
+foreach core {1 2 3} {
   targets [format {bcm2837.cpu%d} $core]
-  reg cpsr 0x600001da
-  resume 0x1003c
+  resume
 }
 EOF
 sed -i "s|__ELF__|$D/sd_test-hwd|g" /tmp/session.tcl
@@ -1397,16 +1348,13 @@ foreach core {0 1 2 3} { targets [format {bcm2837.cpu%d} $core]; arm semihosting
 echo "--- stage: load_image __ELF__ ---"
 targets bcm2837.cpu0
 load_image __ELF__
-echo "--- stage: zero __smp_spin at 0x000e7b10 (4 words) ---"
-mww 0xe7b10 0
-mww 0xe7b14 0
-mww 0xe7b18 0
-mww 0xe7b1c 0
 echo "--- stage: resume cores 0 1 2 3 at 0x1003c ---"
-foreach core {0 1 2 3} {
+targets bcm2837.cpu0
+reg cpsr 0x600001da
+resume 0x1003c
+foreach core {1 2 3} {
   targets [format {bcm2837.cpu%d} $core]
-  reg cpsr 0x600001da
-  resume 0x1003c
+  resume
 }
 EOF
 sed -i "s|__ELF__|$D/smp-mat-sdcard-test-hwd|g" /tmp/session.tcl
@@ -1427,16 +1375,13 @@ foreach core {0 1 2 3} { targets [format {bcm2837.cpu%d} $core]; arm semihosting
 echo "--- stage: load_image __ELF__ ---"
 targets bcm2837.cpu0
 load_image __ELF__
-echo "--- stage: zero __smp_spin at 0x00070310 (4 words) ---"
-mww 0x70310 0
-mww 0x70314 0
-mww 0x70318 0
-mww 0x7031c 0
 echo "--- stage: resume cores 0 1 2 3 at 0x1003c ---"
-foreach core {0 1 2 3} {
+targets bcm2837.cpu0
+reg cpsr 0x600001da
+resume 0x1003c
+foreach core {1 2 3} {
   targets [format {bcm2837.cpu%d} $core]
-  reg cpsr 0x600001da
-  resume 0x1003c
+  resume
 }
 EOF
 sed -i "s|__ELF__|$D/smp-mat-test-hwd|g" /tmp/session.tcl
@@ -1457,16 +1402,13 @@ foreach core {0 1 2 3} { targets [format {bcm2837.cpu%d} $core]; arm semihosting
 echo "--- stage: load_image __ELF__ ---"
 targets bcm2837.cpu0
 load_image __ELF__
-echo "--- stage: zero __smp_spin at 0x000929b0 (4 words) ---"
-mww 0x929b0 0
-mww 0x929b4 0
-mww 0x929b8 0
-mww 0x929bc 0
 echo "--- stage: resume cores 0 1 2 3 at 0x1003c ---"
-foreach core {0 1 2 3} {
+targets bcm2837.cpu0
+reg cpsr 0x600001da
+resume 0x1003c
+foreach core {1 2 3} {
   targets [format {bcm2837.cpu%d} $core]
-  reg cpsr 0x600001da
-  resume 0x1003c
+  resume
 }
 EOF
 sed -i "s|__ELF__|$D/smp-num-test-hwd|g" /tmp/session.tcl
@@ -1487,16 +1429,13 @@ foreach core {0 1 2 3} { targets [format {bcm2837.cpu%d} $core]; arm semihosting
 echo "--- stage: load_image __ELF__ ---"
 targets bcm2837.cpu0
 load_image __ELF__
-echo "--- stage: zero __smp_spin at 0x00084330 (4 words) ---"
-mww 0x84330 0
-mww 0x84334 0
-mww 0x84338 0
-mww 0x8433c 0
 echo "--- stage: resume cores 0 1 2 3 at 0x1003c ---"
-foreach core {0 1 2 3} {
+targets bcm2837.cpu0
+reg cpsr 0x600001da
+resume 0x1003c
+foreach core {1 2 3} {
   targets [format {bcm2837.cpu%d} $core]
-  reg cpsr 0x600001da
-  resume 0x1003c
+  resume
 }
 EOF
 sed -i "s|__ELF__|$D/smp-pipeline-test-hwd|g" /tmp/session.tcl
@@ -1517,16 +1456,13 @@ foreach core {0 1 2 3} { targets [format {bcm2837.cpu%d} $core]; arm semihosting
 echo "--- stage: load_image __ELF__ ---"
 targets bcm2837.cpu0
 load_image __ELF__
-echo "--- stage: zero __smp_spin at 0x00041810 (4 words) ---"
-mww 0x41810 0
-mww 0x41814 0
-mww 0x41818 0
-mww 0x4181c 0
 echo "--- stage: resume cores 0 1 2 3 at 0x1003c ---"
-foreach core {0 1 2 3} {
+targets bcm2837.cpu0
+reg cpsr 0x600001da
+resume 0x1003c
+foreach core {1 2 3} {
   targets [format {bcm2837.cpu%d} $core]
-  reg cpsr 0x600001da
-  resume 0x1003c
+  resume
 }
 EOF
 sed -i "s|__ELF__|$D/smp-pro-cons-test-hwd|g" /tmp/session.tcl
@@ -1547,16 +1483,13 @@ foreach core {0 1 2 3} { targets [format {bcm2837.cpu%d} $core]; arm semihosting
 echo "--- stage: load_image __ELF__ ---"
 targets bcm2837.cpu0
 load_image __ELF__
-echo "--- stage: zero __smp_spin at 0x0002ce80 (4 words) ---"
-mww 0x2ce80 0
-mww 0x2ce84 0
-mww 0x2ce88 0
-mww 0x2ce8c 0
 echo "--- stage: resume cores 0 1 2 3 at 0x1003c ---"
-foreach core {0 1 2 3} {
+targets bcm2837.cpu0
+reg cpsr 0x600001da
+resume 0x1003c
+foreach core {1 2 3} {
   targets [format {bcm2837.cpu%d} $core]
-  reg cpsr 0x600001da
-  resume 0x1003c
+  resume
 }
 EOF
 sed -i "s|__ELF__|$D/smp_test0-hwd|g" /tmp/session.tcl
@@ -1577,16 +1510,13 @@ foreach core {0 1 2 3} { targets [format {bcm2837.cpu%d} $core]; arm semihosting
 echo "--- stage: load_image __ELF__ ---"
 targets bcm2837.cpu0
 load_image __ELF__
-echo "--- stage: zero __smp_spin at 0x0003c780 (4 words) ---"
-mww 0x3c780 0
-mww 0x3c784 0
-mww 0x3c788 0
-mww 0x3c78c 0
 echo "--- stage: resume cores 0 1 2 3 at 0x1003c ---"
-foreach core {0 1 2 3} {
+targets bcm2837.cpu0
+reg cpsr 0x600001da
+resume 0x1003c
+foreach core {1 2 3} {
   targets [format {bcm2837.cpu%d} $core]
-  reg cpsr 0x600001da
-  resume 0x1003c
+  resume
 }
 EOF
 sed -i "s|__ELF__|$D/smp_test1-hwd|g" /tmp/session.tcl
@@ -1607,16 +1537,13 @@ foreach core {0 1 2 3} { targets [format {bcm2837.cpu%d} $core]; arm semihosting
 echo "--- stage: load_image __ELF__ ---"
 targets bcm2837.cpu0
 load_image __ELF__
-echo "--- stage: zero __smp_spin at 0x00040680 (4 words) ---"
-mww 0x40680 0
-mww 0x40684 0
-mww 0x40688 0
-mww 0x4068c 0
 echo "--- stage: resume cores 0 1 2 3 at 0x1003c ---"
-foreach core {0 1 2 3} {
+targets bcm2837.cpu0
+reg cpsr 0x600001da
+resume 0x1003c
+foreach core {1 2 3} {
   targets [format {bcm2837.cpu%d} $core]
-  reg cpsr 0x600001da
-  resume 0x1003c
+  resume
 }
 EOF
 sed -i "s|__ELF__|$D/smp_test2-hwd|g" /tmp/session.tcl
@@ -1637,16 +1564,13 @@ foreach core {0 1 2 3} { targets [format {bcm2837.cpu%d} $core]; arm semihosting
 echo "--- stage: load_image __ELF__ ---"
 targets bcm2837.cpu0
 load_image __ELF__
-echo "--- stage: zero __smp_spin at 0x0003dfc0 (4 words) ---"
-mww 0x3dfc0 0
-mww 0x3dfc4 0
-mww 0x3dfc8 0
-mww 0x3dfcc 0
 echo "--- stage: resume cores 0 1 2 3 at 0x1003c ---"
-foreach core {0 1 2 3} {
+targets bcm2837.cpu0
+reg cpsr 0x600001da
+resume 0x1003c
+foreach core {1 2 3} {
   targets [format {bcm2837.cpu%d} $core]
-  reg cpsr 0x600001da
-  resume 0x1003c
+  resume
 }
 EOF
 sed -i "s|__ELF__|$D/smp_test3-hwd|g" /tmp/session.tcl
@@ -1667,16 +1591,13 @@ foreach core {0 1 2 3} { targets [format {bcm2837.cpu%d} $core]; arm semihosting
 echo "--- stage: load_image __ELF__ ---"
 targets bcm2837.cpu0
 load_image __ELF__
-echo "--- stage: zero __smp_spin at 0x00054810 (4 words) ---"
-mww 0x54810 0
-mww 0x54814 0
-mww 0x54818 0
-mww 0x5481c 0
 echo "--- stage: resume cores 0 1 2 3 at 0x1003c ---"
-foreach core {0 1 2 3} {
+targets bcm2837.cpu0
+reg cpsr 0x600001da
+resume 0x1003c
+foreach core {1 2 3} {
   targets [format {bcm2837.cpu%d} $core]
-  reg cpsr 0x600001da
-  resume 0x1003c
+  resume
 }
 EOF
 sed -i "s|__ELF__|$D/smp_test4-hwd|g" /tmp/session.tcl
@@ -1703,22 +1624,12 @@ foreach core {0 1 2 3} { targets [format {bcm2837.cpu%d} $core]; arm semihosting
 echo "--- stage: load_image __ELF__ ---"
 targets bcm2837.cpu0
 load_image __ELF__
-echo "--- stage: zero __smp_spin at 0x00000000000b9000 (8 words) ---"
-mww 0xb9000 0
-mww 0xb9004 0
-mww 0xb9008 0
-mww 0xb900c 0
-mww 0xb9010 0
-mww 0xb9014 0
-mww 0xb9018 0
-mww 0xb901c 0
 echo "--- stage: resume cores 0 1 2 3 at 0x80000 ---"
-foreach core {0 1 2 3} {
-  targets [format {bcm2837.cpu%d} $core]
-  reg pc 0x80000
-  echo "  start PC core $core = [reg pc]"
-}
-foreach core {0 1 2 3} {
+targets bcm2837.cpu0
+reg pc 0x80000
+echo "  start PC core 0 = [reg pc]"
+resume
+foreach core {1 2 3} {
   targets [format {bcm2837.cpu%d} $core]
   resume
 }
@@ -1741,22 +1652,12 @@ foreach core {0 1 2 3} { targets [format {bcm2837.cpu%d} $core]; arm semihosting
 echo "--- stage: load_image __ELF__ ---"
 targets bcm2837.cpu0
 load_image __ELF__
-echo "--- stage: zero __smp_spin at 0x00000000000a7000 (8 words) ---"
-mww 0xa7000 0
-mww 0xa7004 0
-mww 0xa7008 0
-mww 0xa700c 0
-mww 0xa7010 0
-mww 0xa7014 0
-mww 0xa7018 0
-mww 0xa701c 0
 echo "--- stage: resume cores 0 1 2 3 at 0x80000 ---"
-foreach core {0 1 2 3} {
-  targets [format {bcm2837.cpu%d} $core]
-  reg pc 0x80000
-  echo "  start PC core $core = [reg pc]"
-}
-foreach core {0 1 2 3} {
+targets bcm2837.cpu0
+reg pc 0x80000
+echo "  start PC core 0 = [reg pc]"
+resume
+foreach core {1 2 3} {
   targets [format {bcm2837.cpu%d} $core]
   resume
 }
@@ -1779,22 +1680,12 @@ foreach core {0 1 2 3} { targets [format {bcm2837.cpu%d} $core]; arm semihosting
 echo "--- stage: load_image __ELF__ ---"
 targets bcm2837.cpu0
 load_image __ELF__
-echo "--- stage: zero __smp_spin at 0x00000000000cd000 (8 words) ---"
-mww 0xcd000 0
-mww 0xcd004 0
-mww 0xcd008 0
-mww 0xcd00c 0
-mww 0xcd010 0
-mww 0xcd014 0
-mww 0xcd018 0
-mww 0xcd01c 0
 echo "--- stage: resume cores 0 1 2 3 at 0x80000 ---"
-foreach core {0 1 2 3} {
-  targets [format {bcm2837.cpu%d} $core]
-  reg pc 0x80000
-  echo "  start PC core $core = [reg pc]"
-}
-foreach core {0 1 2 3} {
+targets bcm2837.cpu0
+reg pc 0x80000
+echo "  start PC core 0 = [reg pc]"
+resume
+foreach core {1 2 3} {
   targets [format {bcm2837.cpu%d} $core]
   resume
 }
@@ -1817,22 +1708,12 @@ foreach core {0 1 2 3} { targets [format {bcm2837.cpu%d} $core]; arm semihosting
 echo "--- stage: load_image __ELF__ ---"
 targets bcm2837.cpu0
 load_image __ELF__
-echo "--- stage: zero __smp_spin at 0x00000000000e1000 (8 words) ---"
-mww 0xe1000 0
-mww 0xe1004 0
-mww 0xe1008 0
-mww 0xe100c 0
-mww 0xe1010 0
-mww 0xe1014 0
-mww 0xe1018 0
-mww 0xe101c 0
 echo "--- stage: resume cores 0 1 2 3 at 0x80000 ---"
-foreach core {0 1 2 3} {
-  targets [format {bcm2837.cpu%d} $core]
-  reg pc 0x80000
-  echo "  start PC core $core = [reg pc]"
-}
-foreach core {0 1 2 3} {
+targets bcm2837.cpu0
+reg pc 0x80000
+echo "  start PC core 0 = [reg pc]"
+resume
+foreach core {1 2 3} {
   targets [format {bcm2837.cpu%d} $core]
   resume
 }
@@ -1855,22 +1736,12 @@ foreach core {0 1 2 3} { targets [format {bcm2837.cpu%d} $core]; arm semihosting
 echo "--- stage: load_image __ELF__ ---"
 targets bcm2837.cpu0
 load_image __ELF__
-echo "--- stage: zero __smp_spin at 0x0000000000172000 (8 words) ---"
-mww 0x172000 0
-mww 0x172004 0
-mww 0x172008 0
-mww 0x17200c 0
-mww 0x172010 0
-mww 0x172014 0
-mww 0x172018 0
-mww 0x17201c 0
 echo "--- stage: resume cores 0 1 2 3 at 0x80000 ---"
-foreach core {0 1 2 3} {
-  targets [format {bcm2837.cpu%d} $core]
-  reg pc 0x80000
-  echo "  start PC core $core = [reg pc]"
-}
-foreach core {0 1 2 3} {
+targets bcm2837.cpu0
+reg pc 0x80000
+echo "  start PC core 0 = [reg pc]"
+resume
+foreach core {1 2 3} {
   targets [format {bcm2837.cpu%d} $core]
   resume
 }
@@ -1893,22 +1764,12 @@ foreach core {0 1 2 3} { targets [format {bcm2837.cpu%d} $core]; arm semihosting
 echo "--- stage: load_image __ELF__ ---"
 targets bcm2837.cpu0
 load_image __ELF__
-echo "--- stage: zero __smp_spin at 0x00000000000fa000 (8 words) ---"
-mww 0xfa000 0
-mww 0xfa004 0
-mww 0xfa008 0
-mww 0xfa00c 0
-mww 0xfa010 0
-mww 0xfa014 0
-mww 0xfa018 0
-mww 0xfa01c 0
 echo "--- stage: resume cores 0 1 2 3 at 0x80000 ---"
-foreach core {0 1 2 3} {
-  targets [format {bcm2837.cpu%d} $core]
-  reg pc 0x80000
-  echo "  start PC core $core = [reg pc]"
-}
-foreach core {0 1 2 3} {
+targets bcm2837.cpu0
+reg pc 0x80000
+echo "  start PC core 0 = [reg pc]"
+resume
+foreach core {1 2 3} {
   targets [format {bcm2837.cpu%d} $core]
   resume
 }
@@ -1931,22 +1792,12 @@ foreach core {0 1 2 3} { targets [format {bcm2837.cpu%d} $core]; arm semihosting
 echo "--- stage: load_image __ELF__ ---"
 targets bcm2837.cpu0
 load_image __ELF__
-echo "--- stage: zero __smp_spin at 0x000000000012f000 (8 words) ---"
-mww 0x12f000 0
-mww 0x12f004 0
-mww 0x12f008 0
-mww 0x12f00c 0
-mww 0x12f010 0
-mww 0x12f014 0
-mww 0x12f018 0
-mww 0x12f01c 0
 echo "--- stage: resume cores 0 1 2 3 at 0x80000 ---"
-foreach core {0 1 2 3} {
-  targets [format {bcm2837.cpu%d} $core]
-  reg pc 0x80000
-  echo "  start PC core $core = [reg pc]"
-}
-foreach core {0 1 2 3} {
+targets bcm2837.cpu0
+reg pc 0x80000
+echo "  start PC core 0 = [reg pc]"
+resume
+foreach core {1 2 3} {
   targets [format {bcm2837.cpu%d} $core]
   resume
 }
@@ -1969,22 +1820,12 @@ foreach core {0 1 2 3} { targets [format {bcm2837.cpu%d} $core]; arm semihosting
 echo "--- stage: load_image __ELF__ ---"
 targets bcm2837.cpu0
 load_image __ELF__
-echo "--- stage: zero __smp_spin at 0x0000000000139000 (8 words) ---"
-mww 0x139000 0
-mww 0x139004 0
-mww 0x139008 0
-mww 0x13900c 0
-mww 0x139010 0
-mww 0x139014 0
-mww 0x139018 0
-mww 0x13901c 0
 echo "--- stage: resume cores 0 1 2 3 at 0x80000 ---"
-foreach core {0 1 2 3} {
-  targets [format {bcm2837.cpu%d} $core]
-  reg pc 0x80000
-  echo "  start PC core $core = [reg pc]"
-}
-foreach core {0 1 2 3} {
+targets bcm2837.cpu0
+reg pc 0x80000
+echo "  start PC core 0 = [reg pc]"
+resume
+foreach core {1 2 3} {
   targets [format {bcm2837.cpu%d} $core]
   resume
 }
@@ -2007,22 +1848,12 @@ foreach core {0 1 2 3} { targets [format {bcm2837.cpu%d} $core]; arm semihosting
 echo "--- stage: load_image __ELF__ ---"
 targets bcm2837.cpu0
 load_image __ELF__
-echo "--- stage: zero __smp_spin at 0x00000000000c3000 (8 words) ---"
-mww 0xc3000 0
-mww 0xc3004 0
-mww 0xc3008 0
-mww 0xc300c 0
-mww 0xc3010 0
-mww 0xc3014 0
-mww 0xc3018 0
-mww 0xc301c 0
 echo "--- stage: resume cores 0 1 2 3 at 0x80000 ---"
-foreach core {0 1 2 3} {
-  targets [format {bcm2837.cpu%d} $core]
-  reg pc 0x80000
-  echo "  start PC core $core = [reg pc]"
-}
-foreach core {0 1 2 3} {
+targets bcm2837.cpu0
+reg pc 0x80000
+echo "  start PC core 0 = [reg pc]"
+resume
+foreach core {1 2 3} {
   targets [format {bcm2837.cpu%d} $core]
   resume
 }
@@ -2045,22 +1876,12 @@ foreach core {0 1 2 3} { targets [format {bcm2837.cpu%d} $core]; arm semihosting
 echo "--- stage: load_image __ELF__ ---"
 targets bcm2837.cpu0
 load_image __ELF__
-echo "--- stage: zero __smp_spin at 0x00000000000ac000 (8 words) ---"
-mww 0xac000 0
-mww 0xac004 0
-mww 0xac008 0
-mww 0xac00c 0
-mww 0xac010 0
-mww 0xac014 0
-mww 0xac018 0
-mww 0xac01c 0
 echo "--- stage: resume cores 0 1 2 3 at 0x80000 ---"
-foreach core {0 1 2 3} {
-  targets [format {bcm2837.cpu%d} $core]
-  reg pc 0x80000
-  echo "  start PC core $core = [reg pc]"
-}
-foreach core {0 1 2 3} {
+targets bcm2837.cpu0
+reg pc 0x80000
+echo "  start PC core 0 = [reg pc]"
+resume
+foreach core {1 2 3} {
   targets [format {bcm2837.cpu%d} $core]
   resume
 }
@@ -2083,22 +1904,12 @@ foreach core {0 1 2 3} { targets [format {bcm2837.cpu%d} $core]; arm semihosting
 echo "--- stage: load_image __ELF__ ---"
 targets bcm2837.cpu0
 load_image __ELF__
-echo "--- stage: zero __smp_spin at 0x00000000000c9000 (8 words) ---"
-mww 0xc9000 0
-mww 0xc9004 0
-mww 0xc9008 0
-mww 0xc900c 0
-mww 0xc9010 0
-mww 0xc9014 0
-mww 0xc9018 0
-mww 0xc901c 0
 echo "--- stage: resume cores 0 1 2 3 at 0x80000 ---"
-foreach core {0 1 2 3} {
-  targets [format {bcm2837.cpu%d} $core]
-  reg pc 0x80000
-  echo "  start PC core $core = [reg pc]"
-}
-foreach core {0 1 2 3} {
+targets bcm2837.cpu0
+reg pc 0x80000
+echo "  start PC core 0 = [reg pc]"
+resume
+foreach core {1 2 3} {
   targets [format {bcm2837.cpu%d} $core]
   resume
 }
@@ -2121,22 +1932,12 @@ foreach core {0 1 2 3} { targets [format {bcm2837.cpu%d} $core]; arm semihosting
 echo "--- stage: load_image __ELF__ ---"
 targets bcm2837.cpu0
 load_image __ELF__
-echo "--- stage: zero __smp_spin at 0x00000000000d1000 (8 words) ---"
-mww 0xd1000 0
-mww 0xd1004 0
-mww 0xd1008 0
-mww 0xd100c 0
-mww 0xd1010 0
-mww 0xd1014 0
-mww 0xd1018 0
-mww 0xd101c 0
 echo "--- stage: resume cores 0 1 2 3 at 0x80000 ---"
-foreach core {0 1 2 3} {
-  targets [format {bcm2837.cpu%d} $core]
-  reg pc 0x80000
-  echo "  start PC core $core = [reg pc]"
-}
-foreach core {0 1 2 3} {
+targets bcm2837.cpu0
+reg pc 0x80000
+echo "  start PC core 0 = [reg pc]"
+resume
+foreach core {1 2 3} {
   targets [format {bcm2837.cpu%d} $core]
   resume
 }
@@ -2159,22 +1960,12 @@ foreach core {0 1 2 3} { targets [format {bcm2837.cpu%d} $core]; arm semihosting
 echo "--- stage: load_image __ELF__ ---"
 targets bcm2837.cpu0
 load_image __ELF__
-echo "--- stage: zero __smp_spin at 0x00000000000ca000 (8 words) ---"
-mww 0xca000 0
-mww 0xca004 0
-mww 0xca008 0
-mww 0xca00c 0
-mww 0xca010 0
-mww 0xca014 0
-mww 0xca018 0
-mww 0xca01c 0
 echo "--- stage: resume cores 0 1 2 3 at 0x80000 ---"
-foreach core {0 1 2 3} {
-  targets [format {bcm2837.cpu%d} $core]
-  reg pc 0x80000
-  echo "  start PC core $core = [reg pc]"
-}
-foreach core {0 1 2 3} {
+targets bcm2837.cpu0
+reg pc 0x80000
+echo "  start PC core 0 = [reg pc]"
+resume
+foreach core {1 2 3} {
   targets [format {bcm2837.cpu%d} $core]
   resume
 }
@@ -2197,22 +1988,12 @@ foreach core {0 1 2 3} { targets [format {bcm2837.cpu%d} $core]; arm semihosting
 echo "--- stage: load_image __ELF__ ---"
 targets bcm2837.cpu0
 load_image __ELF__
-echo "--- stage: zero __smp_spin at 0x00000000000f9000 (8 words) ---"
-mww 0xf9000 0
-mww 0xf9004 0
-mww 0xf9008 0
-mww 0xf900c 0
-mww 0xf9010 0
-mww 0xf9014 0
-mww 0xf9018 0
-mww 0xf901c 0
 echo "--- stage: resume cores 0 1 2 3 at 0x80000 ---"
-foreach core {0 1 2 3} {
-  targets [format {bcm2837.cpu%d} $core]
-  reg pc 0x80000
-  echo "  start PC core $core = [reg pc]"
-}
-foreach core {0 1 2 3} {
+targets bcm2837.cpu0
+reg pc 0x80000
+echo "  start PC core 0 = [reg pc]"
+resume
+foreach core {1 2 3} {
   targets [format {bcm2837.cpu%d} $core]
   resume
 }
@@ -2235,22 +2016,12 @@ foreach core {0 1 2 3} { targets [format {bcm2837.cpu%d} $core]; arm semihosting
 echo "--- stage: load_image __ELF__ ---"
 targets bcm2837.cpu0
 load_image __ELF__
-echo "--- stage: zero __smp_spin at 0x00000000001eb000 (8 words) ---"
-mww 0x1eb000 0
-mww 0x1eb004 0
-mww 0x1eb008 0
-mww 0x1eb00c 0
-mww 0x1eb010 0
-mww 0x1eb014 0
-mww 0x1eb018 0
-mww 0x1eb01c 0
 echo "--- stage: resume cores 0 1 2 3 at 0x80000 ---"
-foreach core {0 1 2 3} {
-  targets [format {bcm2837.cpu%d} $core]
-  reg pc 0x80000
-  echo "  start PC core $core = [reg pc]"
-}
-foreach core {0 1 2 3} {
+targets bcm2837.cpu0
+reg pc 0x80000
+echo "  start PC core 0 = [reg pc]"
+resume
+foreach core {1 2 3} {
   targets [format {bcm2837.cpu%d} $core]
   resume
 }
@@ -2281,22 +2052,12 @@ foreach core {0 1 2 3} { targets [format {bcm2837.cpu%d} $core]; arm semihosting
 echo "--- stage: load_image __ELF__ ---"
 targets bcm2837.cpu0
 load_image __ELF__
-echo "--- stage: zero __smp_spin at 0x00000000000b9000 (8 words) ---"
-mww 0xb9000 0
-mww 0xb9004 0
-mww 0xb9008 0
-mww 0xb900c 0
-mww 0xb9010 0
-mww 0xb9014 0
-mww 0xb9018 0
-mww 0xb901c 0
 echo "--- stage: resume cores 0 1 2 3 at 0x80000 ---"
-foreach core {0 1 2 3} {
-  targets [format {bcm2837.cpu%d} $core]
-  reg pc 0x80000
-  echo "  start PC core $core = [reg pc]"
-}
-foreach core {0 1 2 3} {
+targets bcm2837.cpu0
+reg pc 0x80000
+echo "  start PC core 0 = [reg pc]"
+resume
+foreach core {1 2 3} {
   targets [format {bcm2837.cpu%d} $core]
   resume
 }
@@ -2319,22 +2080,12 @@ foreach core {0 1 2 3} { targets [format {bcm2837.cpu%d} $core]; arm semihosting
 echo "--- stage: load_image __ELF__ ---"
 targets bcm2837.cpu0
 load_image __ELF__
-echo "--- stage: zero __smp_spin at 0x00000000000a7000 (8 words) ---"
-mww 0xa7000 0
-mww 0xa7004 0
-mww 0xa7008 0
-mww 0xa700c 0
-mww 0xa7010 0
-mww 0xa7014 0
-mww 0xa7018 0
-mww 0xa701c 0
 echo "--- stage: resume cores 0 1 2 3 at 0x80000 ---"
-foreach core {0 1 2 3} {
-  targets [format {bcm2837.cpu%d} $core]
-  reg pc 0x80000
-  echo "  start PC core $core = [reg pc]"
-}
-foreach core {0 1 2 3} {
+targets bcm2837.cpu0
+reg pc 0x80000
+echo "  start PC core 0 = [reg pc]"
+resume
+foreach core {1 2 3} {
   targets [format {bcm2837.cpu%d} $core]
   resume
 }
@@ -2357,22 +2108,12 @@ foreach core {0 1 2 3} { targets [format {bcm2837.cpu%d} $core]; arm semihosting
 echo "--- stage: load_image __ELF__ ---"
 targets bcm2837.cpu0
 load_image __ELF__
-echo "--- stage: zero __smp_spin at 0x00000000000cd000 (8 words) ---"
-mww 0xcd000 0
-mww 0xcd004 0
-mww 0xcd008 0
-mww 0xcd00c 0
-mww 0xcd010 0
-mww 0xcd014 0
-mww 0xcd018 0
-mww 0xcd01c 0
 echo "--- stage: resume cores 0 1 2 3 at 0x80000 ---"
-foreach core {0 1 2 3} {
-  targets [format {bcm2837.cpu%d} $core]
-  reg pc 0x80000
-  echo "  start PC core $core = [reg pc]"
-}
-foreach core {0 1 2 3} {
+targets bcm2837.cpu0
+reg pc 0x80000
+echo "  start PC core 0 = [reg pc]"
+resume
+foreach core {1 2 3} {
   targets [format {bcm2837.cpu%d} $core]
   resume
 }
@@ -2395,22 +2136,12 @@ foreach core {0 1 2 3} { targets [format {bcm2837.cpu%d} $core]; arm semihosting
 echo "--- stage: load_image __ELF__ ---"
 targets bcm2837.cpu0
 load_image __ELF__
-echo "--- stage: zero __smp_spin at 0x00000000000e1000 (8 words) ---"
-mww 0xe1000 0
-mww 0xe1004 0
-mww 0xe1008 0
-mww 0xe100c 0
-mww 0xe1010 0
-mww 0xe1014 0
-mww 0xe1018 0
-mww 0xe101c 0
 echo "--- stage: resume cores 0 1 2 3 at 0x80000 ---"
-foreach core {0 1 2 3} {
-  targets [format {bcm2837.cpu%d} $core]
-  reg pc 0x80000
-  echo "  start PC core $core = [reg pc]"
-}
-foreach core {0 1 2 3} {
+targets bcm2837.cpu0
+reg pc 0x80000
+echo "  start PC core 0 = [reg pc]"
+resume
+foreach core {1 2 3} {
   targets [format {bcm2837.cpu%d} $core]
   resume
 }
@@ -2433,22 +2164,12 @@ foreach core {0 1 2 3} { targets [format {bcm2837.cpu%d} $core]; arm semihosting
 echo "--- stage: load_image __ELF__ ---"
 targets bcm2837.cpu0
 load_image __ELF__
-echo "--- stage: zero __smp_spin at 0x0000000000172000 (8 words) ---"
-mww 0x172000 0
-mww 0x172004 0
-mww 0x172008 0
-mww 0x17200c 0
-mww 0x172010 0
-mww 0x172014 0
-mww 0x172018 0
-mww 0x17201c 0
 echo "--- stage: resume cores 0 1 2 3 at 0x80000 ---"
-foreach core {0 1 2 3} {
-  targets [format {bcm2837.cpu%d} $core]
-  reg pc 0x80000
-  echo "  start PC core $core = [reg pc]"
-}
-foreach core {0 1 2 3} {
+targets bcm2837.cpu0
+reg pc 0x80000
+echo "  start PC core 0 = [reg pc]"
+resume
+foreach core {1 2 3} {
   targets [format {bcm2837.cpu%d} $core]
   resume
 }
@@ -2471,22 +2192,12 @@ foreach core {0 1 2 3} { targets [format {bcm2837.cpu%d} $core]; arm semihosting
 echo "--- stage: load_image __ELF__ ---"
 targets bcm2837.cpu0
 load_image __ELF__
-echo "--- stage: zero __smp_spin at 0x00000000000fa000 (8 words) ---"
-mww 0xfa000 0
-mww 0xfa004 0
-mww 0xfa008 0
-mww 0xfa00c 0
-mww 0xfa010 0
-mww 0xfa014 0
-mww 0xfa018 0
-mww 0xfa01c 0
 echo "--- stage: resume cores 0 1 2 3 at 0x80000 ---"
-foreach core {0 1 2 3} {
-  targets [format {bcm2837.cpu%d} $core]
-  reg pc 0x80000
-  echo "  start PC core $core = [reg pc]"
-}
-foreach core {0 1 2 3} {
+targets bcm2837.cpu0
+reg pc 0x80000
+echo "  start PC core 0 = [reg pc]"
+resume
+foreach core {1 2 3} {
   targets [format {bcm2837.cpu%d} $core]
   resume
 }
@@ -2509,22 +2220,12 @@ foreach core {0 1 2 3} { targets [format {bcm2837.cpu%d} $core]; arm semihosting
 echo "--- stage: load_image __ELF__ ---"
 targets bcm2837.cpu0
 load_image __ELF__
-echo "--- stage: zero __smp_spin at 0x000000000012f000 (8 words) ---"
-mww 0x12f000 0
-mww 0x12f004 0
-mww 0x12f008 0
-mww 0x12f00c 0
-mww 0x12f010 0
-mww 0x12f014 0
-mww 0x12f018 0
-mww 0x12f01c 0
 echo "--- stage: resume cores 0 1 2 3 at 0x80000 ---"
-foreach core {0 1 2 3} {
-  targets [format {bcm2837.cpu%d} $core]
-  reg pc 0x80000
-  echo "  start PC core $core = [reg pc]"
-}
-foreach core {0 1 2 3} {
+targets bcm2837.cpu0
+reg pc 0x80000
+echo "  start PC core 0 = [reg pc]"
+resume
+foreach core {1 2 3} {
   targets [format {bcm2837.cpu%d} $core]
   resume
 }
@@ -2547,22 +2248,12 @@ foreach core {0 1 2 3} { targets [format {bcm2837.cpu%d} $core]; arm semihosting
 echo "--- stage: load_image __ELF__ ---"
 targets bcm2837.cpu0
 load_image __ELF__
-echo "--- stage: zero __smp_spin at 0x0000000000139000 (8 words) ---"
-mww 0x139000 0
-mww 0x139004 0
-mww 0x139008 0
-mww 0x13900c 0
-mww 0x139010 0
-mww 0x139014 0
-mww 0x139018 0
-mww 0x13901c 0
 echo "--- stage: resume cores 0 1 2 3 at 0x80000 ---"
-foreach core {0 1 2 3} {
-  targets [format {bcm2837.cpu%d} $core]
-  reg pc 0x80000
-  echo "  start PC core $core = [reg pc]"
-}
-foreach core {0 1 2 3} {
+targets bcm2837.cpu0
+reg pc 0x80000
+echo "  start PC core 0 = [reg pc]"
+resume
+foreach core {1 2 3} {
   targets [format {bcm2837.cpu%d} $core]
   resume
 }
@@ -2585,22 +2276,12 @@ foreach core {0 1 2 3} { targets [format {bcm2837.cpu%d} $core]; arm semihosting
 echo "--- stage: load_image __ELF__ ---"
 targets bcm2837.cpu0
 load_image __ELF__
-echo "--- stage: zero __smp_spin at 0x00000000000c3000 (8 words) ---"
-mww 0xc3000 0
-mww 0xc3004 0
-mww 0xc3008 0
-mww 0xc300c 0
-mww 0xc3010 0
-mww 0xc3014 0
-mww 0xc3018 0
-mww 0xc301c 0
 echo "--- stage: resume cores 0 1 2 3 at 0x80000 ---"
-foreach core {0 1 2 3} {
-  targets [format {bcm2837.cpu%d} $core]
-  reg pc 0x80000
-  echo "  start PC core $core = [reg pc]"
-}
-foreach core {0 1 2 3} {
+targets bcm2837.cpu0
+reg pc 0x80000
+echo "  start PC core 0 = [reg pc]"
+resume
+foreach core {1 2 3} {
   targets [format {bcm2837.cpu%d} $core]
   resume
 }
@@ -2623,22 +2304,12 @@ foreach core {0 1 2 3} { targets [format {bcm2837.cpu%d} $core]; arm semihosting
 echo "--- stage: load_image __ELF__ ---"
 targets bcm2837.cpu0
 load_image __ELF__
-echo "--- stage: zero __smp_spin at 0x00000000000ac000 (8 words) ---"
-mww 0xac000 0
-mww 0xac004 0
-mww 0xac008 0
-mww 0xac00c 0
-mww 0xac010 0
-mww 0xac014 0
-mww 0xac018 0
-mww 0xac01c 0
 echo "--- stage: resume cores 0 1 2 3 at 0x80000 ---"
-foreach core {0 1 2 3} {
-  targets [format {bcm2837.cpu%d} $core]
-  reg pc 0x80000
-  echo "  start PC core $core = [reg pc]"
-}
-foreach core {0 1 2 3} {
+targets bcm2837.cpu0
+reg pc 0x80000
+echo "  start PC core 0 = [reg pc]"
+resume
+foreach core {1 2 3} {
   targets [format {bcm2837.cpu%d} $core]
   resume
 }
@@ -2661,22 +2332,12 @@ foreach core {0 1 2 3} { targets [format {bcm2837.cpu%d} $core]; arm semihosting
 echo "--- stage: load_image __ELF__ ---"
 targets bcm2837.cpu0
 load_image __ELF__
-echo "--- stage: zero __smp_spin at 0x00000000000c9000 (8 words) ---"
-mww 0xc9000 0
-mww 0xc9004 0
-mww 0xc9008 0
-mww 0xc900c 0
-mww 0xc9010 0
-mww 0xc9014 0
-mww 0xc9018 0
-mww 0xc901c 0
 echo "--- stage: resume cores 0 1 2 3 at 0x80000 ---"
-foreach core {0 1 2 3} {
-  targets [format {bcm2837.cpu%d} $core]
-  reg pc 0x80000
-  echo "  start PC core $core = [reg pc]"
-}
-foreach core {0 1 2 3} {
+targets bcm2837.cpu0
+reg pc 0x80000
+echo "  start PC core 0 = [reg pc]"
+resume
+foreach core {1 2 3} {
   targets [format {bcm2837.cpu%d} $core]
   resume
 }
@@ -2699,22 +2360,12 @@ foreach core {0 1 2 3} { targets [format {bcm2837.cpu%d} $core]; arm semihosting
 echo "--- stage: load_image __ELF__ ---"
 targets bcm2837.cpu0
 load_image __ELF__
-echo "--- stage: zero __smp_spin at 0x00000000000d1000 (8 words) ---"
-mww 0xd1000 0
-mww 0xd1004 0
-mww 0xd1008 0
-mww 0xd100c 0
-mww 0xd1010 0
-mww 0xd1014 0
-mww 0xd1018 0
-mww 0xd101c 0
 echo "--- stage: resume cores 0 1 2 3 at 0x80000 ---"
-foreach core {0 1 2 3} {
-  targets [format {bcm2837.cpu%d} $core]
-  reg pc 0x80000
-  echo "  start PC core $core = [reg pc]"
-}
-foreach core {0 1 2 3} {
+targets bcm2837.cpu0
+reg pc 0x80000
+echo "  start PC core 0 = [reg pc]"
+resume
+foreach core {1 2 3} {
   targets [format {bcm2837.cpu%d} $core]
   resume
 }
@@ -2737,22 +2388,12 @@ foreach core {0 1 2 3} { targets [format {bcm2837.cpu%d} $core]; arm semihosting
 echo "--- stage: load_image __ELF__ ---"
 targets bcm2837.cpu0
 load_image __ELF__
-echo "--- stage: zero __smp_spin at 0x00000000000cb000 (8 words) ---"
-mww 0xcb000 0
-mww 0xcb004 0
-mww 0xcb008 0
-mww 0xcb00c 0
-mww 0xcb010 0
-mww 0xcb014 0
-mww 0xcb018 0
-mww 0xcb01c 0
 echo "--- stage: resume cores 0 1 2 3 at 0x80000 ---"
-foreach core {0 1 2 3} {
-  targets [format {bcm2837.cpu%d} $core]
-  reg pc 0x80000
-  echo "  start PC core $core = [reg pc]"
-}
-foreach core {0 1 2 3} {
+targets bcm2837.cpu0
+reg pc 0x80000
+echo "  start PC core 0 = [reg pc]"
+resume
+foreach core {1 2 3} {
   targets [format {bcm2837.cpu%d} $core]
   resume
 }
@@ -2775,22 +2416,12 @@ foreach core {0 1 2 3} { targets [format {bcm2837.cpu%d} $core]; arm semihosting
 echo "--- stage: load_image __ELF__ ---"
 targets bcm2837.cpu0
 load_image __ELF__
-echo "--- stage: zero __smp_spin at 0x00000000000f9000 (8 words) ---"
-mww 0xf9000 0
-mww 0xf9004 0
-mww 0xf9008 0
-mww 0xf900c 0
-mww 0xf9010 0
-mww 0xf9014 0
-mww 0xf9018 0
-mww 0xf901c 0
 echo "--- stage: resume cores 0 1 2 3 at 0x80000 ---"
-foreach core {0 1 2 3} {
-  targets [format {bcm2837.cpu%d} $core]
-  reg pc 0x80000
-  echo "  start PC core $core = [reg pc]"
-}
-foreach core {0 1 2 3} {
+targets bcm2837.cpu0
+reg pc 0x80000
+echo "  start PC core 0 = [reg pc]"
+resume
+foreach core {1 2 3} {
   targets [format {bcm2837.cpu%d} $core]
   resume
 }

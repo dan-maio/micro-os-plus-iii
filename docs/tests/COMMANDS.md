@@ -275,6 +275,17 @@ The `<name>` values, per configuration (`-debug` and `-release` alike):
 `cortexm-weactf412` and `aarch32-luckfox-lyra` have no `test-<platform>-cmake`
 action; they are built with `prepare`/`build --config` (6.6).
 
+**Raspberry Pi (Zero 2 W, 3 B), both ports.** Each test resets the board
+through its watchdog, loads the image, starts **core 0 only**, and resumes
+cores 1–3 where the firmware parked them; the test's kernel releases them
+itself (`UOS_HW_RESUME=cpsr-first` / `pc-first`, no `__smp_spin` writes).
+This needs an SD card that boots the port's width (`arm_64bit=0` for
+`aarch32-*`, `arm_64bit=1` for `aarch64-*`) with a kernel that leaves cores
+1–3 in the firmware's loop. Tested on a Pi Zero 2 W on 2026-10-09, all tests
+but `usb_test`, on both ports. The commands, one by one:
+`RPI-ZERO-2W-HARDWARE-STEPS.md`; the previous flow is kept in each port's
+`test/boards/rpi-zero-2w/hw.sh.bak`.
+
 ### 6.8 Legacy single-core boards
 
 ```bash

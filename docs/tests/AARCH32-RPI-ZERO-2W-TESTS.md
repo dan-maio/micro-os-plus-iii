@@ -394,8 +394,9 @@ the Cortex-M ones, with three differences:
   its own log — the same `RESULT: PASS|FAIL|SKIP` protocol as QEMU. Under
   `SEMIHOST` the PL011 UART is mirrored byte-for-byte to that channel, so the
   operator can also watch it on their own terminal.
-- There is no GDB and no reset; the session is pure OpenOCD (halt, load, zero
-  `__smp_spin`, resume with the CPSR mode forced).
+- There is no GDB and no reset; the session is pure OpenOCD (halt, load,
+  start core 0 with the CPSR mode forced, resume cores 1–3 where the
+  firmware parked them — the kernel releases them through mailbox 3).
 
 A CTest wrapper can simply run the port's session and map the log to an exit
 code:
@@ -421,8 +422,9 @@ grep -q 'RESULT: SKIP' "$LOG" && exit 77      # CTest SKIP_RETURN_CODE
 exit 1
 ```
 
-Prefer wrapping the port's runner: it already implements `__smp_spin` zeroing,
-the CPSR resume mode, the one-test-per-power-cycle rule and DEBUG LINK LOST
+Prefer wrapping the port's runner: it already starts core 0 alone with the
+CPSR mode forced (cores 1–3 stay in the firmware's loop until the kernel
+releases them), the one-test-per-power-cycle rule and DEBUG LINK LOST
 detection.
 
 Because hardware is one-test-per-power-cycle, mark these CTest tests

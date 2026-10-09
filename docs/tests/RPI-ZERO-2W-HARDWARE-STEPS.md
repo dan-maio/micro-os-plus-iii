@@ -10,19 +10,47 @@ ARM-USB-OCD also works; see the end of the page.)
 
 ## What happens, in short
 
-1. The board is reset through its watchdog, and boots again.
+1. The board is reset through its watchdog, and boots again from its SD
+   card. Core 0 runs the SD card's kernel; cores 1–3 wait in the firmware's
+   own loop.
 2. OpenOCD stops the four CPU cores.
 3. OpenOCD turns semihosting on, so the test can print through the probe.
 4. OpenOCD copies the test program into the board's RAM.
-5. AArch32: OpenOCD clears a small table the cores use to start each
-   other, then starts the four cores at the program's first instruction.
-   AArch64: OpenOCD starts only core 0; cores 1–3 stay in the firmware's
-   waiting loop until the test itself releases them (no table to clear).
-6. The test runs and prints `RESULT: PASS` (or `FAIL`).
+5. OpenOCD starts **core 0** at the program's first instruction, and lets
+   cores 1–3 go on where they were: still waiting in the firmware's loop.
+6. When the test's kernel is ready, it releases cores 1–3 itself.
+7. The test runs and prints `RESULT: PASS` (or `FAIL`).
 
-One test per power cycle: before the next test, unplug the board's power
-and plug it in again. (On AArch64 the 14 tests also passed back to back
-with only the step-4 watchdog reset between them.)
+Each test starts with the watchdog reset of step 4, so the tests can be run
+one after another. (On 2026-10-09 all 14 tests but `usb_test` passed this
+way, back to back, on both ports.) If a test hangs, power-cycle the board.
+
+## The SD card
+
+Cores 1–3 must still be in the firmware's loop when step 6 runs, so the SD
+card must boot a kernel that does **not** start them, and it must boot the
+same width as the port, because the two ports wake the cores differently:
+
+| Port | SD card `config.txt` | The kernel wakes cores 1–3 by writing | Cores 1–3 wait at (after step 4) |
+|---|---|---|---|
+| AArch32 | `arm_64bit=0` | their mailbox 3 | `pc=0x7a`, Thumb, Hypervisor |
+| AArch64 | `arm_64bit=1` (e.g. `$A64/test/boards/rpi-zero-2w/hw-park/`) | their release word at `0xd8 + 8*core` | `pc=0x7c`, EL2H |
+
+So switch the SD card (or its `config.txt` and kernel) when you switch
+ports. To check it, after a step-4 reset and a 12 s wait (AArch64: add
+`-c "init"` after the config file):
+
+```bash
+$OPENOCD -s $CFG -f $CFG/openocd-jlink-rpi3.cfg \
+  -c "targets bcm2837.cpu1" -c "halt" -c "reg pc" -c "resume" \
+  -c "shutdown"
+```
+
+`pc` must be the value in the table (the same for `cpu2`, `cpu3`). If a core
+is anywhere else, the SD card's kernel has started it, and these steps will
+not work: use another card, or the previous flow, kept in each port's
+`test/boards/rpi-zero-2w/hw.sh.bak` (it starts all four cores and first
+clears the `__smp_spin` table in RAM).
 
 ## Step 0 — set the paths
 
@@ -33,8 +61,6 @@ A32=$WORK/micro-os-plus-iii-aarch32       # 32-bit port
 A64=$WORK/micro-os-plus-iii-aarch64       # 64-bit port
 BUILD=$K/tests/build
 OPENOCD=$HOME/.local/xPacks/@xpack-dev-tools/openocd/0.12.0-7.1/.content/bin/openocd
-TC32=$HOME/.local/xPacks/@xpack-dev-tools/arm-none-eabi-gcc/15.2.1-1.1.1/.content/bin
-TC64=$HOME/.local/xPacks/@xpack-dev-tools/aarch64-none-elf-gcc/15.2.1-1.1.1/.content/bin
 ```
 
 ## Step 1 — build the tests
@@ -59,33 +85,16 @@ The programs for the board are the files ending in `-hwd`, in
 
 ## AArch32 (32-bit port)
 
-### Step 2 — choose the test and read two addresses from it
+### Step 2 — choose the test
 
 ```bash
 D=$BUILD/aarch32-rpi-zero-2w-cmake-gcc-debug/platform-bin/port-tests/test
 CFG=$A32/test/boards/rpi-zero-2w
 ELF=$D/smp_test0-hwd
-
-$TC32/arm-none-eabi-readelf -h $ELF | grep 'Entry point'
-$TC32/arm-none-eabi-nm $ELF | grep ' __smp_spin$'
 ```
 
-- **Entry point** is where the program starts. For this port it is always
-  `0x1003c`.
-- **`__smp_spin`** is a table of 4 numbers (4 bytes each). A waiting core
-  reads its start address from it. Its address changes from build to build,
-  so read it every time. Example output: `0002cfb0 B __smp_spin`.
-
-Write the 4 addresses of the table (the address, then +4, +8, +12):
-
-```bash
-S=0x$($TC32/arm-none-eabi-nm $ELF | awk '$3 == "__smp_spin" {print $1}')
-S0=$(printf 0x%x $((S)))
-S1=$(printf 0x%x $((S + 4)))
-S2=$(printf 0x%x $((S + 8)))
-S3=$(printf 0x%x $((S + 12)))
-echo $S0 $S1 $S2 $S3          # e.g. 0x2cfb0 0x2cfb4 0x2cfb8 0x2cfbc
-```
+Nothing has to be read from the ELF: the program always starts at
+`0x1003c`.
 
 ### Step 3 — open the serial console (optional)
 
@@ -118,6 +127,9 @@ $OPENOCD -s $CFG -f $CFG/openocd-jlink-rpi3.cfg \
   it expires. The board reboots.
 - `shutdown` — OpenOCD exits.
 
+The `Error: Invalid ACK (0) in DAP response` lines at the end are expected:
+the chip resets while the probe is still talking to it.
+
 ### Step 5 — wait for the board to boot
 
 ```bash
@@ -139,35 +151,41 @@ $OPENOCD -s $CFG -f $CFG/openocd-jlink-rpi3.cfg \
   -c "targets bcm2837.cpu2" -c "arm semihosting enable" \
   -c "targets bcm2837.cpu3" -c "arm semihosting enable" \
   -c "targets bcm2837.cpu0" -c "load_image $ELF" \
-  -c "mww $S0 0" -c "mww $S1 0" -c "mww $S2 0" -c "mww $S3 0" \
   -c "targets bcm2837.cpu0" -c "reg cpsr 0x600001da" -c "resume 0x1003c" \
-  -c "targets bcm2837.cpu1" -c "reg cpsr 0x600001da" -c "resume 0x1003c" \
-  -c "targets bcm2837.cpu2" -c "reg cpsr 0x600001da" -c "resume 0x1003c" \
-  -c "targets bcm2837.cpu3" -c "reg cpsr 0x600001da" -c "resume 0x1003c"
+  -c "targets bcm2837.cpu1" -c "resume" \
+  -c "targets bcm2837.cpu2" -c "resume" \
+  -c "targets bcm2837.cpu3" -c "resume"
 ```
 
 What each part does:
 
-1. **Stop the 4 cores** (`targets` … `halt`, for cores 0–3). A core still
-   running old code could overwrite RAM while the new program is copied.
+1. **Stop the 4 cores** (`targets` … `halt`, for cores 0–3), so nothing
+   runs while the program is copied.
 2. **Turn semihosting on for each core.** The test prints by stopping the
    core for a moment; OpenOCD sees the stop, prints the text and lets the
-   core go on. Every core needs it, because any core can print.
+   core go on. Every core needs it, because any core can print once it runs.
 3. **Copy the program into RAM** (`load_image $ELF`, through core 0).
-4. **Clear the `__smp_spin` table** (the 4 `mww … 0`). A waiting core must
-   not find an old start address there from the previous test.
-5. **Start each core** at the program's entry:
+4. **Start core 0** at the program's entry:
    - `reg cpsr 0x600001da` — put the core in 32-bit mode: the low bits
      `0x1a` select HYP (hypervisor) mode, and `0x1c0` masks the aborts,
      IRQs and FIQs;
    - `resume 0x1003c` — run from the entry point.
+5. **Let cores 1–3 go on where they were** (`resume` with no address): back
+   in the firmware's loop, waiting on their mailbox 3.
 
-   Core 0 starts the system; cores 1–3 wait until the kernel releases them.
+Core 0 starts the system. When the kernel is ready, the test wakes each of
+cores 1–3 (`release_one()` in `test/boards/rpi-zero-2w/src/smp.cpp`): it
+first writes the core's start address into its `__smp_spin` slot, then
+writes `_start` into the core's mailbox 3. The core leaves the firmware's
+loop, runs `_start`, and finds its `__smp_spin` slot already written — so
+whatever the previous program left in RAM there does not matter, and
+OpenOCD does not have to clear it.
 
 ### Step 7 — watch the result
 
 The test's messages appear in this OpenOCD window. It passed when it prints
-`RESULT: PASS`. Then press **Ctrl-C** to stop OpenOCD.
+`RESULT: PASS`. Then press **Ctrl-C** to stop OpenOCD. An SMP test shows that
+cores 1–3 started, e.g. `join: c1=3 c2=3 c3=3`.
 
 How long to wait at most: `smp_test0`–`smp_test3` 120 s; `smp_test4`,
 `usb_test`, `cmsis-os-validator`, `mutex-stress`, `rtos-apis` 300 s;
@@ -175,10 +193,10 @@ How long to wait at most: `smp_test0`–`smp_test3` 120 s; `smp_test4`,
 600 s; `smp-mat-test`, `smp-mat-sdcard-test` 900 s. Printing is slow over
 JTAG, so the chatty tests take long.
 
-### Step 8 — power-cycle the board
+### Step 8 — the next test
 
-Unplug the power and plug it in again before the next test, then go back to
-step 2.
+Go back to step 2: the reset of step 4 puts cores 1–3 back in the
+firmware's loop. If a test hung, power-cycle the board first.
 
 ---
 
@@ -188,41 +206,13 @@ The same steps; only these things change:
 
 | | AArch32 | AArch64 |
 |---|---|---|
+| SD card | `arm_64bit=0` | `arm_64bit=1` |
 | Config folder `CFG` | `$A32/test/boards/rpi-zero-2w` | `$A64/test/boards/rpi-zero-2w` |
-| Tools | `$TC32/arm-none-eabi-…` | `$TC64/aarch64-none-elf-…` |
 | Entry point | `0x1003c` | `0x80000` |
-| `__smp_spin` | read with `nm`, 4 writes | not used (nothing to read or write) |
 | Connect | the config file does it | add `-c init` after the config file |
-| Start the cores | all 4: `reg cpsr …` then `resume 0x1003c` | core 0: `reg pc 0x80000`, `resume`; cores 1–3: `resume` where they are |
+| Start core 0 | `reg cpsr 0x600001da`, `resume 0x1003c` | `reg pc 0x80000`, `resume` |
+| Cores 1–3 | `resume` where they are | `resume` where they are |
 | JTAG speed | 1000 kHz | 4000 kHz |
-
-### Why AArch64 needs no `__smp_spin` writes
-
-After the reset in step 4 the firmware holds cores 1–3 in its own waiting
-loop (they are stopped at `pc=0x7c`, EL2, MMU off, and their release words at
-`0xd8`…`0xf0` are 0). Step 6 starts only core 0. Cores 1–3 are let go
-exactly where they were, so they keep waiting in the firmware. When the
-kernel is ready, the test releases them itself (`release_one()` in
-`test/boards/rpi-zero-2w/src/smp.cpp`): it first writes their entry into
-`__smp_spin`, then writes `_start` into their release word. So a core never
-reads `__smp_spin` before the test has written it, and its old content does
-not matter.
-
-This needs an SD card whose kernel does **not** start cores 1–3 (for example
-`test/boards/rpi-zero-2w/hw-park/`). Check it once, after a step-4 reset:
-
-```bash
-$OPENOCD -s $CFG -f $CFG/openocd-jlink-rpi3.cfg -c "init" \
-  -c "targets bcm2837.cpu1" -c "halt" -c "reg pc" -c "resume" \
-  -c "shutdown"
-```
-
-`pc` must be `0x7c` (and the same for `cpu2`, `cpu3`). If a core is
-anywhere else, the SD card's kernel has started it; use the AArch32 way
-(start all 4 cores and clear `__smp_spin`) instead.
-
-Tested on 2026-10-09: all 14 AArch64 tests (all but `usb_test`) passed
-this way, one after another, with only the step-4 reset between them.
 
 ### Step 2 (AArch64)
 
@@ -273,17 +263,14 @@ $OPENOCD -s $CFG -f $CFG/openocd-jlink-rpi3.cfg -c "init" \
   -c "targets bcm2837.cpu3" -c "resume"
 ```
 
-What each part does:
+The same parts as for AArch32, except:
 
-1. **Stop the 4 cores**, so nothing runs while the program is copied.
-2. **Turn semihosting on for each core** — cores 1–3 print too, once the
-   test has released them.
-3. **Copy the program into RAM** (`load_image $ELF`).
-4. **Start core 0**: `reg pc 0x80000` sets its program counter to the
-   entry, `resume` runs it. A 64-bit core keeps the mode it was stopped in
-   (EL2), and the startup code reads that mode, so there is no CPSR to set.
-5. **Let cores 1–3 go on where they were** (`resume` with no address): back
-   in the firmware's waiting loop, until the test releases them.
+- **Start core 0**: `reg pc 0x80000` sets its program counter to the entry,
+  `resume` runs it. A 64-bit core keeps the mode it was stopped in (EL2),
+  and the startup code reads that mode, so there is no CPSR to set.
+- **Cores 1–3** wait in the firmware's loop on their release word
+  (`0xd8 + 8*core`), not on a mailbox; the test writes `_start` there after
+  it has written their `__smp_spin` slot.
 
 Steps 3, 7 and 8 are the same as for AArch32.
 
@@ -298,8 +285,12 @@ In steps 4 and 6, write `openocd-olimex.cfg` instead of
 
 - **`LIBUSB_ERROR_BUSY`** — another OpenOCD still holds the probe:
   `pkill -9 -f openocd`.
-- **`Invalid ACK (0) in DAP response`**, then the cores cannot be examined —
-  the JTAG link dropped, not the test. Lower the speed: add
+- **`Invalid ACK (0) in DAP response` in step 6**, then the cores cannot be
+  examined — the JTAG link dropped, not the test. Lower the speed: add
   `-c "adapter speed 1000"` right after the config file, and check the
   board's power supply.
+- **The cores halt in the wrong state** (AArch32 card on an AArch64 test, or
+  the other way round: `ARM state … Hypervisor` instead of `AArch64 … EL2H`)
+  — the SD card boots the other width, and the test times out; see
+  "The SD card".
 - **Nothing prints** — power-cycle the board and start again from step 4.

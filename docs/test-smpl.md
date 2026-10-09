@@ -76,7 +76,7 @@ semihosted console for the verdict.
 | `UOS_HW_CFG_INIT` | `1` when that config is purely declarative and the runner must issue `init` |
 | `UOS_HW_ENTRY` | where the image is linked (read from the ELF when possible) |
 | `UOS_HW_SPIN_WORDS` | `__smp_spin` words to zero before releasing the secondaries; `0` skips that stage |
-| `UOS_HW_RESUME` | `cpsr` \| `pc` \| `entry` |
+| `UOS_HW_RESUME` | `cpsr` \| `pc` \| `entry` (every core) — or `cpsr-first` \| `pc-first`: only the first core is started at the entry, the others are resumed where they were halted (the Pi's firmware loop) until the kernel releases them; used with `UOS_HW_SPIN_WORDS=0` by both Pi ports |
 | `UOS_HW_NCPU`, `UOS_HW_CORES`, `UOS_HW_TARGET_FMT` | how many cores, which are debug targets at load time, and how they are named (`bcm2837.cpu%d`, `rk3506.a7.%d`) |
 | `UOS_HW_PRELOAD` | Tcl to run between halt and load — the Lyra's MMU/cache sanitize, which has to happen before an image is written over the miniloader's page tables |
 | `UOS_HW_NM`, `UOS_HW_READELF`, `UOS_HW_ADAPTER_KHZ` | binutils for the ELF, and the probe clock |

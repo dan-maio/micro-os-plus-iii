@@ -47,16 +47,6 @@
 #                             RK3506's miniloader hands core 0 over in SVC
 #                             already, and this is what the board's own
 #                             loader has always done.
-#                     pc-first = set PC on the first core only and resume
-#                             it; the other cores resume where they were
-#                             halted -- parked by the firmware -- and wait
-#                             there until the kernel releases them, so none
-#                             of them reads __smp_spin before the kernel has
-#                             written it (use with UOS_HW_SPIN_WORDS=0).
-#                             AArch64 Pi: the firmware's spin-table loop.
-#                     cpsr-first = the same, with "set CPSR, then resume
-#                             at entry" on the first core (AArch32 Pi: the
-#                             others wait on mailbox 3 in the 32-bit stub).
 #   UOS_HW_NCPU       cores the port schedules on  (default: 4)
 #   UOS_HW_TARGET_FMT printf format for the OpenOCD target names, with the
 #                     core index as the only conversion
@@ -177,23 +167,6 @@ run_one () {
       resume="foreach core {$CORES} {
   targets [format {$TARGET_FMT} \$core]
   resume $entry
-}" ;;
-    pc-first|cpsr-first)
-      local others="" first
-      [[ "$CORES" == *" "* ]] && others="${CORES#* }"
-      if [[ "$RESUME_MODE" == cpsr-first ]]; then
-        first="reg cpsr 0x600001da
-resume $entry"
-      else
-        first="reg pc $entry
-echo \"  start PC core ${FIRST_CORE} = [reg pc]\"
-resume"
-      fi
-      resume="targets ${FIRST_TARGET}
-${first}
-foreach core {$others} {
-  targets [format {$TARGET_FMT} \$core]
-  resume
 }" ;;
     *)
       resume="foreach core {$CORES} {

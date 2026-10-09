@@ -14,12 +14,15 @@ ARM-USB-OCD also works; see the end of the page.)
 2. OpenOCD stops the four CPU cores.
 3. OpenOCD turns semihosting on, so the test can print through the probe.
 4. OpenOCD copies the test program into the board's RAM.
-5. OpenOCD clears a small table the cores use to start each other.
-6. OpenOCD starts the four cores at the program's first instruction.
-7. The test runs and prints `RESULT: PASS` (or `FAIL`).
+5. AArch32: OpenOCD clears a small table the cores use to start each
+   other, then starts the four cores at the program's first instruction.
+   AArch64: OpenOCD starts only core 0; cores 1–3 stay in the firmware's
+   waiting loop until the test itself releases them (no table to clear).
+6. The test runs and prints `RESULT: PASS` (or `FAIL`).
 
 One test per power cycle: before the next test, unplug the board's power
-and plug it in again.
+and plug it in again. (On AArch64 the 14 tests also passed back to back
+with only the step-4 watchdog reset between them.)
 
 ## Step 0 — set the paths
 
@@ -188,10 +191,38 @@ The same steps; only these things change:
 | Config folder `CFG` | `$A32/test/boards/rpi-zero-2w` | `$A64/test/boards/rpi-zero-2w` |
 | Tools | `$TC32/arm-none-eabi-…` | `$TC64/aarch64-none-elf-…` |
 | Entry point | `0x1003c` | `0x80000` |
-| `__smp_spin` | 4 numbers of 4 bytes → 4 writes | 4 numbers of 8 bytes → 8 writes |
+| `__smp_spin` | read with `nm`, 4 writes | not used (nothing to read or write) |
 | Connect | the config file does it | add `-c init` after the config file |
-| Start a core | `reg cpsr …` then `resume 0x1003c` | `reg pc 0x80000`, then `resume` |
+| Start the cores | all 4: `reg cpsr …` then `resume 0x1003c` | core 0: `reg pc 0x80000`, `resume`; cores 1–3: `resume` where they are |
 | JTAG speed | 1000 kHz | 4000 kHz |
+
+### Why AArch64 needs no `__smp_spin` writes
+
+After the reset in step 4 the firmware holds cores 1–3 in its own waiting
+loop (they are stopped at `pc=0x7c`, EL2, MMU off, and their release words at
+`0xd8`…`0xf0` are 0). Step 6 starts only core 0. Cores 1–3 are let go
+exactly where they were, so they keep waiting in the firmware. When the
+kernel is ready, the test releases them itself (`release_one()` in
+`test/boards/rpi-zero-2w/src/smp.cpp`): it first writes their entry into
+`__smp_spin`, then writes `_start` into their release word. So a core never
+reads `__smp_spin` before the test has written it, and its old content does
+not matter.
+
+This needs an SD card whose kernel does **not** start cores 1–3 (for example
+`test/boards/rpi-zero-2w/hw-park/`). Check it once, after a step-4 reset:
+
+```bash
+$OPENOCD -s $CFG -f $CFG/openocd-jlink-rpi3.cfg -c "init" \
+  -c "targets bcm2837.cpu1" -c "halt" -c "reg pc" -c "resume" \
+  -c "shutdown"
+```
+
+`pc` must be `0x7c` (and the same for `cpu2`, `cpu3`). If a core is
+anywhere else, the SD card's kernel has started it; use the AArch32 way
+(start all 4 cores and clear `__smp_spin`) instead.
+
+Tested on 2026-10-09: all 14 AArch64 tests (all but `usb_test`) passed
+this way, one after another, with only the step-4 reset between them.
 
 ### Step 2 (AArch64)
 
@@ -199,11 +230,9 @@ The same steps; only these things change:
 D=$BUILD/aarch64-rpi-zero-2w-cmake-gcc-debug/platform-bin/port-tests/test
 CFG=$A64/test/boards/rpi-zero-2w
 ELF=$D/smp_test0-hwd
-
-S=0x$($TC64/aarch64-none-elf-nm $ELF | awk '$3 == "__smp_spin" {print $1}')
-for i in 0 1 2 3 4 5 6 7; do eval S$i=$(printf 0x%x $((S + 4 * i))); done
-echo $S0 $S1 $S2 $S3 $S4 $S5 $S6 $S7
 ```
+
+Nothing to read from the ELF: the entry is always `0x80000`.
 
 ### Step 4 (AArch64) — reset the board
 
@@ -238,22 +267,23 @@ $OPENOCD -s $CFG -f $CFG/openocd-jlink-rpi3.cfg -c "init" \
   -c "targets bcm2837.cpu2" -c "arm semihosting enable" \
   -c "targets bcm2837.cpu3" -c "arm semihosting enable" \
   -c "targets bcm2837.cpu0" -c "load_image $ELF" \
-  -c "mww $S0 0" -c "mww $S1 0" -c "mww $S2 0" -c "mww $S3 0" \
-  -c "mww $S4 0" -c "mww $S5 0" -c "mww $S6 0" -c "mww $S7 0" \
-  -c "targets bcm2837.cpu0" -c "reg pc 0x80000" \
-  -c "targets bcm2837.cpu1" -c "reg pc 0x80000" \
-  -c "targets bcm2837.cpu2" -c "reg pc 0x80000" \
-  -c "targets bcm2837.cpu3" -c "reg pc 0x80000" \
-  -c "targets bcm2837.cpu0" -c "resume" \
+  -c "targets bcm2837.cpu0" -c "reg pc 0x80000" -c "resume" \
   -c "targets bcm2837.cpu1" -c "resume" \
   -c "targets bcm2837.cpu2" -c "resume" \
   -c "targets bcm2837.cpu3" -c "resume"
 ```
 
-The same parts as for AArch32, except the start: first set every core's
-program counter to `0x80000` (`reg pc`), then let them all run (`resume`).
-A 64-bit core keeps the mode it was stopped in, and the startup code reads
-that mode, so there is no CPSR to set.
+What each part does:
+
+1. **Stop the 4 cores**, so nothing runs while the program is copied.
+2. **Turn semihosting on for each core** — cores 1–3 print too, once the
+   test has released them.
+3. **Copy the program into RAM** (`load_image $ELF`).
+4. **Start core 0**: `reg pc 0x80000` sets its program counter to the
+   entry, `resume` runs it. A 64-bit core keeps the mode it was stopped in
+   (EL2), and the startup code reads that mode, so there is no CPSR to set.
+5. **Let cores 1–3 go on where they were** (`resume` with no address): back
+   in the firmware's waiting loop, until the test releases them.
 
 Steps 3, 7 and 8 are the same as for AArch32.
 

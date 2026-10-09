@@ -193,6 +193,37 @@ loop, runs `_start`, and finds its `__smp_spin` slot already written — so
 whatever the previous program left in RAM there does not matter, and
 OpenOCD does not have to clear it.
 
+
+this can be simplified by tcl script :
+
+```
+# Connect to the board.
+init
+
+# Halt all four cores and enable semihosting.
+foreach core {0 1 2 3} {
+    targets bcm2837.cpu$core
+    halt
+    arm semihosting enable
+}
+
+# Load the ELF once, using core 0.
+targets bcm2837.cpu0
+load_image $ELF
+
+# Configure the initial execution state and start core 0.
+reg cpsr 0x600001da
+resume 0x1003c
+
+# Start the other cores.
+foreach core {1 2 3} {
+    targets bcm2837.cpu$core
+    resume
+}
+
+```
+
+
 ### Step 7 — watch the result
 
 The test's messages appear in this OpenOCD window. It passed when it prints

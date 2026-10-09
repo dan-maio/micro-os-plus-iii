@@ -1,28 +1,42 @@
-# µOS++ III SMP — AArch32 and AArch64 test commands, one by one
+# µOS++ III SMP — test commands, one by one
 
-Every QEMU and hardware test of the AArch32 and AArch64 platforms, written as
-the explicit commands that `test_smpl/run-qemu.sh` and `test_smpl/run-hw.sh`
-(through each board's `hw.sh`) execute, without the scripts.
+Every QEMU, hardware and host test of the AArch32, AArch64, Cortex-M33,
+RP2350, STM32F4 and POSIX platforms, written as the explicit commands that
+the runners execute — `test_smpl/run-qemu.sh`, `test_smpl/run-hw.sh` and
+`test_smpl/run-host.sh`, each board's `hw.sh`, and the `add_test()` commands
+of the kernel platforms — without the scripts.
 
-| Platform | Port | QEMU tests | Hardware tests |
-|---|---|---:|---:|
-| `aarch32-rpi-zero-2w` | `micro-os-plus-iii-aarch32` | 15 | 15 |
-| `aarch32-rpi3b` | `micro-os-plus-iii-aarch32` | 15 | 14 |
-| `aarch64-rpi-zero-2w` | `micro-os-plus-iii-aarch64` | 15 | 15 |
-| `aarch64-rpi3b` | `micro-os-plus-iii-aarch64` | 15 | 14 |
-| `aarch32-luckfox-lyra` | `micro-os-plus-iii-aarch32` | — | 20 |
+| Platform | Port | QEMU tests | Hardware tests | Host tests | Section |
+|---|---|---:|---:|---:|---|
+| `aarch32-rpi-zero-2w` | `micro-os-plus-iii-aarch32` | 15 | 15 | — | 3.3, 4.3 |
+| `aarch32-rpi3b` | `micro-os-plus-iii-aarch32` | 15 | 14 | — | 3.4, 4.4 |
+| `aarch64-rpi-zero-2w` | `micro-os-plus-iii-aarch64` | 15 | 15 | — | 3.5, 4.5 |
+| `aarch64-rpi3b` | `micro-os-plus-iii-aarch64` | 15 | 14 | — | 3.6, 4.6 |
+| `aarch32-luckfox-lyra` | `micro-os-plus-iii-aarch32` | — | 20 | — | 4.7 |
+| `2xcortex-m33` | `micro-os-plus-iii-cortexm` | 4 | — | — | 5.2 |
+| `pico2-1cpu` | `micro-os-plus-iii-cortexm` | 4 | — | — | 5.3 |
+| `cortexm-pico2` | `micro-os-plus-iii-cortexm` | 6 | 20 | — | 5.4, 6.3, 6.4 |
+| `cortexm-pico2-rp2350b-psram` | `micro-os-plus-iii-cortexm` | 3 | 15 | — | 5.5, 6.5 |
+| `cortexm-pico2-pizero` | `micro-os-plus-iii-cortexm` | — | 14 | — | 6.6 |
+| `cortexm-nucleof411` | `micro-os-plus-iii-cortexm` | — | 4 | — | 7.2 |
+| `cortexm-weactf411` | `micro-os-plus-iii-cortexm` | — | 5 | — | 7.3 |
+| `cortexm-weactf412` | `micro-os-plus-iii-cortexm` | — | 5 | — | 7.4 |
+| `native` (`native-cmake-sys`) | `micro-os-plus-iii-posix-arch` | — | — | 16 | 8 |
 
-The addresses (`__smp_spin`) in section 4 were read on 2026-10-09 from the
-**debug** builds of the five platforms (`*-cmake-gcc-debug`) made from:
+The image names, the test lists and the AArch32/AArch64 addresses
+(`__smp_spin`, section 4) were read on 2026-10-09 from the **debug** builds
+(`*-cmake-gcc-debug`, `native-cmake-sys-debug`) made from:
 
 | Repository | Branch | Commit |
 |---|---|---|
 | `micro-os-plus-iii` | `smp` | `d780c76c` |
 | `micro-os-plus-iii-aarch32` | `smp` | `e721dea` |
 | `micro-os-plus-iii-aarch64` | `smp` | `8151c26` |
+| `micro-os-plus-iii-cortexm` | `smp` | `71e98ff` |
+| `micro-os-plus-iii-posix-arch` | `smp` | `4ed05ad` |
 
-They change whenever a test is built differently (release, another commit);
-section 4.1 shows how to read them again.
+The addresses change whenever a test is built differently (release, another
+commit); section 4.1 shows how to read them again.
 
 ## 1. Paths and tools
 
@@ -31,9 +45,12 @@ WORK=/tmp
 K=$WORK/micro-os-plus-iii                 # kernel
 A32=$WORK/micro-os-plus-iii-aarch32       # AArch32 port
 A64=$WORK/micro-os-plus-iii-aarch64       # AArch64 port
+C=$WORK/micro-os-plus-iii-cortexm         # Cortex-M port
+P=$WORK/micro-os-plus-iii-posix-arch      # POSIX port
 BUILD=$K/tests/build
 
 QEMU=$HOME/.local/xPacks/@xpack-dev-tools/qemu-arm/9.2.4-1.1/.content/bin/qemu-system-aarch64
+QEMUARM=$HOME/.local/xPacks/@xpack-dev-tools/qemu-arm/9.2.4-1.1/.content/bin/qemu-system-arm
 OPENOCD=$HOME/.local/xPacks/@xpack-dev-tools/openocd/0.12.0-7.1/.content/bin/openocd
 SCRIPTS=$HOME/.local/xPacks/@xpack-dev-tools/openocd/0.12.0-7.1/.content/openocd/scripts
 TC32=$HOME/.local/xPacks/@xpack-dev-tools/arm-none-eabi-gcc/15.2.1-1.1.1/.content/bin
@@ -48,16 +65,24 @@ These are the versions the scripts pick on this machine: the newest
 ```bash
 cd $A32 && xpm install && xpm link
 cd $A64 && xpm install && xpm link
+cd $C   && xpm install && xpm link
+cd $P   && xpm install && xpm link
 
 cd $K/tests
-for c in aarch32-rpi-zero-2w aarch32-rpi3b aarch64-rpi-zero-2w aarch64-rpi3b aarch32-luckfox-lyra; do
+for c in aarch32-rpi-zero-2w aarch32-rpi3b aarch64-rpi-zero-2w aarch64-rpi3b aarch32-luckfox-lyra \
+         2xcortex-m33 pico2-1cpu cortexm-pico2 cortexm-pico2-rp2350b-psram cortexm-pico2-pizero \
+         cortexm-nucleof411 cortexm-weactf411 cortexm-weactf412; do
   xpm install     --config $c-cmake-gcc-debug
   xpm run prepare --config $c-cmake-gcc-debug
   xpm run build   --config $c-cmake-gcc-debug
 done
+xpm install     --config native-cmake-sys-debug
+xpm run prepare --config native-cmake-sys-debug
+xpm run build   --config native-cmake-sys-debug
 ```
 
-(Replace `-debug` by `-release` for the release images.) The images are in
+(Replace `-debug` by `-release` for the release images.) The AArch32 and
+AArch64 images are in
 `$BUILD/<platform>-cmake-gcc-debug/platform-bin/port-tests/test/`:
 
 | File | Used by |
@@ -3449,7 +3474,1414 @@ sed -i "s|__ELF__|$D/smp_test_int5-hwd|g" /tmp/session.tcl
 $OPENOCD -s $CFG -s $SCRIPTS -f $CFG/openocd.cfg -f /tmp/session.tcl
 ```
 
-## 5. The same tests through `ctest`
+## 5. Cortex-M on QEMU
+
+### 5.1 The commands
+
+These tests are started by `ctest` directly (no runner script). A test passed
+when QEMU exits with status 0; the suites end with `Hasta la Vista!`, the port
+tests print `RESULT: PASS`. `ctest` gives each 1200 s (suites) or 300 s (port
+tests).
+
+Checked on 2026-10-09 with these exact commands: `2xcortex-m33`
+`fp-switch-test` and `pico2-1cpu` `mutex-stress-test` (exit 0),
+`cortexm-pico2` `smp-test1` (`RESULT: PASS`, exit 0).
+
+### 5.2 `2xcortex-m33` — QEMU
+
+The harness suites on two Cortex-M33 (SSE-200) on QEMU's `mps2-an521`.
+
+```bash
+D=$BUILD/2xcortex-m33-cmake-gcc-debug/platform-bin
+```
+
+`rtos-apis-test`
+
+```bash
+timeout 1200 $QEMUARM --machine mps2-an521 --cpu cortex-m33 --smp 2 \
+  --global sse-200.CPU0_FPU=on --global sse-200.CPU0_DSP=on \
+  --global sse-200.CPU1_FPU=on --global sse-200.CPU1_DSP=on \
+  --kernel $D/rtos-apis-test.elf --nographic -d unimp,guest_errors \
+  --semihosting-config enable=on,target=native < /dev/null
+```
+
+`mutex-stress-test`
+
+```bash
+timeout 1200 $QEMUARM --machine mps2-an521 --cpu cortex-m33 --smp 2 \
+  --global sse-200.CPU0_FPU=on --global sse-200.CPU0_DSP=on \
+  --global sse-200.CPU1_FPU=on --global sse-200.CPU1_DSP=on \
+  --kernel $D/mutex-stress-test.elf --nographic -d unimp,guest_errors \
+  --semihosting-config enable=on,target=native < /dev/null
+```
+
+`fp-switch-test`
+
+```bash
+timeout 1200 $QEMUARM --machine mps2-an521 --cpu cortex-m33 --smp 2 \
+  --global sse-200.CPU0_FPU=on --global sse-200.CPU0_DSP=on \
+  --global sse-200.CPU1_FPU=on --global sse-200.CPU1_DSP=on \
+  --kernel $D/fp-switch-test.elf --nographic -d unimp,guest_errors \
+  --semihosting-config enable=on,target=native < /dev/null
+```
+
+`cmsis-os-validator-test`
+
+```bash
+timeout 1200 $QEMUARM --machine mps2-an521 --cpu cortex-m33 --smp 2 \
+  --global sse-200.CPU0_FPU=on --global sse-200.CPU0_DSP=on \
+  --global sse-200.CPU1_FPU=on --global sse-200.CPU1_DSP=on \
+  --kernel $D/cmsis-os-validator-test.elf --nographic -d unimp,guest_errors \
+  --semihosting-config enable=on,target=native < /dev/null
+```
+
+### 5.3 `pico2-1cpu` — QEMU
+
+The harness suites on one Cortex-M33 on QEMU's `mps2-an505`.
+
+```bash
+D=$BUILD/pico2-1cpu-cmake-gcc-debug/platform-bin
+```
+
+`rtos-apis-test`
+
+```bash
+timeout 1200 $QEMUARM --machine mps2-an505 --cpu cortex-m33 \
+  --kernel $D/rtos-apis-test.elf --nographic -d unimp,guest_errors \
+  --semihosting-config enable=on,target=native < /dev/null
+```
+
+`mutex-stress-test`
+
+```bash
+timeout 1200 $QEMUARM --machine mps2-an505 --cpu cortex-m33 \
+  --kernel $D/mutex-stress-test.elf --nographic -d unimp,guest_errors \
+  --semihosting-config enable=on,target=native < /dev/null
+```
+
+`fp-switch-test`
+
+```bash
+timeout 1200 $QEMUARM --machine mps2-an505 --cpu cortex-m33 \
+  --kernel $D/fp-switch-test.elf --nographic -d unimp,guest_errors \
+  --semihosting-config enable=on,target=native < /dev/null
+```
+
+`cmsis-os-validator-test`
+
+```bash
+timeout 1200 $QEMUARM --machine mps2-an505 --cpu cortex-m33 \
+  --kernel $D/cmsis-os-validator-test.elf --nographic -d unimp,guest_errors \
+  --semihosting-config enable=on,target=native < /dev/null
+```
+
+### 5.4 `cortexm-pico2` — QEMU
+
+The port tests that have a QEMU build run on a generic Cortex-M7 (QEMU's `mps2-an500`).
+
+```bash
+D=$BUILD/cortexm-pico2-cmake-gcc-debug/platform-bin/port-tests/test
+```
+
+`cmsis-os-validator`
+
+```bash
+timeout 300 $QEMUARM -M mps2-an500 -cpu cortex-m7 \
+  -kernel $D/cmsis-os-validator-qemu.elf --nographic -d unimp,guest_errors \
+  --semihosting-config enable=on,target=native < /dev/null
+```
+
+`fp-switch`
+
+```bash
+timeout 300 $QEMUARM -M mps2-an500 -cpu cortex-m7 \
+  -kernel $D/fp-switch-qemu.elf --nographic -d unimp,guest_errors \
+  --semihosting-config enable=on,target=native < /dev/null
+```
+
+`mutex-stress`
+
+```bash
+timeout 300 $QEMUARM -M mps2-an500 -cpu cortex-m7 \
+  -kernel $D/mutex-stress-qemu.elf --nographic -d unimp,guest_errors \
+  --semihosting-config enable=on,target=native < /dev/null
+```
+
+`rtos-apis`
+
+```bash
+timeout 300 $QEMUARM -M mps2-an500 -cpu cortex-m7 \
+  -kernel $D/rtos-apis-qemu.elf --nographic -d unimp,guest_errors \
+  --semihosting-config enable=on,target=native < /dev/null
+```
+
+`sc-test-ko`
+
+```bash
+timeout 300 $QEMUARM -M mps2-an500 -cpu cortex-m7 \
+  -kernel $D/sc-test-ko-qemu.elf --nographic -d unimp,guest_errors \
+  --semihosting-config enable=on,target=native < /dev/null
+```
+
+`smp-test1`
+
+```bash
+timeout 300 $QEMUARM -M mps2-an500 -cpu cortex-m7 \
+  -kernel $D/smp-test1-qemu.elf --nographic -d unimp,guest_errors \
+  --semihosting-config enable=on,target=native < /dev/null
+```
+
+### 5.5 `cortexm-pico2-rp2350b-psram` — QEMU
+
+The port tests that have a QEMU build run on a generic Cortex-M7 (QEMU's `mps2-an500`).
+
+```bash
+D=$BUILD/cortexm-pico2-rp2350b-psram-cmake-gcc-debug/platform-bin/port-tests/test
+```
+
+`fp-switch`
+
+```bash
+timeout 300 $QEMUARM -M mps2-an500 -cpu cortex-m7 \
+  -kernel $D/fp-switch-qemu.elf --nographic -d unimp,guest_errors \
+  --semihosting-config enable=on,target=native < /dev/null
+```
+
+`sc-test-ko`
+
+```bash
+timeout 300 $QEMUARM -M mps2-an500 -cpu cortex-m7 \
+  -kernel $D/sc-test-ko-qemu.elf --nographic -d unimp,guest_errors \
+  --semihosting-config enable=on,target=native < /dev/null
+```
+
+`smp-test1`
+
+```bash
+timeout 300 $QEMUARM -M mps2-an500 -cpu cortex-m7 \
+  -kernel $D/smp-test1-qemu.elf --nographic -d unimp,guest_errors \
+  --semihosting-config enable=on,target=native < /dev/null
+```
+
+## 6. RP2350 hardware (Pico 2, WeAct RP2350B, Pi-Zero RP2350B)
+
+### 6.1 What a hardware run does
+
+OpenOCD over a CMSIS-DAP probe. The test image is written to the flash
+(`program ... verify`), the chip is reset with `reset init` (a bare `reset`
+does not re-run the bootrom/XIP setup), semihosting is enabled on both cores,
+and core 1 is resumed **before** core 0 (a debug-halted core 1 does not answer
+the core-1 launch). The test's console is the board's serial port; its
+`RESULT:` line is also written through semihosting, so it appears in the
+OpenOCD output. When `RESULT: PASS` (or `RESULT: FAIL`) appears, stop OpenOCD
+(Ctrl-C).
+
+One test per power cycle: power-cycle the board before the next test.
+
+Each test is two commands: stop any OpenOCD already attached to that board's
+config, then run OpenOCD.
+
+### 6.2 The boards
+
+| Platform | OpenOCD config | Probe | Flash |
+|---|---|---|---|
+| `cortexm-pico2` | `$C/test/boards/pico2/openocd.cfg` | CMSIS-DAP (any) | 4 MB |
+| `cortexm-pico2-rp2350b-psram` | `$C/test/boards/pico2-rp2350b-psram/openocd.cfg` | CMSIS-DAP `0xc251:0xf001` | 16 MB |
+| `cortexm-pico2-pizero` | `$C/test/boards/pico2-pizero/openocd.cfg` | CMSIS-DAP `0x0416:0x5951` | 16 MB |
+
+### 6.3 `cortexm-pico2` — hardware, programmed into flash
+
+```bash
+D=$BUILD/cortexm-pico2-cmake-gcc-debug/platform-bin/port-tests/test
+```
+
+`cmsis-os-validator`
+
+```bash
+pkill -9 -f "openocd.*boards/pico2/openocd.cfg"
+$OPENOCD -s $SCRIPTS -f $C/test/boards/pico2/openocd.cfg \
+  -c "init" \
+  -c "reset init" \
+  -c "program \"$D/cmsis-os-validator-hwd\" verify" \
+  -c "reset init" \
+  -c "targets rp2350.cm1" \
+  -c "arm semihosting enable" \
+  -c "resume" \
+  -c "targets rp2350.cm0" \
+  -c "arm semihosting enable" \
+  -c "resume"
+```
+
+`exc-test`
+
+```bash
+pkill -9 -f "openocd.*boards/pico2/openocd.cfg"
+$OPENOCD -s $SCRIPTS -f $C/test/boards/pico2/openocd.cfg \
+  -c "init" \
+  -c "reset init" \
+  -c "program \"$D/exc-test-hwd\" verify" \
+  -c "reset init" \
+  -c "targets rp2350.cm1" \
+  -c "arm semihosting enable" \
+  -c "resume" \
+  -c "targets rp2350.cm0" \
+  -c "arm semihosting enable" \
+  -c "resume"
+```
+
+`fp-switch`
+
+```bash
+pkill -9 -f "openocd.*boards/pico2/openocd.cfg"
+$OPENOCD -s $SCRIPTS -f $C/test/boards/pico2/openocd.cfg \
+  -c "init" \
+  -c "reset init" \
+  -c "program \"$D/fp-switch-hwd\" verify" \
+  -c "reset init" \
+  -c "targets rp2350.cm1" \
+  -c "arm semihosting enable" \
+  -c "resume" \
+  -c "targets rp2350.cm0" \
+  -c "arm semihosting enable" \
+  -c "resume"
+```
+
+`mutex-stress`
+
+```bash
+pkill -9 -f "openocd.*boards/pico2/openocd.cfg"
+$OPENOCD -s $SCRIPTS -f $C/test/boards/pico2/openocd.cfg \
+  -c "init" \
+  -c "reset init" \
+  -c "program \"$D/mutex-stress-hwd\" verify" \
+  -c "reset init" \
+  -c "targets rp2350.cm1" \
+  -c "arm semihosting enable" \
+  -c "resume" \
+  -c "targets rp2350.cm0" \
+  -c "arm semihosting enable" \
+  -c "resume"
+```
+
+`rtos-apis`
+
+```bash
+pkill -9 -f "openocd.*boards/pico2/openocd.cfg"
+$OPENOCD -s $SCRIPTS -f $C/test/boards/pico2/openocd.cfg \
+  -c "init" \
+  -c "reset init" \
+  -c "program \"$D/rtos-apis-hwd\" verify" \
+  -c "reset init" \
+  -c "targets rp2350.cm1" \
+  -c "arm semihosting enable" \
+  -c "resume" \
+  -c "targets rp2350.cm0" \
+  -c "arm semihosting enable" \
+  -c "resume"
+```
+
+`sc-test-ko`
+
+```bash
+pkill -9 -f "openocd.*boards/pico2/openocd.cfg"
+$OPENOCD -s $SCRIPTS -f $C/test/boards/pico2/openocd.cfg \
+  -c "init" \
+  -c "reset init" \
+  -c "program \"$D/sc-test-ko-hwd\" verify" \
+  -c "reset init" \
+  -c "targets rp2350.cm1" \
+  -c "arm semihosting enable" \
+  -c "resume" \
+  -c "targets rp2350.cm0" \
+  -c "arm semihosting enable" \
+  -c "resume"
+```
+
+`smp-mat-test`
+
+```bash
+pkill -9 -f "openocd.*boards/pico2/openocd.cfg"
+$OPENOCD -s $SCRIPTS -f $C/test/boards/pico2/openocd.cfg \
+  -c "init" \
+  -c "reset init" \
+  -c "program \"$D/smp-mat-test-hwd\" verify" \
+  -c "reset init" \
+  -c "targets rp2350.cm1" \
+  -c "arm semihosting enable" \
+  -c "resume" \
+  -c "targets rp2350.cm0" \
+  -c "arm semihosting enable" \
+  -c "resume"
+```
+
+`smp-test-ko`
+
+```bash
+pkill -9 -f "openocd.*boards/pico2/openocd.cfg"
+$OPENOCD -s $SCRIPTS -f $C/test/boards/pico2/openocd.cfg \
+  -c "init" \
+  -c "reset init" \
+  -c "program \"$D/smp-test-ko-hwd\" verify" \
+  -c "reset init" \
+  -c "targets rp2350.cm1" \
+  -c "arm semihosting enable" \
+  -c "resume" \
+  -c "targets rp2350.cm0" \
+  -c "arm semihosting enable" \
+  -c "resume"
+```
+
+`smp-test-usb-cdc-acm`
+
+```bash
+pkill -9 -f "openocd.*boards/pico2/openocd.cfg"
+$OPENOCD -s $SCRIPTS -f $C/test/boards/pico2/openocd.cfg \
+  -c "init" \
+  -c "reset init" \
+  -c "program \"$D/smp-test-usb-cdc-acm-hwd\" verify" \
+  -c "reset init" \
+  -c "targets rp2350.cm1" \
+  -c "arm semihosting enable" \
+  -c "resume" \
+  -c "targets rp2350.cm0" \
+  -c "arm semihosting enable" \
+  -c "resume"
+```
+
+`smp-test-usb-hid`
+
+```bash
+pkill -9 -f "openocd.*boards/pico2/openocd.cfg"
+$OPENOCD -s $SCRIPTS -f $C/test/boards/pico2/openocd.cfg \
+  -c "init" \
+  -c "reset init" \
+  -c "program \"$D/smp-test-usb-hid-hwd\" verify" \
+  -c "reset init" \
+  -c "targets rp2350.cm1" \
+  -c "arm semihosting enable" \
+  -c "resume" \
+  -c "targets rp2350.cm0" \
+  -c "arm semihosting enable" \
+  -c "resume"
+```
+
+`smp-test0`
+
+```bash
+pkill -9 -f "openocd.*boards/pico2/openocd.cfg"
+$OPENOCD -s $SCRIPTS -f $C/test/boards/pico2/openocd.cfg \
+  -c "init" \
+  -c "reset init" \
+  -c "program \"$D/smp-test0-hwd\" verify" \
+  -c "reset init" \
+  -c "targets rp2350.cm1" \
+  -c "arm semihosting enable" \
+  -c "resume" \
+  -c "targets rp2350.cm0" \
+  -c "arm semihosting enable" \
+  -c "resume"
+```
+
+`smp-test1`
+
+```bash
+pkill -9 -f "openocd.*boards/pico2/openocd.cfg"
+$OPENOCD -s $SCRIPTS -f $C/test/boards/pico2/openocd.cfg \
+  -c "init" \
+  -c "reset init" \
+  -c "program \"$D/smp-test1-hwd\" verify" \
+  -c "reset init" \
+  -c "targets rp2350.cm1" \
+  -c "arm semihosting enable" \
+  -c "resume" \
+  -c "targets rp2350.cm0" \
+  -c "arm semihosting enable" \
+  -c "resume"
+```
+
+`smp-test2`
+
+```bash
+pkill -9 -f "openocd.*boards/pico2/openocd.cfg"
+$OPENOCD -s $SCRIPTS -f $C/test/boards/pico2/openocd.cfg \
+  -c "init" \
+  -c "reset init" \
+  -c "program \"$D/smp-test2-hwd\" verify" \
+  -c "reset init" \
+  -c "targets rp2350.cm1" \
+  -c "arm semihosting enable" \
+  -c "resume" \
+  -c "targets rp2350.cm0" \
+  -c "arm semihosting enable" \
+  -c "resume"
+```
+
+`smp-test3`
+
+```bash
+pkill -9 -f "openocd.*boards/pico2/openocd.cfg"
+$OPENOCD -s $SCRIPTS -f $C/test/boards/pico2/openocd.cfg \
+  -c "init" \
+  -c "reset init" \
+  -c "program \"$D/smp-test3-hwd\" verify" \
+  -c "reset init" \
+  -c "targets rp2350.cm1" \
+  -c "arm semihosting enable" \
+  -c "resume" \
+  -c "targets rp2350.cm0" \
+  -c "arm semihosting enable" \
+  -c "resume"
+```
+
+`smp-test4`
+
+```bash
+pkill -9 -f "openocd.*boards/pico2/openocd.cfg"
+$OPENOCD -s $SCRIPTS -f $C/test/boards/pico2/openocd.cfg \
+  -c "init" \
+  -c "reset init" \
+  -c "program \"$D/smp-test4-hwd\" verify" \
+  -c "reset init" \
+  -c "targets rp2350.cm1" \
+  -c "arm semihosting enable" \
+  -c "resume" \
+  -c "targets rp2350.cm0" \
+  -c "arm semihosting enable" \
+  -c "resume"
+```
+
+`smp-test5`
+
+```bash
+pkill -9 -f "openocd.*boards/pico2/openocd.cfg"
+$OPENOCD -s $SCRIPTS -f $C/test/boards/pico2/openocd.cfg \
+  -c "init" \
+  -c "reset init" \
+  -c "program \"$D/smp-test5-hwd\" verify" \
+  -c "reset init" \
+  -c "targets rp2350.cm1" \
+  -c "arm semihosting enable" \
+  -c "resume" \
+  -c "targets rp2350.cm0" \
+  -c "arm semihosting enable" \
+  -c "resume"
+```
+
+### 6.4 `cortexm-pico2` — hardware, loaded into RAM
+
+These four tests have their own runner (`$C/test/pico2/<test>/hw.sh`, which
+the board's `hw.sh` hands them to): the image is loaded into SRAM without
+writing the flash, the vector table is moved to `0x20000000`, and core 0 is
+started from the image's initial stack pointer and reset vector.
+
+`cmsis-os-validator-ram`
+
+```bash
+pkill -9 -f "openocd.*boards/pico2/openocd.cfg"
+$OPENOCD -s $SCRIPTS -f $C/test/boards/pico2/openocd.cfg \
+  -c "init" \
+  -c "reset init" \
+  -c "rp2350.cm0 configure -work-area-phys 0x20070000 -work-area-size 0x8000" \
+  -c "load_image \"$D/cmsis-os-validator-ram-hwd\"" \
+  -c "verify_image \"$D/cmsis-os-validator-ram-hwd\"" \
+  -c "targets rp2350.cm1" \
+  -c "arm semihosting enable" \
+  -c "resume" \
+  -c "targets rp2350.cm0" \
+  -c "arm semihosting enable" \
+  -c "set v [read_memory 0x20000000 32 2]" \
+  -c "mww 0xe000ed08 0x20000000" \
+  -c "reg sp [lindex \$v 0]" \
+  -c "reg pc [expr {[lindex \$v 1] & ~1}]" \
+  -c "resume"
+```
+
+`mutex-stress-ram`
+
+```bash
+pkill -9 -f "openocd.*boards/pico2/openocd.cfg"
+$OPENOCD -s $SCRIPTS -f $C/test/boards/pico2/openocd.cfg \
+  -c "init" \
+  -c "reset init" \
+  -c "rp2350.cm0 configure -work-area-phys 0x20070000 -work-area-size 0x8000" \
+  -c "load_image \"$D/mutex-stress-ram-hwd\"" \
+  -c "verify_image \"$D/mutex-stress-ram-hwd\"" \
+  -c "targets rp2350.cm1" \
+  -c "arm semihosting enable" \
+  -c "resume" \
+  -c "targets rp2350.cm0" \
+  -c "arm semihosting enable" \
+  -c "set v [read_memory 0x20000000 32 2]" \
+  -c "mww 0xe000ed08 0x20000000" \
+  -c "reg sp [lindex \$v 0]" \
+  -c "reg pc [expr {[lindex \$v 1] & ~1}]" \
+  -c "resume"
+```
+
+`rtos-apis-ram`
+
+```bash
+pkill -9 -f "openocd.*boards/pico2/openocd.cfg"
+$OPENOCD -s $SCRIPTS -f $C/test/boards/pico2/openocd.cfg \
+  -c "init" \
+  -c "reset init" \
+  -c "rp2350.cm0 configure -work-area-phys 0x20070000 -work-area-size 0x8000" \
+  -c "load_image \"$D/rtos-apis-ram-hwd\"" \
+  -c "verify_image \"$D/rtos-apis-ram-hwd\"" \
+  -c "targets rp2350.cm1" \
+  -c "arm semihosting enable" \
+  -c "resume" \
+  -c "targets rp2350.cm0" \
+  -c "arm semihosting enable" \
+  -c "set v [read_memory 0x20000000 32 2]" \
+  -c "mww 0xe000ed08 0x20000000" \
+  -c "reg sp [lindex \$v 0]" \
+  -c "reg pc [expr {[lindex \$v 1] & ~1}]" \
+  -c "resume"
+```
+
+`smp-mat-test-ram`
+
+```bash
+pkill -9 -f "openocd.*boards/pico2/openocd.cfg"
+$OPENOCD -s $SCRIPTS -f $C/test/boards/pico2/openocd.cfg \
+  -c "init" \
+  -c "reset init" \
+  -c "rp2350.cm0 configure -work-area-phys 0x20070000 -work-area-size 0x8000" \
+  -c "load_image \"$D/smp-mat-test-ram-hwd\"" \
+  -c "verify_image \"$D/smp-mat-test-ram-hwd\"" \
+  -c "targets rp2350.cm1" \
+  -c "arm semihosting enable" \
+  -c "resume" \
+  -c "targets rp2350.cm0" \
+  -c "arm semihosting enable" \
+  -c "set v [read_memory 0x20000000 32 2]" \
+  -c "mww 0xe000ed08 0x20000000" \
+  -c "reg sp [lindex \$v 0]" \
+  -c "reg pc [expr {[lindex \$v 1] & ~1}]" \
+  -c "resume"
+```
+
+### 6.5 `cortexm-pico2-rp2350b-psram` — hardware
+
+```bash
+D=$BUILD/cortexm-pico2-rp2350b-psram-cmake-gcc-debug/platform-bin/port-tests/test
+```
+
+`exc-test`
+
+```bash
+pkill -9 -f "openocd.*boards/pico2-rp2350b-psram/openocd.cfg"
+$OPENOCD -s $SCRIPTS -f $C/test/boards/pico2-rp2350b-psram/openocd.cfg \
+  -c "init" \
+  -c "reset init" \
+  -c "program \"$D/exc-test-hwd\" verify" \
+  -c "reset init" \
+  -c "targets rp2350.cm1" \
+  -c "arm semihosting enable" \
+  -c "resume" \
+  -c "targets rp2350.cm0" \
+  -c "arm semihosting enable" \
+  -c "resume"
+```
+
+`fp-switch`
+
+```bash
+pkill -9 -f "openocd.*boards/pico2-rp2350b-psram/openocd.cfg"
+$OPENOCD -s $SCRIPTS -f $C/test/boards/pico2-rp2350b-psram/openocd.cfg \
+  -c "init" \
+  -c "reset init" \
+  -c "program \"$D/fp-switch-hwd\" verify" \
+  -c "reset init" \
+  -c "targets rp2350.cm1" \
+  -c "arm semihosting enable" \
+  -c "resume" \
+  -c "targets rp2350.cm0" \
+  -c "arm semihosting enable" \
+  -c "resume"
+```
+
+`sc-test-ko`
+
+```bash
+pkill -9 -f "openocd.*boards/pico2-rp2350b-psram/openocd.cfg"
+$OPENOCD -s $SCRIPTS -f $C/test/boards/pico2-rp2350b-psram/openocd.cfg \
+  -c "init" \
+  -c "reset init" \
+  -c "program \"$D/sc-test-ko-hwd\" verify" \
+  -c "reset init" \
+  -c "targets rp2350.cm1" \
+  -c "arm semihosting enable" \
+  -c "resume" \
+  -c "targets rp2350.cm0" \
+  -c "arm semihosting enable" \
+  -c "resume"
+```
+
+`smp-mat-test`
+
+```bash
+pkill -9 -f "openocd.*boards/pico2-rp2350b-psram/openocd.cfg"
+$OPENOCD -s $SCRIPTS -f $C/test/boards/pico2-rp2350b-psram/openocd.cfg \
+  -c "init" \
+  -c "reset init" \
+  -c "program \"$D/smp-mat-test-hwd\" verify" \
+  -c "reset init" \
+  -c "targets rp2350.cm1" \
+  -c "arm semihosting enable" \
+  -c "resume" \
+  -c "targets rp2350.cm0" \
+  -c "arm semihosting enable" \
+  -c "resume"
+```
+
+`smp-test-ko`
+
+```bash
+pkill -9 -f "openocd.*boards/pico2-rp2350b-psram/openocd.cfg"
+$OPENOCD -s $SCRIPTS -f $C/test/boards/pico2-rp2350b-psram/openocd.cfg \
+  -c "init" \
+  -c "reset init" \
+  -c "program \"$D/smp-test-ko-hwd\" verify" \
+  -c "reset init" \
+  -c "targets rp2350.cm1" \
+  -c "arm semihosting enable" \
+  -c "resume" \
+  -c "targets rp2350.cm0" \
+  -c "arm semihosting enable" \
+  -c "resume"
+```
+
+`smp-test-nested`
+
+```bash
+pkill -9 -f "openocd.*boards/pico2-rp2350b-psram/openocd.cfg"
+$OPENOCD -s $SCRIPTS -f $C/test/boards/pico2-rp2350b-psram/openocd.cfg \
+  -c "init" \
+  -c "reset init" \
+  -c "program \"$D/smp-test-nested-hwd\" verify" \
+  -c "reset init" \
+  -c "targets rp2350.cm1" \
+  -c "arm semihosting enable" \
+  -c "resume" \
+  -c "targets rp2350.cm0" \
+  -c "arm semihosting enable" \
+  -c "resume"
+```
+
+`smp-test-nested-clock`
+
+```bash
+pkill -9 -f "openocd.*boards/pico2-rp2350b-psram/openocd.cfg"
+$OPENOCD -s $SCRIPTS -f $C/test/boards/pico2-rp2350b-psram/openocd.cfg \
+  -c "init" \
+  -c "reset init" \
+  -c "program \"$D/smp-test-nested-clock-hwd\" verify" \
+  -c "reset init" \
+  -c "targets rp2350.cm1" \
+  -c "arm semihosting enable" \
+  -c "resume" \
+  -c "targets rp2350.cm0" \
+  -c "arm semihosting enable" \
+  -c "resume"
+```
+
+`smp-test-nested-clock_200`
+
+```bash
+pkill -9 -f "openocd.*boards/pico2-rp2350b-psram/openocd.cfg"
+$OPENOCD -s $SCRIPTS -f $C/test/boards/pico2-rp2350b-psram/openocd.cfg \
+  -c "init" \
+  -c "reset init" \
+  -c "program \"$D/smp-test-nested-clock_200-hwd\" verify" \
+  -c "reset init" \
+  -c "targets rp2350.cm1" \
+  -c "arm semihosting enable" \
+  -c "resume" \
+  -c "targets rp2350.cm0" \
+  -c "arm semihosting enable" \
+  -c "resume"
+```
+
+`smp-test-nested-clock_250`
+
+```bash
+pkill -9 -f "openocd.*boards/pico2-rp2350b-psram/openocd.cfg"
+$OPENOCD -s $SCRIPTS -f $C/test/boards/pico2-rp2350b-psram/openocd.cfg \
+  -c "init" \
+  -c "reset init" \
+  -c "program \"$D/smp-test-nested-clock_250-hwd\" verify" \
+  -c "reset init" \
+  -c "targets rp2350.cm1" \
+  -c "arm semihosting enable" \
+  -c "resume" \
+  -c "targets rp2350.cm0" \
+  -c "arm semihosting enable" \
+  -c "resume"
+```
+
+`smp-test0`
+
+```bash
+pkill -9 -f "openocd.*boards/pico2-rp2350b-psram/openocd.cfg"
+$OPENOCD -s $SCRIPTS -f $C/test/boards/pico2-rp2350b-psram/openocd.cfg \
+  -c "init" \
+  -c "reset init" \
+  -c "program \"$D/smp-test0-hwd\" verify" \
+  -c "reset init" \
+  -c "targets rp2350.cm1" \
+  -c "arm semihosting enable" \
+  -c "resume" \
+  -c "targets rp2350.cm0" \
+  -c "arm semihosting enable" \
+  -c "resume"
+```
+
+`smp-test1`
+
+```bash
+pkill -9 -f "openocd.*boards/pico2-rp2350b-psram/openocd.cfg"
+$OPENOCD -s $SCRIPTS -f $C/test/boards/pico2-rp2350b-psram/openocd.cfg \
+  -c "init" \
+  -c "reset init" \
+  -c "program \"$D/smp-test1-hwd\" verify" \
+  -c "reset init" \
+  -c "targets rp2350.cm1" \
+  -c "arm semihosting enable" \
+  -c "resume" \
+  -c "targets rp2350.cm0" \
+  -c "arm semihosting enable" \
+  -c "resume"
+```
+
+`smp-test2`
+
+```bash
+pkill -9 -f "openocd.*boards/pico2-rp2350b-psram/openocd.cfg"
+$OPENOCD -s $SCRIPTS -f $C/test/boards/pico2-rp2350b-psram/openocd.cfg \
+  -c "init" \
+  -c "reset init" \
+  -c "program \"$D/smp-test2-hwd\" verify" \
+  -c "reset init" \
+  -c "targets rp2350.cm1" \
+  -c "arm semihosting enable" \
+  -c "resume" \
+  -c "targets rp2350.cm0" \
+  -c "arm semihosting enable" \
+  -c "resume"
+```
+
+`smp-test3`
+
+```bash
+pkill -9 -f "openocd.*boards/pico2-rp2350b-psram/openocd.cfg"
+$OPENOCD -s $SCRIPTS -f $C/test/boards/pico2-rp2350b-psram/openocd.cfg \
+  -c "init" \
+  -c "reset init" \
+  -c "program \"$D/smp-test3-hwd\" verify" \
+  -c "reset init" \
+  -c "targets rp2350.cm1" \
+  -c "arm semihosting enable" \
+  -c "resume" \
+  -c "targets rp2350.cm0" \
+  -c "arm semihosting enable" \
+  -c "resume"
+```
+
+`smp-test4`
+
+```bash
+pkill -9 -f "openocd.*boards/pico2-rp2350b-psram/openocd.cfg"
+$OPENOCD -s $SCRIPTS -f $C/test/boards/pico2-rp2350b-psram/openocd.cfg \
+  -c "init" \
+  -c "reset init" \
+  -c "program \"$D/smp-test4-hwd\" verify" \
+  -c "reset init" \
+  -c "targets rp2350.cm1" \
+  -c "arm semihosting enable" \
+  -c "resume" \
+  -c "targets rp2350.cm0" \
+  -c "arm semihosting enable" \
+  -c "resume"
+```
+
+`smp-test5`
+
+```bash
+pkill -9 -f "openocd.*boards/pico2-rp2350b-psram/openocd.cfg"
+$OPENOCD -s $SCRIPTS -f $C/test/boards/pico2-rp2350b-psram/openocd.cfg \
+  -c "init" \
+  -c "reset init" \
+  -c "program \"$D/smp-test5-hwd\" verify" \
+  -c "reset init" \
+  -c "targets rp2350.cm1" \
+  -c "arm semihosting enable" \
+  -c "resume" \
+  -c "targets rp2350.cm0" \
+  -c "arm semihosting enable" \
+  -c "resume"
+```
+
+### 6.6 `cortexm-pico2-pizero` — hardware
+
+```bash
+D=$BUILD/cortexm-pico2-pizero-cmake-gcc-debug/platform-bin/port-tests/test
+```
+
+`exc-test`
+
+```bash
+pkill -9 -f "openocd.*boards/pico2-pizero/openocd.cfg"
+$OPENOCD -s $SCRIPTS -f $C/test/boards/pico2-pizero/openocd.cfg \
+  -c "init" \
+  -c "reset init" \
+  -c "program \"$D/exc-test-hwd\" verify" \
+  -c "reset init" \
+  -c "targets rp2350.cm1" \
+  -c "arm semihosting enable" \
+  -c "resume" \
+  -c "targets rp2350.cm0" \
+  -c "arm semihosting enable" \
+  -c "resume"
+```
+
+`psram-exec`
+
+```bash
+pkill -9 -f "openocd.*boards/pico2-pizero/openocd.cfg"
+$OPENOCD -s $SCRIPTS -f $C/test/boards/pico2-pizero/openocd.cfg \
+  -c "init" \
+  -c "reset init" \
+  -c "program \"$D/psram-exec-hwd\" verify" \
+  -c "reset init" \
+  -c "targets rp2350.cm1" \
+  -c "arm semihosting enable" \
+  -c "resume" \
+  -c "targets rp2350.cm0" \
+  -c "arm semihosting enable" \
+  -c "resume"
+```
+
+`psram-mat-test-250`
+
+```bash
+pkill -9 -f "openocd.*boards/pico2-pizero/openocd.cfg"
+$OPENOCD -s $SCRIPTS -f $C/test/boards/pico2-pizero/openocd.cfg \
+  -c "init" \
+  -c "reset init" \
+  -c "program \"$D/psram-mat-test-250-hwd\" verify" \
+  -c "reset init" \
+  -c "targets rp2350.cm1" \
+  -c "arm semihosting enable" \
+  -c "resume" \
+  -c "targets rp2350.cm0" \
+  -c "arm semihosting enable" \
+  -c "resume"
+```
+
+`sc-test-ko`
+
+```bash
+pkill -9 -f "openocd.*boards/pico2-pizero/openocd.cfg"
+$OPENOCD -s $SCRIPTS -f $C/test/boards/pico2-pizero/openocd.cfg \
+  -c "init" \
+  -c "reset init" \
+  -c "program \"$D/sc-test-ko-hwd\" verify" \
+  -c "reset init" \
+  -c "targets rp2350.cm1" \
+  -c "arm semihosting enable" \
+  -c "resume" \
+  -c "targets rp2350.cm0" \
+  -c "arm semihosting enable" \
+  -c "resume"
+```
+
+`smp-mat-test`
+
+```bash
+pkill -9 -f "openocd.*boards/pico2-pizero/openocd.cfg"
+$OPENOCD -s $SCRIPTS -f $C/test/boards/pico2-pizero/openocd.cfg \
+  -c "init" \
+  -c "reset init" \
+  -c "program \"$D/smp-mat-test-hwd\" verify" \
+  -c "reset init" \
+  -c "targets rp2350.cm1" \
+  -c "arm semihosting enable" \
+  -c "resume" \
+  -c "targets rp2350.cm0" \
+  -c "arm semihosting enable" \
+  -c "resume"
+```
+
+`smp-test-ko`
+
+```bash
+pkill -9 -f "openocd.*boards/pico2-pizero/openocd.cfg"
+$OPENOCD -s $SCRIPTS -f $C/test/boards/pico2-pizero/openocd.cfg \
+  -c "init" \
+  -c "reset init" \
+  -c "program \"$D/smp-test-ko-hwd\" verify" \
+  -c "reset init" \
+  -c "targets rp2350.cm1" \
+  -c "arm semihosting enable" \
+  -c "resume" \
+  -c "targets rp2350.cm0" \
+  -c "arm semihosting enable" \
+  -c "resume"
+```
+
+`smp-test-usb-cdc-acm`
+
+```bash
+pkill -9 -f "openocd.*boards/pico2-pizero/openocd.cfg"
+$OPENOCD -s $SCRIPTS -f $C/test/boards/pico2-pizero/openocd.cfg \
+  -c "init" \
+  -c "reset init" \
+  -c "program \"$D/smp-test-usb-cdc-acm-hwd\" verify" \
+  -c "reset init" \
+  -c "targets rp2350.cm1" \
+  -c "arm semihosting enable" \
+  -c "resume" \
+  -c "targets rp2350.cm0" \
+  -c "arm semihosting enable" \
+  -c "resume"
+```
+
+`smp-test-usb-hid`
+
+```bash
+pkill -9 -f "openocd.*boards/pico2-pizero/openocd.cfg"
+$OPENOCD -s $SCRIPTS -f $C/test/boards/pico2-pizero/openocd.cfg \
+  -c "init" \
+  -c "reset init" \
+  -c "program \"$D/smp-test-usb-hid-hwd\" verify" \
+  -c "reset init" \
+  -c "targets rp2350.cm1" \
+  -c "arm semihosting enable" \
+  -c "resume" \
+  -c "targets rp2350.cm0" \
+  -c "arm semihosting enable" \
+  -c "resume"
+```
+
+`smp-test0`
+
+```bash
+pkill -9 -f "openocd.*boards/pico2-pizero/openocd.cfg"
+$OPENOCD -s $SCRIPTS -f $C/test/boards/pico2-pizero/openocd.cfg \
+  -c "init" \
+  -c "reset init" \
+  -c "program \"$D/smp-test0-hwd\" verify" \
+  -c "reset init" \
+  -c "targets rp2350.cm1" \
+  -c "arm semihosting enable" \
+  -c "resume" \
+  -c "targets rp2350.cm0" \
+  -c "arm semihosting enable" \
+  -c "resume"
+```
+
+`smp-test1`
+
+```bash
+pkill -9 -f "openocd.*boards/pico2-pizero/openocd.cfg"
+$OPENOCD -s $SCRIPTS -f $C/test/boards/pico2-pizero/openocd.cfg \
+  -c "init" \
+  -c "reset init" \
+  -c "program \"$D/smp-test1-hwd\" verify" \
+  -c "reset init" \
+  -c "targets rp2350.cm1" \
+  -c "arm semihosting enable" \
+  -c "resume" \
+  -c "targets rp2350.cm0" \
+  -c "arm semihosting enable" \
+  -c "resume"
+```
+
+`smp-test2`
+
+```bash
+pkill -9 -f "openocd.*boards/pico2-pizero/openocd.cfg"
+$OPENOCD -s $SCRIPTS -f $C/test/boards/pico2-pizero/openocd.cfg \
+  -c "init" \
+  -c "reset init" \
+  -c "program \"$D/smp-test2-hwd\" verify" \
+  -c "reset init" \
+  -c "targets rp2350.cm1" \
+  -c "arm semihosting enable" \
+  -c "resume" \
+  -c "targets rp2350.cm0" \
+  -c "arm semihosting enable" \
+  -c "resume"
+```
+
+`smp-test3`
+
+```bash
+pkill -9 -f "openocd.*boards/pico2-pizero/openocd.cfg"
+$OPENOCD -s $SCRIPTS -f $C/test/boards/pico2-pizero/openocd.cfg \
+  -c "init" \
+  -c "reset init" \
+  -c "program \"$D/smp-test3-hwd\" verify" \
+  -c "reset init" \
+  -c "targets rp2350.cm1" \
+  -c "arm semihosting enable" \
+  -c "resume" \
+  -c "targets rp2350.cm0" \
+  -c "arm semihosting enable" \
+  -c "resume"
+```
+
+`smp-test4`
+
+```bash
+pkill -9 -f "openocd.*boards/pico2-pizero/openocd.cfg"
+$OPENOCD -s $SCRIPTS -f $C/test/boards/pico2-pizero/openocd.cfg \
+  -c "init" \
+  -c "reset init" \
+  -c "program \"$D/smp-test4-hwd\" verify" \
+  -c "reset init" \
+  -c "targets rp2350.cm1" \
+  -c "arm semihosting enable" \
+  -c "resume" \
+  -c "targets rp2350.cm0" \
+  -c "arm semihosting enable" \
+  -c "resume"
+```
+
+`smp-test5`
+
+```bash
+pkill -9 -f "openocd.*boards/pico2-pizero/openocd.cfg"
+$OPENOCD -s $SCRIPTS -f $C/test/boards/pico2-pizero/openocd.cfg \
+  -c "init" \
+  -c "reset init" \
+  -c "program \"$D/smp-test5-hwd\" verify" \
+  -c "reset init" \
+  -c "targets rp2350.cm1" \
+  -c "arm semihosting enable" \
+  -c "resume" \
+  -c "targets rp2350.cm0" \
+  -c "arm semihosting enable" \
+  -c "resume"
+```
+
+## 7. STM32F4 hardware (Nucleo-F411RE, WeAct F411CE, WeAct F412RE)
+
+### 7.1 What a hardware run does
+
+OpenOCD halts the chip, writes the test image to the flash, enables
+semihosting (the trace output is a semihosting call, which faults when no
+debugger listens), then resets the chip into the image (`reset run`). The
+semihosting output and the `RESULT:` line appear in the OpenOCD output; the
+board's UART console (115200 8N1) is separate. When `RESULT: PASS` (or
+`RESULT: FAIL`) appears, stop OpenOCD (Ctrl-C).
+
+| Platform | OpenOCD config | Probe |
+|---|---|---|
+| `cortexm-nucleof411` | `$C/test/boards/nucleof411/openocd.cfg` | the Nucleo's ST-Link (`board/st_nucleo_f4.cfg`, connect under reset) |
+| `cortexm-weactf411` | `$C/test/boards/weactf411/openocd.cfg` | CMSIS-DAP `0x0d28:0x0204` (another one: add `-c 'set CMSIS_DAP_VID_PID {0x1a86 0x8011}'` before `-f`) |
+| `cortexm-weactf412` | `$C/test/boards/weactf412/openocd.cfg` | ST-Link (V2 / V2-1 / V3) |
+
+The SWD clock of the two WeAct configs is 1000 kHz; another one is set with
+`-c 'set ADAPTER_KHZ <n>'` before `-f`.
+
+### 7.2 `cortexm-nucleof411` — hardware
+
+```bash
+D=$BUILD/cortexm-nucleof411-cmake-gcc-debug/platform-bin/port-tests/test
+```
+
+`cmsis-os-validator`
+
+```bash
+$OPENOCD -s $SCRIPTS -f $C/test/boards/nucleof411/openocd.cfg \
+  -c "init" \
+  -c "reset halt" \
+  -c "program \"$D/cmsis-os-validator-hwd\"" \
+  -c "arm semihosting enable" \
+  -c "reset run"
+```
+
+`mos-test1`
+
+```bash
+$OPENOCD -s $SCRIPTS -f $C/test/boards/nucleof411/openocd.cfg \
+  -c "init" \
+  -c "reset halt" \
+  -c "program \"$D/mos-test1-hwd\"" \
+  -c "arm semihosting enable" \
+  -c "reset run"
+```
+
+`mutex-stress`
+
+```bash
+$OPENOCD -s $SCRIPTS -f $C/test/boards/nucleof411/openocd.cfg \
+  -c "init" \
+  -c "reset halt" \
+  -c "program \"$D/mutex-stress-hwd\"" \
+  -c "arm semihosting enable" \
+  -c "reset run"
+```
+
+`rtos-apis`
+
+```bash
+$OPENOCD -s $SCRIPTS -f $C/test/boards/nucleof411/openocd.cfg \
+  -c "init" \
+  -c "reset halt" \
+  -c "program \"$D/rtos-apis-hwd\"" \
+  -c "arm semihosting enable" \
+  -c "reset run"
+```
+
+### 7.3 `cortexm-weactf411` — hardware
+
+```bash
+D=$BUILD/cortexm-weactf411-cmake-gcc-debug/platform-bin/port-tests/test
+```
+
+`cmsis-os-validator`
+
+```bash
+$OPENOCD -s $SCRIPTS -f $C/test/boards/weactf411/openocd.cfg \
+  -c "init" \
+  -c "reset halt" \
+  -c "program \"$D/cmsis-os-validator-hwd\"" \
+  -c "arm semihosting enable" \
+  -c "reset run"
+```
+
+`mos-test1`
+
+```bash
+$OPENOCD -s $SCRIPTS -f $C/test/boards/weactf411/openocd.cfg \
+  -c "init" \
+  -c "reset halt" \
+  -c "program \"$D/mos-test1-hwd\"" \
+  -c "arm semihosting enable" \
+  -c "reset run"
+```
+
+`mutex-stress`
+
+```bash
+$OPENOCD -s $SCRIPTS -f $C/test/boards/weactf411/openocd.cfg \
+  -c "init" \
+  -c "reset halt" \
+  -c "program \"$D/mutex-stress-hwd\"" \
+  -c "arm semihosting enable" \
+  -c "reset run"
+```
+
+`rtos-apis`
+
+```bash
+$OPENOCD -s $SCRIPTS -f $C/test/boards/weactf411/openocd.cfg \
+  -c "init" \
+  -c "reset halt" \
+  -c "program \"$D/rtos-apis-hwd\"" \
+  -c "arm semihosting enable" \
+  -c "reset run"
+```
+
+`spi-pipeline`
+
+```bash
+$OPENOCD -s $SCRIPTS -f $C/test/boards/weactf411/openocd.cfg \
+  -c "init" \
+  -c "reset halt" \
+  -c "program \"$D/spi-pipeline-hwd\"" \
+  -c "arm semihosting enable" \
+  -c "reset run"
+```
+
+### 7.4 `cortexm-weactf412` — hardware
+
+```bash
+D=$BUILD/cortexm-weactf412-cmake-gcc-debug/platform-bin/port-tests/test
+```
+
+`cmsis-os-validator`
+
+```bash
+$OPENOCD -s $SCRIPTS -f $C/test/boards/weactf412/openocd.cfg \
+  -c "init" \
+  -c "reset halt" \
+  -c "program \"$D/cmsis-os-validator-hwd\"" \
+  -c "arm semihosting enable" \
+  -c "reset run"
+```
+
+`mos-test1`
+
+```bash
+$OPENOCD -s $SCRIPTS -f $C/test/boards/weactf412/openocd.cfg \
+  -c "init" \
+  -c "reset halt" \
+  -c "program \"$D/mos-test1-hwd\"" \
+  -c "arm semihosting enable" \
+  -c "reset run"
+```
+
+`mutex-stress`
+
+```bash
+$OPENOCD -s $SCRIPTS -f $C/test/boards/weactf412/openocd.cfg \
+  -c "init" \
+  -c "reset halt" \
+  -c "program \"$D/mutex-stress-hwd\"" \
+  -c "arm semihosting enable" \
+  -c "reset run"
+```
+
+`rtos-apis`
+
+```bash
+$OPENOCD -s $SCRIPTS -f $C/test/boards/weactf412/openocd.cfg \
+  -c "init" \
+  -c "reset halt" \
+  -c "program \"$D/rtos-apis-hwd\"" \
+  -c "arm semihosting enable" \
+  -c "reset run"
+```
+
+`uart-test1`
+
+```bash
+$OPENOCD -s $SCRIPTS -f $C/test/boards/weactf412/openocd.cfg \
+  -c "init" \
+  -c "reset halt" \
+  -c "program \"$D/uart-test1-hwd\"" \
+  -c "arm semihosting enable" \
+  -c "reset run"
+```
+
+The legacy single-core platforms `nucleo-f411re`, `nucleo-f767zi` and
+`nucleo-h743zi` are not here: xpack-dev-smp.md §21.3 records that they fail at
+configure.
+
+## 8. POSIX native (the host, `native-cmake-sys`)
+
+### 8.1 The commands
+
+The port tests are host executables; `test_smpl/run-host.sh` starts each one
+through `/usr/bin/env` under `timeout`, giving the tests that use a card the
+path of a disk image file in `UOS_SD_IMAGE`. A test passed when it prints
+`RESULT: PASS`. The CMSIS-RTOS validator is started by `ctest` directly and
+passes when it exits with status 0 (`Test Result: PASSED`).
+
+Checked on 2026-10-09 with these exact commands: `smp_test0`
+(`RESULT: PASS (10 heartbeats on core 0)`) and `flatfs-test` with its image
+(`RESULT: PASS`), both exit 0.
+
+```bash
+D=$BUILD/native-cmake-sys-debug/platform-bin/port-tests
+mkdir -p $D/.host-logs
+```
+
+### 8.2 The tests
+
+`flatfs-test`
+
+```bash
+timeout 300 /usr/bin/env UOS_SD_IMAGE=$D/.host-logs/flatfs-test.disk.img $D/flatfs-test-host
+```
+
+`mutex-ceiling-test`
+
+```bash
+timeout 300 /usr/bin/env $D/mutex-ceiling-test-host
+```
+
+`mutex-stress`
+
+```bash
+timeout 300 /usr/bin/env $D/mutex-stress-host
+```
+
+`rtos-apis`
+
+```bash
+timeout 300 /usr/bin/env $D/rtos-apis-host
+```
+
+`smp-mat-test`
+
+```bash
+timeout 900 /usr/bin/env $D/smp-mat-test-host
+```
+
+`smp-mutex-stress`
+
+```bash
+timeout 300 /usr/bin/env $D/smp-mutex-stress-host
+```
+
+`smp-num-test`
+
+```bash
+timeout 1000 /usr/bin/env UOS_SD_IMAGE=$D/.host-logs/smp-num-test.disk.img $D/smp-num-test-host
+```
+
+`smp-pipeline-test`
+
+```bash
+timeout 1000 /usr/bin/env UOS_SD_IMAGE=$D/.host-logs/smp-pipeline-test.disk.img $D/smp-pipeline-test-host
+```
+
+`smp-pro-cons-test`
+
+```bash
+timeout 1000 /usr/bin/env $D/smp-pro-cons-test-host
+```
+
+`smp-rtos-apis`
+
+```bash
+timeout 300 /usr/bin/env $D/smp-rtos-apis-host
+```
+
+`smp_test0`
+
+```bash
+timeout 150 /usr/bin/env $D/smp_test0-host
+```
+
+`smp_test1`
+
+```bash
+timeout 150 /usr/bin/env $D/smp_test1-host
+```
+
+`smp_test2`
+
+```bash
+timeout 300 /usr/bin/env $D/smp_test2-host
+```
+
+`smp_test3`
+
+```bash
+timeout 150 /usr/bin/env $D/smp_test3-host
+```
+
+`smp_test4`
+
+```bash
+timeout 150 /usr/bin/env $D/smp_test4-host
+```
+
+`cmsis-os-validator`
+
+```bash
+cd $BUILD/native-cmake-sys-debug/platform-bin
+timeout 600 ./cmsis-os-validator-test
+```
+
+## 9. The same tests through `ctest`
 
 The commands above are what these run:
 
@@ -3461,7 +4893,12 @@ ctest -L qemu -V                                 # all the QEMU tests
 ctest -R '^<platform>-<test>-hwd$' -V            # one hardware test (the board's hw.sh)
 ```
 
-The board `hw.sh` looks for the shared runner in `micro-os-plus-iii-smp` (or
+For the native platform the names are `native-<test>-host`; for the
+Cortex-M QEMU suites, `<platform>-<suite>-test`. The Cortex-M boards' `hw.sh`
+run OpenOCD themselves (sections 6 and 7); `ctest` gives them 240 s
+(`cortexm-pico2`) or 600 s (the others).
+
+The AArch32/AArch64 board `hw.sh` looks for the shared runner in `micro-os-plus-iii-smp` (or
 `micro-os-plus-iii-smp.git`) next to the port. When the kernel folder is named
 `micro-os-plus-iii`, as here, it fails with
 `.../micro-os-plus-iii-smp.git/test_smpl/run-hw.sh: No such file or directory`

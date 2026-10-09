@@ -250,14 +250,17 @@ UOS_HW_RESUME=cpsr-first        # cpsr | pc | entry | cpsr-first | pc-first
 UOS_HW_NCPU=4
 UOS_HW_TARGET_FMT="bcm2837.cpu%d"
 UOS_HW_CFG=…/openocd-jlink-rpi3.cfg
-UOS_HW_CFG_INIT=0               # 1 when the config is purely declarative
+UOS_HW_CFG_INIT=1               # 1 when the config is purely declarative
 UOS_HW_PRELOAD="…Tcl…"          # run between halt and load (the Lyra's
                                 # MMU/cache sanitize)
 ```
 
-The AArch64 Pi differs from the AArch32 Pi on the same silicon by three of
-these: entry `0x80000`, `pc-first` (core 0 is started by PC, because a core
-keeps the exception level it was halted in), and `CFG_INIT=1`.
+The AArch64 Pi differs from the AArch32 Pi on the same silicon by two of
+these: entry `0x80000`, and `pc-first` (core 0 is started by PC, because a
+core keeps the exception level it was halted in). Both Pi ports' OpenOCD
+configs are purely declarative (`CFG_INIT=1`); the AArch32 ones used to run
+`init` and `halt` themselves, and that version is kept as
+`openocd-jlink-rpi3.cfg.bak` / `openocd-olimex.cfg.bak`.
 
 On both Pi ports only core 0 is started (`cpsr-first` / `pc-first`); cores
 1–3 are resumed where they were halted — after the watchdog reset, in the

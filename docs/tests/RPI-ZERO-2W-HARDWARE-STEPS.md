@@ -37,11 +37,10 @@ same width as the port, because the two ports wake the cores differently:
 | AArch64 | `arm_64bit=1` (e.g. `$A64/test/boards/rpi-zero-2w/hw-park/`) | their release word at `0xd8 + 8*core` | `pc=0x7c`, EL2H |
 
 So switch the SD card (or its `config.txt` and kernel) when you switch
-ports. To check it, after a step-4 reset and a 12 s wait (AArch64: add
-`-c "init"` after the config file):
+ports. To check it, after a step-4 reset and a 12 s wait:
 
 ```bash
-$OPENOCD -s $CFG -f $CFG/openocd-jlink-rpi3.cfg \
+$OPENOCD -s $CFG -f $CFG/openocd-jlink-rpi3.cfg -c "init" \
   -c "targets bcm2837.cpu1" -c "halt" -c "reg pc" -c "resume" \
   -c "shutdown"
 ```
@@ -109,7 +108,7 @@ OpenOCD never uses this port, so it can stay open all the time.
 ### Step 4 — reset the board
 
 ```bash
-$OPENOCD -s $CFG -f $CFG/openocd-jlink-rpi3.cfg \
+$OPENOCD -s $CFG -f $CFG/openocd-jlink-rpi3.cfg -c "init" \
   -c "targets bcm2837.cpu0" \
   -c "halt" \
   -c "mww 0x3f100024 0x5a000001" \
@@ -118,8 +117,10 @@ $OPENOCD -s $CFG -f $CFG/openocd-jlink-rpi3.cfg \
 ```
 
 - `-s $CFG -f $CFG/openocd-jlink-rpi3.cfg` — the J-Link and the board
-  description (4 Cortex-A53 cores, JTAG at 1000 kHz). This file also
-  connects to the board and stops core 0 by itself.
+  description (4 Cortex-A53 cores, JTAG at 1000 kHz). The file only
+  describes the hardware; it does not connect by itself.
+- `-c "init"` — connect to the board through the probe. Every OpenOCD
+  command below needs it first.
 - `targets bcm2837.cpu0` — talk to core 0.
 - `halt` — stop core 0.
 - `mww 0x3f100024 0x5a000001` — set the watchdog timer to (almost) zero.
@@ -141,7 +142,7 @@ sleep 12
 This is one OpenOCD command. The options run in order, from top to bottom.
 
 ```bash
-$OPENOCD -s $CFG -f $CFG/openocd-jlink-rpi3.cfg \
+$OPENOCD -s $CFG -f $CFG/openocd-jlink-rpi3.cfg -c "init" \
   -c "targets bcm2837.cpu0" -c "halt" \
   -c "targets bcm2837.cpu1" -c "halt" \
   -c "targets bcm2837.cpu2" -c "halt" \
@@ -209,7 +210,6 @@ The same steps; only these things change:
 | SD card | `arm_64bit=0` | `arm_64bit=1` |
 | Config folder `CFG` | `$A32/test/boards/rpi-zero-2w` | `$A64/test/boards/rpi-zero-2w` |
 | Entry point | `0x1003c` | `0x80000` |
-| Connect | the config file does it | add `-c init` after the config file |
 | Start core 0 | `reg cpsr 0x600001da`, `resume 0x1003c` | `reg pc 0x80000`, `resume` |
 | Cores 1–3 | `resume` where they are | `resume` where they are |
 | JTAG speed | 1000 kHz | 4000 kHz |
@@ -235,8 +235,7 @@ $OPENOCD -s $CFG -f $CFG/openocd-jlink-rpi3.cfg -c "init" \
   -c "shutdown"
 ```
 
-`-c "init"` connects to the board: the 64-bit config file only describes
-the hardware and does not connect by itself.
+The same as for AArch32, with the 64-bit port's config folder.
 
 ### Step 5 (AArch64)
 
@@ -257,7 +256,7 @@ $OPENOCD -s $CFG -f $CFG/openocd-jlink-rpi3.cfg -c "init" \
   -c "targets bcm2837.cpu2" -c "arm semihosting enable" \
   -c "targets bcm2837.cpu3" -c "arm semihosting enable" \
   -c "targets bcm2837.cpu0" -c "load_image $ELF" \
-  -c "targets bcm2837.cpu0" -c "reg pc 0x80000" -c "resume" \
+  -c "targets bcm2837.cpu0" -c "reg pc 0x80000" -c "reg pc" -c "resume" \
   -c "targets bcm2837.cpu1" -c "resume" \
   -c "targets bcm2837.cpu2" -c "resume" \
   -c "targets bcm2837.cpu3" -c "resume"
@@ -266,8 +265,9 @@ $OPENOCD -s $CFG -f $CFG/openocd-jlink-rpi3.cfg -c "init" \
 The same parts as for AArch32, except:
 
 - **Start core 0**: `reg pc 0x80000` sets its program counter to the entry,
-  `resume` runs it. A 64-bit core keeps the mode it was stopped in (EL2),
-  and the startup code reads that mode, so there is no CPSR to set.
+  `reg pc` reads it back (OpenOCD prints `pc (/64): 0x0000000000080000`, a
+  check only), `resume` runs it. A 64-bit core keeps the mode it was stopped
+  in (EL2), and the startup code reads that mode, so there is no CPSR to set.
 - **Cores 1–3** wait in the firmware's loop on their release word
   (`0xd8 + 8*core`), not on a mailbox; the test writes `_start` there after
   it has written their `__smp_spin` slot.

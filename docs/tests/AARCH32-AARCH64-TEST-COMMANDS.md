@@ -789,7 +789,7 @@ passed this way, on both ports.
 |---|---|---|
 | OpenOCD config, J-Link (default) | `$A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg` | `$A64/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg` |
 | OpenOCD config, Olimex ARM-USB-OCD | `$A32/test/boards/rpi-zero-2w/openocd-olimex.cfg` | `$A64/test/boards/rpi-zero-2w/openocd-olimex.cfg` |
-| `-c init` | no (the config runs `init` itself) | yes (the config is declarative) |
+| `-c init` | yes (the config is declarative) | yes (the config is declarative) |
 | entry | `0x1003c` | `0x80000` |
 | start core 0 | set CPSR to `0x600001da`, then resume at the entry | set PC to the entry, then resume |
 | cores 1–3 | `resume` where they are | `resume` where they are |
@@ -816,7 +816,7 @@ D=$BUILD/aarch32-rpi-zero-2w-cmake-gcc-debug/platform-bin/port-tests/test
 `cmsis-os-validator` (allow about 300 s)
 
 ```bash
-$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg \
+$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -c init \
   -c "targets bcm2837.cpu0; halt; mww 0x3f100024 0x5a000001; mww 0x3f10001c 0x5a000020; shutdown"
 sleep 12
 cat > /tmp/session.tcl <<'EOF'
@@ -837,13 +837,13 @@ foreach core {1 2 3} {
 }
 EOF
 sed -i "s|__ELF__|$D/cmsis-os-validator-hwd|g" /tmp/session.tcl
-$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -f /tmp/session.tcl
+$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -c init -f /tmp/session.tcl
 ```
 
 `mutex-stress` (allow about 300 s)
 
 ```bash
-$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg \
+$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -c init \
   -c "targets bcm2837.cpu0; halt; mww 0x3f100024 0x5a000001; mww 0x3f10001c 0x5a000020; shutdown"
 sleep 12
 cat > /tmp/session.tcl <<'EOF'
@@ -864,13 +864,13 @@ foreach core {1 2 3} {
 }
 EOF
 sed -i "s|__ELF__|$D/mutex-stress-hwd|g" /tmp/session.tcl
-$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -f /tmp/session.tcl
+$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -c init -f /tmp/session.tcl
 ```
 
 `rtos-apis` (allow about 300 s)
 
 ```bash
-$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg \
+$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -c init \
   -c "targets bcm2837.cpu0; halt; mww 0x3f100024 0x5a000001; mww 0x3f10001c 0x5a000020; shutdown"
 sleep 12
 cat > /tmp/session.tcl <<'EOF'
@@ -891,13 +891,13 @@ foreach core {1 2 3} {
 }
 EOF
 sed -i "s|__ELF__|$D/rtos-apis-hwd|g" /tmp/session.tcl
-$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -f /tmp/session.tcl
+$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -c init -f /tmp/session.tcl
 ```
 
 `sd_test` (allow about 450 s)
 
 ```bash
-$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg \
+$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -c init \
   -c "targets bcm2837.cpu0; halt; mww 0x3f100024 0x5a000001; mww 0x3f10001c 0x5a000020; shutdown"
 sleep 12
 cat > /tmp/session.tcl <<'EOF'
@@ -918,13 +918,13 @@ foreach core {1 2 3} {
 }
 EOF
 sed -i "s|__ELF__|$D/sd_test-hwd|g" /tmp/session.tcl
-$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -f /tmp/session.tcl
+$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -c init -f /tmp/session.tcl
 ```
 
 `smp-mat-sdcard-test` (allow about 900 s)
 
 ```bash
-$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg \
+$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -c init \
   -c "targets bcm2837.cpu0; halt; mww 0x3f100024 0x5a000001; mww 0x3f10001c 0x5a000020; shutdown"
 sleep 12
 cat > /tmp/session.tcl <<'EOF'
@@ -945,13 +945,13 @@ foreach core {1 2 3} {
 }
 EOF
 sed -i "s|__ELF__|$D/smp-mat-sdcard-test-hwd|g" /tmp/session.tcl
-$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -f /tmp/session.tcl
+$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -c init -f /tmp/session.tcl
 ```
 
 `smp-mat-test` (allow about 900 s)
 
 ```bash
-$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg \
+$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -c init \
   -c "targets bcm2837.cpu0; halt; mww 0x3f100024 0x5a000001; mww 0x3f10001c 0x5a000020; shutdown"
 sleep 12
 cat > /tmp/session.tcl <<'EOF'
@@ -972,13 +972,13 @@ foreach core {1 2 3} {
 }
 EOF
 sed -i "s|__ELF__|$D/smp-mat-test-hwd|g" /tmp/session.tcl
-$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -f /tmp/session.tcl
+$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -c init -f /tmp/session.tcl
 ```
 
 `smp-num-test` (allow about 600 s)
 
 ```bash
-$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg \
+$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -c init \
   -c "targets bcm2837.cpu0; halt; mww 0x3f100024 0x5a000001; mww 0x3f10001c 0x5a000020; shutdown"
 sleep 12
 cat > /tmp/session.tcl <<'EOF'
@@ -999,13 +999,13 @@ foreach core {1 2 3} {
 }
 EOF
 sed -i "s|__ELF__|$D/smp-num-test-hwd|g" /tmp/session.tcl
-$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -f /tmp/session.tcl
+$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -c init -f /tmp/session.tcl
 ```
 
 `smp-pipeline-test` (allow about 600 s)
 
 ```bash
-$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg \
+$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -c init \
   -c "targets bcm2837.cpu0; halt; mww 0x3f100024 0x5a000001; mww 0x3f10001c 0x5a000020; shutdown"
 sleep 12
 cat > /tmp/session.tcl <<'EOF'
@@ -1026,13 +1026,13 @@ foreach core {1 2 3} {
 }
 EOF
 sed -i "s|__ELF__|$D/smp-pipeline-test-hwd|g" /tmp/session.tcl
-$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -f /tmp/session.tcl
+$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -c init -f /tmp/session.tcl
 ```
 
 `smp-pro-cons-test` (allow about 600 s)
 
 ```bash
-$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg \
+$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -c init \
   -c "targets bcm2837.cpu0; halt; mww 0x3f100024 0x5a000001; mww 0x3f10001c 0x5a000020; shutdown"
 sleep 12
 cat > /tmp/session.tcl <<'EOF'
@@ -1053,13 +1053,13 @@ foreach core {1 2 3} {
 }
 EOF
 sed -i "s|__ELF__|$D/smp-pro-cons-test-hwd|g" /tmp/session.tcl
-$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -f /tmp/session.tcl
+$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -c init -f /tmp/session.tcl
 ```
 
 `smp_test0` (allow about 120 s)
 
 ```bash
-$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg \
+$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -c init \
   -c "targets bcm2837.cpu0; halt; mww 0x3f100024 0x5a000001; mww 0x3f10001c 0x5a000020; shutdown"
 sleep 12
 cat > /tmp/session.tcl <<'EOF'
@@ -1080,13 +1080,13 @@ foreach core {1 2 3} {
 }
 EOF
 sed -i "s|__ELF__|$D/smp_test0-hwd|g" /tmp/session.tcl
-$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -f /tmp/session.tcl
+$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -c init -f /tmp/session.tcl
 ```
 
 `smp_test1` (allow about 120 s)
 
 ```bash
-$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg \
+$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -c init \
   -c "targets bcm2837.cpu0; halt; mww 0x3f100024 0x5a000001; mww 0x3f10001c 0x5a000020; shutdown"
 sleep 12
 cat > /tmp/session.tcl <<'EOF'
@@ -1107,13 +1107,13 @@ foreach core {1 2 3} {
 }
 EOF
 sed -i "s|__ELF__|$D/smp_test1-hwd|g" /tmp/session.tcl
-$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -f /tmp/session.tcl
+$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -c init -f /tmp/session.tcl
 ```
 
 `smp_test2` (allow about 120 s)
 
 ```bash
-$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg \
+$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -c init \
   -c "targets bcm2837.cpu0; halt; mww 0x3f100024 0x5a000001; mww 0x3f10001c 0x5a000020; shutdown"
 sleep 12
 cat > /tmp/session.tcl <<'EOF'
@@ -1134,13 +1134,13 @@ foreach core {1 2 3} {
 }
 EOF
 sed -i "s|__ELF__|$D/smp_test2-hwd|g" /tmp/session.tcl
-$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -f /tmp/session.tcl
+$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -c init -f /tmp/session.tcl
 ```
 
 `smp_test3` (allow about 120 s)
 
 ```bash
-$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg \
+$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -c init \
   -c "targets bcm2837.cpu0; halt; mww 0x3f100024 0x5a000001; mww 0x3f10001c 0x5a000020; shutdown"
 sleep 12
 cat > /tmp/session.tcl <<'EOF'
@@ -1161,13 +1161,13 @@ foreach core {1 2 3} {
 }
 EOF
 sed -i "s|__ELF__|$D/smp_test3-hwd|g" /tmp/session.tcl
-$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -f /tmp/session.tcl
+$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -c init -f /tmp/session.tcl
 ```
 
 `smp_test4` (allow about 300 s)
 
 ```bash
-$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg \
+$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -c init \
   -c "targets bcm2837.cpu0; halt; mww 0x3f100024 0x5a000001; mww 0x3f10001c 0x5a000020; shutdown"
 sleep 12
 cat > /tmp/session.tcl <<'EOF'
@@ -1188,13 +1188,13 @@ foreach core {1 2 3} {
 }
 EOF
 sed -i "s|__ELF__|$D/smp_test4-hwd|g" /tmp/session.tcl
-$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -f /tmp/session.tcl
+$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -c init -f /tmp/session.tcl
 ```
 
 `usb_test` (allow about 300 s)
 
 ```bash
-$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg \
+$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -c init \
   -c "targets bcm2837.cpu0; halt; mww 0x3f100024 0x5a000001; mww 0x3f10001c 0x5a000020; shutdown"
 sleep 12
 cat > /tmp/session.tcl <<'EOF'
@@ -1215,7 +1215,7 @@ foreach core {1 2 3} {
 }
 EOF
 sed -i "s|__ELF__|$D/usb_test-hwd|g" /tmp/session.tcl
-$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -f /tmp/session.tcl
+$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -c init -f /tmp/session.tcl
 ```
 
 ### 4.4 `aarch32-rpi3b` — hardware
@@ -1229,7 +1229,7 @@ D=$BUILD/aarch32-rpi3b-cmake-gcc-debug/platform-bin/port-tests/test
 `cmsis-os-validator` (allow about 300 s)
 
 ```bash
-$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg \
+$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -c init \
   -c "targets bcm2837.cpu0; halt; mww 0x3f100024 0x5a000001; mww 0x3f10001c 0x5a000020; shutdown"
 sleep 12
 cat > /tmp/session.tcl <<'EOF'
@@ -1250,13 +1250,13 @@ foreach core {1 2 3} {
 }
 EOF
 sed -i "s|__ELF__|$D/cmsis-os-validator-hwd|g" /tmp/session.tcl
-$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -f /tmp/session.tcl
+$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -c init -f /tmp/session.tcl
 ```
 
 `mutex-stress` (allow about 300 s)
 
 ```bash
-$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg \
+$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -c init \
   -c "targets bcm2837.cpu0; halt; mww 0x3f100024 0x5a000001; mww 0x3f10001c 0x5a000020; shutdown"
 sleep 12
 cat > /tmp/session.tcl <<'EOF'
@@ -1277,13 +1277,13 @@ foreach core {1 2 3} {
 }
 EOF
 sed -i "s|__ELF__|$D/mutex-stress-hwd|g" /tmp/session.tcl
-$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -f /tmp/session.tcl
+$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -c init -f /tmp/session.tcl
 ```
 
 `rtos-apis` (allow about 300 s)
 
 ```bash
-$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg \
+$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -c init \
   -c "targets bcm2837.cpu0; halt; mww 0x3f100024 0x5a000001; mww 0x3f10001c 0x5a000020; shutdown"
 sleep 12
 cat > /tmp/session.tcl <<'EOF'
@@ -1304,13 +1304,13 @@ foreach core {1 2 3} {
 }
 EOF
 sed -i "s|__ELF__|$D/rtos-apis-hwd|g" /tmp/session.tcl
-$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -f /tmp/session.tcl
+$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -c init -f /tmp/session.tcl
 ```
 
 `sd_test` (allow about 450 s)
 
 ```bash
-$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg \
+$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -c init \
   -c "targets bcm2837.cpu0; halt; mww 0x3f100024 0x5a000001; mww 0x3f10001c 0x5a000020; shutdown"
 sleep 12
 cat > /tmp/session.tcl <<'EOF'
@@ -1331,13 +1331,13 @@ foreach core {1 2 3} {
 }
 EOF
 sed -i "s|__ELF__|$D/sd_test-hwd|g" /tmp/session.tcl
-$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -f /tmp/session.tcl
+$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -c init -f /tmp/session.tcl
 ```
 
 `smp-mat-sdcard-test` (allow about 900 s)
 
 ```bash
-$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg \
+$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -c init \
   -c "targets bcm2837.cpu0; halt; mww 0x3f100024 0x5a000001; mww 0x3f10001c 0x5a000020; shutdown"
 sleep 12
 cat > /tmp/session.tcl <<'EOF'
@@ -1358,13 +1358,13 @@ foreach core {1 2 3} {
 }
 EOF
 sed -i "s|__ELF__|$D/smp-mat-sdcard-test-hwd|g" /tmp/session.tcl
-$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -f /tmp/session.tcl
+$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -c init -f /tmp/session.tcl
 ```
 
 `smp-mat-test` (allow about 900 s)
 
 ```bash
-$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg \
+$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -c init \
   -c "targets bcm2837.cpu0; halt; mww 0x3f100024 0x5a000001; mww 0x3f10001c 0x5a000020; shutdown"
 sleep 12
 cat > /tmp/session.tcl <<'EOF'
@@ -1385,13 +1385,13 @@ foreach core {1 2 3} {
 }
 EOF
 sed -i "s|__ELF__|$D/smp-mat-test-hwd|g" /tmp/session.tcl
-$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -f /tmp/session.tcl
+$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -c init -f /tmp/session.tcl
 ```
 
 `smp-num-test` (allow about 600 s)
 
 ```bash
-$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg \
+$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -c init \
   -c "targets bcm2837.cpu0; halt; mww 0x3f100024 0x5a000001; mww 0x3f10001c 0x5a000020; shutdown"
 sleep 12
 cat > /tmp/session.tcl <<'EOF'
@@ -1412,13 +1412,13 @@ foreach core {1 2 3} {
 }
 EOF
 sed -i "s|__ELF__|$D/smp-num-test-hwd|g" /tmp/session.tcl
-$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -f /tmp/session.tcl
+$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -c init -f /tmp/session.tcl
 ```
 
 `smp-pipeline-test` (allow about 600 s)
 
 ```bash
-$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg \
+$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -c init \
   -c "targets bcm2837.cpu0; halt; mww 0x3f100024 0x5a000001; mww 0x3f10001c 0x5a000020; shutdown"
 sleep 12
 cat > /tmp/session.tcl <<'EOF'
@@ -1439,13 +1439,13 @@ foreach core {1 2 3} {
 }
 EOF
 sed -i "s|__ELF__|$D/smp-pipeline-test-hwd|g" /tmp/session.tcl
-$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -f /tmp/session.tcl
+$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -c init -f /tmp/session.tcl
 ```
 
 `smp-pro-cons-test` (allow about 600 s)
 
 ```bash
-$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg \
+$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -c init \
   -c "targets bcm2837.cpu0; halt; mww 0x3f100024 0x5a000001; mww 0x3f10001c 0x5a000020; shutdown"
 sleep 12
 cat > /tmp/session.tcl <<'EOF'
@@ -1466,13 +1466,13 @@ foreach core {1 2 3} {
 }
 EOF
 sed -i "s|__ELF__|$D/smp-pro-cons-test-hwd|g" /tmp/session.tcl
-$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -f /tmp/session.tcl
+$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -c init -f /tmp/session.tcl
 ```
 
 `smp_test0` (allow about 120 s)
 
 ```bash
-$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg \
+$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -c init \
   -c "targets bcm2837.cpu0; halt; mww 0x3f100024 0x5a000001; mww 0x3f10001c 0x5a000020; shutdown"
 sleep 12
 cat > /tmp/session.tcl <<'EOF'
@@ -1493,13 +1493,13 @@ foreach core {1 2 3} {
 }
 EOF
 sed -i "s|__ELF__|$D/smp_test0-hwd|g" /tmp/session.tcl
-$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -f /tmp/session.tcl
+$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -c init -f /tmp/session.tcl
 ```
 
 `smp_test1` (allow about 120 s)
 
 ```bash
-$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg \
+$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -c init \
   -c "targets bcm2837.cpu0; halt; mww 0x3f100024 0x5a000001; mww 0x3f10001c 0x5a000020; shutdown"
 sleep 12
 cat > /tmp/session.tcl <<'EOF'
@@ -1520,13 +1520,13 @@ foreach core {1 2 3} {
 }
 EOF
 sed -i "s|__ELF__|$D/smp_test1-hwd|g" /tmp/session.tcl
-$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -f /tmp/session.tcl
+$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -c init -f /tmp/session.tcl
 ```
 
 `smp_test2` (allow about 120 s)
 
 ```bash
-$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg \
+$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -c init \
   -c "targets bcm2837.cpu0; halt; mww 0x3f100024 0x5a000001; mww 0x3f10001c 0x5a000020; shutdown"
 sleep 12
 cat > /tmp/session.tcl <<'EOF'
@@ -1547,13 +1547,13 @@ foreach core {1 2 3} {
 }
 EOF
 sed -i "s|__ELF__|$D/smp_test2-hwd|g" /tmp/session.tcl
-$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -f /tmp/session.tcl
+$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -c init -f /tmp/session.tcl
 ```
 
 `smp_test3` (allow about 120 s)
 
 ```bash
-$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg \
+$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -c init \
   -c "targets bcm2837.cpu0; halt; mww 0x3f100024 0x5a000001; mww 0x3f10001c 0x5a000020; shutdown"
 sleep 12
 cat > /tmp/session.tcl <<'EOF'
@@ -1574,13 +1574,13 @@ foreach core {1 2 3} {
 }
 EOF
 sed -i "s|__ELF__|$D/smp_test3-hwd|g" /tmp/session.tcl
-$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -f /tmp/session.tcl
+$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -c init -f /tmp/session.tcl
 ```
 
 `smp_test4` (allow about 300 s)
 
 ```bash
-$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg \
+$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -c init \
   -c "targets bcm2837.cpu0; halt; mww 0x3f100024 0x5a000001; mww 0x3f10001c 0x5a000020; shutdown"
 sleep 12
 cat > /tmp/session.tcl <<'EOF'
@@ -1601,7 +1601,7 @@ foreach core {1 2 3} {
 }
 EOF
 sed -i "s|__ELF__|$D/smp_test4-hwd|g" /tmp/session.tcl
-$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -f /tmp/session.tcl
+$OPENOCD -s $A32/test/boards/rpi-zero-2w -s $SCRIPTS -f $A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg -c init -f /tmp/session.tcl
 ```
 
 ### 4.5 `aarch64-rpi-zero-2w` — hardware

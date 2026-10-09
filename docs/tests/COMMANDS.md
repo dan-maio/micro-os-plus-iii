@@ -2,7 +2,8 @@
 
 The commands used on 2026-10-08 to clone the five repositories from
 `github.com/dan-maio` into `/tmp/micro-os` and run the POSIX native tests with
-the system compiler (`native-cmake-sys`).
+the system compiler (`native-cmake-sys`). Section 6 lists the commands for all
+the other tests (native compilers, QEMU Cortex-M, SMP QEMU, real hardware).
 
 ## 1. Create the folder and clone
 
@@ -130,3 +131,169 @@ The `env` used must be `/usr/bin/env`. The correction, in
 timeout "$tmo" /usr/bin/env "${env[@]}" "$exe" 2>&1 | tee "$log"
 timeout "$tmo" /usr/bin/env "${env[@]}" "$exe" > "$log" 2>&1
 ```
+
+## 6. All the other tests
+
+Every command below is an action of `micro-os-plus-iii/tests/package.json`
+and runs in `micro-os-plus-iii/tests`.
+
+### 6.1 Install for all the tests (xpack-dev-smp.md §13.3)
+
+The native tests need only posix-arch (section 2). The QEMU Cortex-M, SMP and
+hardware tests also need the other three ports:
+
+```bash
+cd /tmp/micro-os/micro-os-plus-iii-posix-arch && xpm install && xpm link
+cd /tmp/micro-os/micro-os-plus-iii-cortexm    && xpm install && xpm link
+cd /tmp/micro-os/micro-os-plus-iii-aarch32    && xpm install && xpm link
+cd /tmp/micro-os/micro-os-plus-iii-aarch64    && xpm install && xpm link
+
+cd /tmp/micro-os/micro-os-plus-iii/tests
+xpm run install-all        # npm install ; xpm install --all-configs
+```
+
+`install-all` installs the toolchains of every configuration (xPack GCC,
+clang, arm-none-eabi-gcc, aarch64-none-elf-gcc, qemu-arm, openocd).
+
+### 6.2 Everything at once
+
+```bash
+xpm run test-all           # test-native-cmake ; test-cortex-cmake ; test-smp-cmake
+```
+
+An action stops at its first failing test; to continue with the next group,
+run the groups one by one (6.3–6.5).
+
+### 6.3 Native (POSIX host)
+
+| Action | Compiler | Configurations (debug + release) |
+|---|---|---|
+| `xpm run test-native-cmake-sys` | the host's `gcc` | `native-cmake-sys-*` |
+| `xpm run test-native-cmake-gcc` | xPack gcc 14.2.0 | `native-cmake-gcc-*` |
+| `xpm run test-native-cmake-gcc11` | xPack gcc 11.5.0 | `native-cmake-gcc11-*` |
+| `xpm run test-native-cmake-gcc12` | xPack gcc 12.4.0 | `native-cmake-gcc12-*` |
+| `xpm run test-native-cmake-gcc13` | xPack gcc 13.3.0 | `native-cmake-gcc13-*` |
+| `xpm run test-native-cmake-gcc14` | xPack gcc 14.2.0 | `native-cmake-gcc14-*` |
+| `xpm run test-native-cmake-clang` | xPack clang 19.1.7 | `native-cmake-clang-*` |
+| `xpm run test-native-cmake-clang13` … `clang19` | xPack clang 13.0.1 … 19.1.7 | `native-cmake-clang13-*` … `clang19-*` |
+
+`xpm run test-native-cmake` runs `gcc11`, `gcc12`, `gcc13` and `gcc14`
+(not on macOS, which runs `test-native-cmake-sys` instead), then `clang16`,
+`clang17`, `clang18` and `clang19`; it only prints the `clang13`–`clang15`
+commands.
+
+The `test` step runs `ctest -V`, except `native-cmake-gcc-*`, which runs
+`ctest -V -LE hwd`.
+
+### 6.4 QEMU Cortex-M (single core, xPack arm-none-eabi-gcc 15.2.1, qemu-arm 8.2.6)
+
+```bash
+xpm run test-cortex-cmake          # the four below
+xpm run test-qemu-cortex-m0-cmake
+xpm run test-qemu-cortex-m3-cmake
+xpm run test-qemu-cortex-m4f-cmake
+xpm run test-qemu-cortex-m7f-cmake
+```
+
+`xpm run run-qemu-cortex-latest` runs the same four; `xpm run test` runs
+only `test-qemu-cortex-m7f-cmake`.
+
+### 6.5 SMP on QEMU (xPack arm-none-eabi-gcc / aarch64-none-elf-gcc 15.2.1)
+
+```bash
+xpm run test-smp-cmake             # the eight below
+xpm run test-aarch32-rpi-zero-2w-cmake
+xpm run test-aarch32-rpi3b-cmake
+xpm run test-aarch64-rpi-zero-2w-cmake
+xpm run test-aarch64-rpi3b-cmake
+xpm run test-2xcortex-m33-cmake
+xpm run test-pico2-1cpu-cmake
+xpm run test-cortexm-pico2-cmake
+xpm run test-cortexm-pico2-rp2350b-psram-cmake
+```
+
+The `test` step of these configurations runs `ctest -V -LE hwd`: the
+real-hardware tests are built but not run.
+
+### 6.6 One configuration, step by step
+
+Every test action above is `prepare`, `build` and `test` for the `-debug`
+and then the `-release` configuration. One configuration alone:
+
+```bash
+xpm run prepare --config <configuration>
+xpm run build   --config <configuration>
+xpm run test    --config <configuration>
+```
+
+For example `<configuration>` = `aarch32-rpi3b-cmake-gcc-debug`. One test of
+a configuration that is already built:
+
+```bash
+cd build/<configuration>
+ctest -R '^<test name>$' --output-on-failure
+ctest -N                   # lists the test names
+```
+
+### 6.7 Real hardware (`hwd`): board and debug probe connected
+
+These run one test on the board:
+
+```bash
+xpm run test-<name>-hwd --config <configuration>
+```
+
+Each one runs the CMake prepare with the toolchain, the build, then
+`ctest -V -R <platform>-<name>-hwd` in `build/<configuration>`. For example:
+
+```bash
+xpm run test-mutex-stress-hwd --config aarch32-rpi3b-cmake-gcc-debug
+xpm run test-smp-test0-hwd    --config cortexm-pico2-cmake-gcc-debug
+xpm run test-sd_test-hwd      --config aarch32-luckfox-lyra-cmake-gcc-debug
+```
+
+The `<name>` values, per configuration (`-debug` and `-release` alike):
+
+| Configurations | `test-<name>-hwd` actions |
+|---|---|
+| `aarch32-rpi-zero-2w-*`, `aarch64-rpi-zero-2w-*` | `sd_test`, `smp-mat-sdcard-test`, `smp-mat-test`, `smp-num-test`, `smp-pipeline-test`, `smp-pro-cons-test`, `smp_test0` … `smp_test4`, `usb_test`, `mutex-stress`, `rtos-apis`, `cmsis-os-validator` |
+| `aarch32-rpi3b-*`, `aarch64-rpi3b-*` | the same, without `usb_test` |
+| `aarch32-luckfox-lyra-*` | `sd_test`, `smp-mat-sdcard-test`, `smp-mat-test`, `smp-num-test`, `smp-pipeline-test`, `smp-pro-cons-test`, `smp_test0` … `smp_test7`, `smp_test_int`, `smp_test_int2` … `smp_test_int5`, `mutex-stress-test` |
+| `cortexm-pico2-*` | `cmsis-os-validator`, `cmsis-os-validator-ram`, `exc-test`, `mutex-stress`, `mutex-stress-ram`, `fp-switch`, `rtos-apis`, `rtos-apis-ram`, `sc-test-ko`, `smp-mat-test`, `smp-mat-test-ram`, `smp-test-ko`, `smp-test-usb-cdc-acm`, `smp-test-usb-hid`, `smp-test0` … `smp-test5` |
+| `cortexm-pico2-pizero-*` | `exc-test`, `sc-test-ko`, `smp-mat-test`, `smp-test-ko`, `psram-exec`, `psram-mat-test-250`, `smp-test-usb-cdc-acm`, `smp-test-usb-hid`, `smp-test0` … `smp-test5` |
+| `cortexm-pico2-rp2350b-psram-*` | `exc-test`, `fp-switch`, `sc-test-ko`, `smp-mat-test`, `smp-test0` … `smp-test5`, `smp-test-ko`, `smp-test-nested`, `smp-test-nested-clock`, `smp-test-nested-clock_200`, `smp-test-nested-clock_250` |
+| `cortexm-nucleof411-*` | `cmsis-os-validator`, `mos-test1`, `mutex-stress`, `rtos-apis` |
+| `cortexm-weactf411-*` | the same, plus `spi-pipeline` |
+| `cortexm-weactf412-*` | the same as nucleof411, plus `uart-test1` |
+
+`cortexm-pico2-pizero`, `cortexm-nucleof411`, `cortexm-weactf411`,
+`cortexm-weactf412` and `aarch32-luckfox-lyra` have no `test-<platform>-cmake`
+action; they are built with `prepare`/`build --config` (6.6).
+
+### 6.8 Legacy single-core boards
+
+```bash
+xpm run test-raspberrypi-pico-cmake
+xpm run test-nucleo-f411re-cmake
+xpm run test-nucleo-f767zi-cmake
+xpm run test-nucleo-h743zi-cmake
+```
+
+xpack-dev-smp.md §21.3 records that these four fail at configure (the cortexm
+CMake does not find the kernel through the xpacks path).
+
+### 6.9 Results recorded on 2026-10-07 (xpack-dev-smp.md §23.4)
+
+| Action | Debug | Release |
+|---|---|---|
+| `test-native-cmake-sys` | 16/16 | 16/16 |
+| `test-cortex-cmake` (m0, m3, m4f, m7f) | 3/3 each | 3/3 each |
+| `test-aarch32-rpi-zero-2w-cmake`, `test-aarch32-rpi3b-cmake` | 15/15 | 15/15 |
+| `test-aarch64-rpi-zero-2w-cmake`, `test-aarch64-rpi3b-cmake` | 15/15 | 15/15 |
+| `test-2xcortex-m33-cmake` | 4/4 | 4/4 |
+| `test-pico2-1cpu-cmake` | 4/4 | 4/4 |
+| `test-cortexm-pico2-cmake` | 6/6 | 6/6 |
+| `test-cortexm-pico2-rp2350b-psram-cmake` | 3/3 | 3/3 |
+
+The other native compilers (6.3) and the hardware tests (6.7) were not run
+for this document.

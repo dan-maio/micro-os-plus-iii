@@ -185,7 +185,12 @@ commands.
 The `test` step runs `ctest -V`, except `native-cmake-gcc-*`, which runs
 `ctest -V -LE hwd`.
 
-### 6.4 QEMU Cortex-M (single core, xPack arm-none-eabi-gcc 15.2.1, qemu-arm 8.2.6)
+### 6.4 QEMU Cortex-M (single core, xPack arm-none-eabi-gcc 15.2.1)
+
+The QEMU these tests run is the newest `qemu-arm` xPack installed in
+`~/.local/xPacks/@xpack-dev-tools/qemu-arm/` (9.2.4-1.1 on 2026-10-09), found
+by the platform's `CMakeLists.txt`; the 8.2.6 that `xpm install` installs for
+these configurations is used only when no newer one is there.
 
 ```bash
 xpm run test-cortex-cmake          # the four below

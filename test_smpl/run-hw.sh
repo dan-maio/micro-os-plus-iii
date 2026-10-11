@@ -67,7 +67,14 @@
 #                     declared `-defer-examine` in its OpenOCD config -- has
 #                     no debug target to halt yet, so it lists only "0".
 #   UOS_HW_PRELOAD    Tcl run after the halt and before load_image, on the
-#                     first core listed. The RK3506 needs it: the miniloader
+#                     first core listed. A PRELOAD that writes the BCM PM
+#                     watchdog (0x3f10001c/0x3f100024 on the BCM2837,
+#                     0xfe10001c/0xfe100024 on the BCM2711) is a RESET: it is
+#                     run in its own OpenOCD session, followed by
+#                     UOS_HW_RESET_WAIT seconds for the firmware to boot and
+#                     re-enable JTAG, before the test's session starts.
+#   UOS_HW_RESET_WAIT seconds to wait after that reset (default: 12;
+#                     the Pi 4 B's hw.sh sets 15). The RK3506 needs it: the miniloader
 #                     leaves the MMU and caches ON, and load_image writing
 #                     through them leaves DRAM holding something other than
 #                     the image.
@@ -78,6 +85,10 @@
 #                     "Invalid ACK (0) in DAP response" and then fails to
 #                     re-examine every core; drop to 1000 and retry before
 #                     suspecting the firmware.
+#   UOS_HW_IGNORE_ERRORS  ERE of OpenOCD "Error: " lines that are benign on
+#                     this board and must not end the run (default: none).
+#                     The Pi 4 B's A72 examine reads EDSCR (0x8041xxxx) once
+#                     with a sticky fault before OpenOCD's own recovery.
 #   OPENOCD           openocd binary (default: newest xPack, else PATH)
 set -uo pipefail
 
@@ -97,6 +108,8 @@ ADAPTER_KHZ="${UOS_HW_ADAPTER_KHZ:-}"
 TARGET_FMT="${UOS_HW_TARGET_FMT:-bcm2837.cpu%d}"
 CORES="${UOS_HW_CORES:-$(seq -s' ' 0 $((NCPU - 1)))}"
 PRELOAD="${UOS_HW_PRELOAD:-}"
+RESET_WAIT="${UOS_HW_RESET_WAIT:-12}"
+IGNORE_ERRORS="${UOS_HW_IGNORE_ERRORS:-}"
 
 # The OpenOCD target name for a core index, and the first core in the list --
 # the one the image is loaded through.
@@ -189,11 +202,14 @@ resume $entry"
 echo \"  start PC core ${FIRST_CORE} = [reg pc]\"
 resume"
       fi
+      # A config that groups the cores with \`target smp\` (the BCM2711's)
+      # has already resumed them all with the first core; only a core that
+      # is still halted is resumed here, else OpenOCD aborts on "not halted".
       resume="targets ${FIRST_TARGET}
 ${first}
 foreach core {$others} {
   targets [format {$TARGET_FMT} \$core]
-  resume
+  if {[[target current] curstate] eq \"halted\"} { resume }
 }" ;;
     *)
       resume="foreach core {$CORES} {
@@ -221,16 +237,26 @@ ${zero}"
   fi
   local preload_stage=""
   if [[ -n "$PRELOAD" ]]; then
-    if [[ "$PRELOAD" =~ (0x3f10001c|0x3f100024|reset) ]]; then
+    if [[ "$PRELOAD" =~ (0x3f10001c|0x3f100024|0xfe10001c|0xfe100024|reset) ]]; then
       say "executing pre-load reset on ${FIRST_TARGET}..."
       local preload_args=(-s "$(dirname "$CFG")")
       [[ -n "$SCRIPTS" ]] && preload_args+=(-s "$SCRIPTS")
       preload_args+=(-f "$CFG")
       [[ "$CFG_INIT" == "1" ]] && preload_args+=(-c "init")
       preload_args+=(-c "targets ${FIRST_TARGET}; halt; ${PRELOAD}; shutdown")
-      "$OPENOCD" "${preload_args[@]}" >/dev/null 2>&1 || true
-      say "waiting 12s for board to boot after reset..."
-      sleep 12
+      # The watchdog drops the debug link, so OpenOCD's exit status means
+      # nothing here. A session that never reached the TAP, or died in its
+      # config (Traceback), never wrote the watchdog: stop instead of
+      # loading into a board that was not reset.
+      local reset_log="${log%.log}.reset.log"
+      "$OPENOCD" "${preload_args[@]}" > "$reset_log" 2>&1 || true
+      if grep -q 'Traceback' "$reset_log" || ! grep -q 'tap/device found' "$reset_log"; then
+        say "watchdog reset FAILED -- OpenOCD did not reach the board (see $reset_log):"
+        grep -E '^Error: |Traceback' "$reset_log" | head -5 >&2
+        return 7
+      fi
+      say "waiting ${RESET_WAIT}s for board to boot after reset..."
+      sleep "$RESET_WAIT"
     else
       preload_stage="echo \"--- stage: pre-load ---\"
 targets ${FIRST_TARGET}
@@ -270,6 +296,13 @@ EOF
   "$OPENOCD" "${args[@]}" > >(tee "$log") 2>&1 &
   local ocd=$!
 
+  # The first OpenOCD "Error: " line not excused by UOS_HW_IGNORE_ERRORS.
+  real_errors () {
+    grep -E '^Error: ' "$log" 2>/dev/null |
+      { if [[ -n "$IGNORE_ERRORS" ]]; then grep -vE "$IGNORE_ERRORS"; else cat; fi; } |
+      head -1
+  }
+
   local rc=2 waited=0
   while ((waited < secs)); do
     if grep -q 'RESULT: PASS' "$log" 2>/dev/null; then rc=0; break; fi
@@ -279,7 +312,7 @@ EOF
     if grep -qE 'Invalid ACK|Polling failed|Examination failed' "$log" 2>/dev/null; then
       rc=6; break
     fi
-    if grep -qE '^Error: ' "$log" 2>/dev/null; then rc=5; break; fi
+    if [[ -n "$(real_errors)" ]]; then rc=5; break; fi
     sleep 1; waited=$((waited + 1))
   done
 
@@ -293,7 +326,7 @@ EOF
     3) echo "SKIP  ($(sed -n 's/.*RESULT: SKIP *//p' "$log" | head -1))" ;;
     1) echo "FAIL" ;;
     4) echo "OPENOCD DIED" ;;
-    5) echo "OPENOCD ERROR: $(grep -m1 '^Error: ' "$log")" ;;
+    5) echo "OPENOCD ERROR: $(real_errors)" ;;
     6) echo "DEBUG LINK LOST  (the DAP stopped answering, not a firmware fault)"
        echo "    retry with UOS_HW_ADAPTER_KHZ=1000, and check the board's supply" ;;
     *) echo "TIMEOUT after ${secs}s" ;;

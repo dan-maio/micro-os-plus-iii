@@ -17,14 +17,13 @@ The probe is a Raspberry Pi **debugprobe** (a Pico, firmware 2.0.0) used as a
    link and exits.
 2. **Wait 15 s** for the firmware to boot and switch the JTAG pins on again.
    Core 0 runs the firmware stub; cores 1–3 wait in the stub's spin-table loop.
-3. **Connect and halt all four cores** (they stop at EL2, MMU off; cores 1–3
-   in the firmware's spin-table loop).
+3. **Connect and halt core 0** (it stops at EL2, MMU off). Cores 1–3 are not
+   halted (see step 6).
 4. **Semihosting on**, on all four cores.
 5. **Load.** `load_image` copies the test's ELF into RAM at `0x80000`.
 6. **Run.** Core 0's PC is set to `0x80000` (`_start`) and core 0 is resumed.
-   Cores 1–3 are resumed where they were halted (only those still halted:
-   the core 0 resume may already have restarted them through the CTI), and
-   wait in the firmware's loop until the kernel writes their spin-table slot.
+   Cores 1–3 go on waiting in the firmware's loop until the kernel writes
+   their spin-table slot.
 7. **Watch.** The test's console is the UART. The verdict line
    (`RESULT: PASS|FAIL|SKIP`) also goes out through semihosting, where the
    runner sees it.
@@ -166,40 +165,34 @@ Write the session's commands to a file (this is what the runner generates, in
 
 ```sh
 cat > /tmp/run-$APP.cfg <<CFG
-echo "--- stage: halt cores 0 1 2 3 ---"
-foreach core {0 1 2 3} { targets [format {bcm2711.cpu%d} \$core]; halt }
+echo "--- stage: halt cores 0 ---"
+targets bcm2711.cpu0; halt
 
 echo "--- stage: enable semihosting on cores 0 1 2 3 ---"
 # Per-target: a core whose semihosting is off stalls at a debug halt the first
 # time it traps, so every core needs it, not just core 0.
 foreach core {0 1 2 3} { targets [format {bcm2711.cpu%d} \$core]; arm semihosting enable }
+if {[info procs rpi4b_enable_hde] ne ""} { rpi4b_enable_hde }
 
 echo "--- stage: load_image $ELF ---"
 targets bcm2711.cpu0
 load_image $ELF
 
-echo "--- stage: resume cores 0 1 2 3 at 0x80000 ---"
+echo "--- stage: resume cores 0 at 0x80000 ---"
 targets bcm2711.cpu0
 reg pc 0x80000
 echo "  start PC core 0 = [reg pc]"
 resume
-foreach core {1 2 3} {
-  targets [format {bcm2711.cpu%d} \$core]
-  if {[[target current] curstate] eq "halted"} { resume }
-}
 CFG
 ```
 
-All four cores are halted, and the image is loaded through core 0. Only core
-0's PC is set; cores 1–3 are resumed where the firmware parked them and wait
-there until the kernel writes their spin-table slot. The cores are not grouped
-(`USE_SMP` is 0). A resume of core 0 may restart the other cores through the
-CTI (cross-trigger), so only a core that is still halted is resumed; a
-`resume` of a running core makes OpenOCD abort on "not halted".
-
-Known issue: a semihosting call from core 1, 2 or 3 sometimes stalls the run
-(see "If something goes wrong"). smp_test4 hits it every time so far; smp_test3
-hit it once in two runs.
+Only **core 0** is halted, loaded through and resumed. Cores 1–3 are never
+halted: they keep running in the firmware's spin loop until the kernel writes
+their spin-table slot. Halting them too looks harmless but is not: a resume of
+core 0 restarts the other cores through the CTI (cross-trigger), so OpenOCD
+never resumes them itself, and a core it halted at the start later halts with
+the registers OpenOCD cached at that first halt. OpenOCD then cannot serve
+that core's semihosting call, the core stays halted, and the test stalls.
 
 `0x80000` is `_start`, the ELF's entry point
 (`aarch64-none-elf-readelf -h $ELF | grep Entry`).
@@ -315,7 +308,8 @@ Settings (environment variables) the scripts take:
 | Variable | Default | What |
 |---|---|---|
 | `UOS_HW_RESET_WAIT` | 15 | seconds between the watchdog reset and the connect |
-| `UOS_HW_CORES` | `0 1 2 3` | cores that are halted, get semihosting and are resumed |
+| `UOS_HW_CORES` | `0` | cores that are halted, loaded through and resumed |
+| `UOS_HW_SEMIHOST_CORES` | `0 1 2 3` | cores with semihosting enabled (without halting them) |
 | `UOS_HW_ADAPTER_KHZ` | (config: 4000) | JTAG clock, set after `init` |
 | `UOS_HW_PRELOAD` | the two watchdog writes | the reset commands of step 4 |
 | `UOS_HW_IGNORE_ERRORS` | `JTAG-DP STICKY ERROR\|Failed to read memory at 0x80[4-7][0-9a-f]+$` | `Error:` lines that do not end the run |
@@ -357,8 +351,8 @@ debugprobe firmware, are the next things to try.
 | `LIBUSB_ERROR_BUSY`, or the probe is not found | another OpenOCD holds it: `pkill -x openocd` |
 | the reset prints `The 'bcm2711.dap memaccess' command must be used after 'init'` | `memaccess` written as a plain line in the config; it must be in the `examine-end` events |
 | the reset session shows no `tap/device found` | no JTAG: the board is off, or the firmware has not enabled the pins (`enable_jtag_gpio=1`), or it is still booting (wait longer: `UOS_HW_RESET_WAIT=30`) |
-| `Error: [bcm2711.cpu1] not halted` at the resume, then OpenOCD exits | a script that resumes cores 1–3 unconditionally after core 0: the core 0 resume already restarted them through the CTI. Resume only a core whose `curstate` is `halted` (step 6) |
-| the output stops at `RESULT: `, and a core 1–3 shows `halted ... due to breakpoint`, EL1, `pc: 0x80` or a pc just after a `HLT #0xF000` | **open issue**: that core's semihosting call was not completed (OpenOCD showed the registers cached at its first halt, or served the call but did not resume the core). Seen on smp_test4 (every run) and smp_test3 (one run in two); not yet solved. Power-cycle and run the test again |
-| the run log shows `RESULT: ` without `PASS`/`FAIL` | the verdict was printed in pieces; the board's `uart.hpp` must mirror the whole verdict line (`mirror_verdict`) |
+| `Error: [bcm2711.cpu1] not halted` at the resume, then OpenOCD exits | a script that halted cores 1–3 and resumes them after core 0: the core 0 resume already restarted them through the CTI. Halt and resume core 0 only (`UOS_HW_CORES=0`) |
+| the output stops, and a core 1–3 shows `halted ... due to breakpoint`, `pc: 0x80`, EL1, registers equal to its first halt | that core was halted at the start of the session: OpenOCD later reads its stale cached registers and cannot serve its semihosting call. Do not halt cores 1–3 (`UOS_HW_CORES=0`) |
+| the run log shows `RESULT: ` without `PASS`/`FAIL` | the verdict was printed in pieces; the board's `uart.hpp` must mirror the whole verdict line (`mirror_verdict`) or use a single `puts()` |
 | nothing on the UART for minutes after the halt | the load is still running (see the table in step 2) |
 | `mww phys` never ends | use the virtual address (step 4) |

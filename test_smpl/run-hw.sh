@@ -66,6 +66,9 @@
 #                     held in BootROM until the kernel releases them --
 #                     declared `-defer-examine` in its OpenOCD config -- has
 #                     no debug target to halt yet, so it lists only "0".
+#   UOS_HW_SEMIHOST_CORES which core indices have semihosting enabled
+#                     (default: all 0..NCPU-1). Can differ from UOS_HW_CORES
+#                     when only core 0 is halted but secondaries need semihosting.
 #   UOS_HW_PRELOAD    Tcl run after the halt and before load_image, on the
 #                     first core listed. A PRELOAD that writes the BCM PM
 #                     watchdog (0x3f10001c/0x3f100024 on the BCM2837,
@@ -107,6 +110,7 @@ RESUME_MODE="${UOS_HW_RESUME:-pc}"
 ADAPTER_KHZ="${UOS_HW_ADAPTER_KHZ:-}"
 TARGET_FMT="${UOS_HW_TARGET_FMT:-bcm2837.cpu%d}"
 CORES="${UOS_HW_CORES:-$(seq -s' ' 0 $((NCPU - 1)))}"
+SEMIHOST_CORES="${UOS_HW_SEMIHOST_CORES:-$(seq -s' ' 0 $((NCPU - 1)))}"
 PRELOAD="${UOS_HW_PRELOAD:-}"
 RESET_WAIT="${UOS_HW_RESET_WAIT:-12}"
 IGNORE_ERRORS="${UOS_HW_IGNORE_ERRORS:-}"
@@ -270,10 +274,12 @@ ${PRELOAD}
 ${speed:+$speed
 }echo "--- stage: halt cores $CORES ---"
 foreach core {$CORES} { targets [format {$TARGET_FMT} \$core]; halt }
-echo "--- stage: enable semihosting on cores $CORES ---"
+echo "--- stage: enable semihosting on cores $SEMIHOST_CORES ---"
 # Per-target: a core whose semihosting is off stalls at a debug halt the first
 # time it traps, so every core needs it, not just core 0.
-foreach core {$CORES} { targets [format {$TARGET_FMT} \$core]; arm semihosting enable }
+foreach core {$SEMIHOST_CORES} { targets [format {$TARGET_FMT} \$core]; arm semihosting enable }
+if {[info procs rpi4b_enable_hde] ne ""} { rpi4b_enable_hde }
+if {[info procs uos_board_post_semihosting] ne ""} { uos_board_post_semihosting }
 ${preload_stage}echo "--- stage: load_image $elf ---"
 targets ${FIRST_TARGET}
 load_image $elf

@@ -6,8 +6,11 @@ the test scripts do (`micro-os-plus-iii-aarch64/test/boards/rpi4b/hw.sh`, which
 calls `micro-os-plus-iii/test_smpl/run-hw.sh`), written out as plain commands:
 reset, load, run, watch, end.
 
-The probe is a Raspberry Pi **debugprobe** (a Pico, firmware 2.0.0) used as a
-**CMSIS-DAP v2** adapter in **JTAG** mode, through OpenOCD (xPack 0.12.0-7.1).
+The probe is a Raspberry Pi **debugprobe** (a Pico) used as a **CMSIS-DAP v2**
+adapter in **JTAG** mode, through OpenOCD (xPack 0.12.0-7.1). The Pico runs an
+updated firmware with optimized CMSIS-DAP/JTAG code (it still reports
+`FW Version = 2.0.0`), which loads about 38× faster than the stock debugprobe
+firmware (see "Load speed" below).
 
 ## What happens, in short
 
@@ -86,20 +89,23 @@ holds the debug information, which is never sent to the board):
 $TESTS/build/$C/xpacks/.bin/aarch64-none-elf-readelf -lW $ELF | grep LOAD
 ```
 
-The load runs at about **1 KB/s** (see "Why the load is slow" below):
+With the optimized probe firmware the load runs at about **39.5 KB/s**
+(smp_test4: 70,296 bytes in 1.78 s, measured). The stock debugprobe firmware
+did about 1 KB/s (see "Load speed" below). The new column is that rate applied
+to each test's size; only smp_test4 was timed:
 
-| Test | Loaded bytes | Load |
-|---|---|---|
-| cmsis-os-validator | 151,640 | ~2.4 min |
-| mutex-stress | 94,488 | ~1.5 min |
-| rtos-apis | 228,136 | ~3.5 min |
-| sd_test | 83,512 | ~1.3 min |
-| smp-mat-sdcard-test | 93,736 | ~1.5 min |
-| smp-mat-test | 77,608 | ~1.2 min |
-| smp-num-test | 91,160 | ~1.4 min |
-| smp-pipeline-test | 146,472 | ~2.3 min |
-| smp-pro-cons-test | 88,968 | ~1.4 min |
-| smp_test0 … smp_test4 | 65,656 … 74,744 | ~1.1 min |
+| Test | Loaded bytes | Load (optimized firmware) | Load (stock firmware) |
+|---|---|---|---|
+| cmsis-os-validator | 151,640 | ~3.8 s | ~2.4 min |
+| mutex-stress | 94,488 | ~2.4 s | ~1.5 min |
+| rtos-apis | 228,136 | ~5.8 s | ~3.5 min |
+| sd_test | 83,512 | ~2.1 s | ~1.3 min |
+| smp-mat-sdcard-test | 93,736 | ~2.4 s | ~1.5 min |
+| smp-mat-test | 77,608 | ~2.0 s | ~1.2 min |
+| smp-num-test | 91,160 | ~2.3 s | ~1.4 min |
+| smp-pipeline-test | 146,472 | ~3.7 s | ~2.3 min |
+| smp-pro-cons-test | 88,968 | ~2.3 s | ~1.4 min |
+| smp_test0 … smp_test4 | 65,656 … 74,744 | ~1.7 … 1.9 s (smp_test4: 1.78 s measured) | ~1.1 min |
 
 ## Step 3 — open the serial console
 
@@ -264,7 +270,7 @@ What the config file `$CFG` sets up, besides the board:
 |---|---|
 | `source [find interface/cmsis-dap.cfg]`, `transport select jtag` | the probe, in JTAG mode |
 | `source [find board/rpi4b.cfg]` | OpenOCD's BCM2711 target: `bcm2711.cpu0..3`, `bcm2711.dap`, `bcm2711.ap` (not grouped: `USE_SMP` is 0), linked by their CTIs |
-| `adapter speed 4000` | 4 MHz TCK (the clock is not what limits the load) |
+| `adapter speed 4000` | 4 MHz TCK |
 | `gdb port disabled` | no GDB, OpenOCD only |
 | `rpi4b_unwedge` on every `examine-start` | clears a core's stuck debug state (EDSCR ERR/MA, TX/RX full) left by an earlier session |
 | `bcm2711.dap memaccess 0` on every `examine-end` | no idle TCKs after each access: the load is 1.74× faster (see below). It has to be set after `init`, and every core's examine resets it to 10, so it is set again after each one |
@@ -367,9 +373,20 @@ config, `rpi4b-cmsis-dap.cfg` (same `rpi4b_unwedge` and `memaccess 0` events):
 and then the "Debug Pi 4B" launch does steps 6–7 through GDB
 (`monitor halt`, `load`, `monitor arm semihosting enable`).
 
-## Why the load is slow
+## Load speed
 
-Measured on this setup, with OpenOCD's packet-level log (`-d4`):
+With the **optimized probe firmware** (the Pico reflashed with new optimized
+CMSIS-DAP/JTAG code), measured on this setup at `adapter speed 4000`, with
+`bcm2711.dap memaccess 0`: smp_test4 (70,296 loaded bytes) in **1780 ms**,
+about **39.5 KB/s** (38.6 KiB/s), timed around `load_image` alone in OpenOCD
+(`clock milliseconds` before and after). That is about **38×** the stock
+firmware's ~1.05 KB/s, and the whole test ran and passed (29.6 s in CTest,
+the 15 s reset wait included).
+
+### Why the stock firmware was slow
+
+Measured on this setup with the stock debugprobe firmware 2.0.0, with
+OpenOCD's packet-level log (`-d4`):
 
 * OpenOCD's CMSIS-DAP driver, in **JTAG** mode, sends raw
   `DAP_JTAG_Sequence` commands and encodes every TMS bit and every idle clock
@@ -381,8 +398,8 @@ Measured on this setup, with OpenOCD's packet-level log (`-d4`):
 
 With `bcm2711.dap memaccess 0` (10 idle clocks per access removed), a 4 KB
 load went from 6.7 s to 3.9 s (1.74×) and read back identical. The rest of
-the cost is the round trip: the probe on a USB port without a hub, or a newer
-debugprobe firmware, are the next things to try.
+the cost was the round trip, and that is what the optimized probe firmware
+removed (above).
 
 ## If something goes wrong
 
@@ -394,5 +411,5 @@ debugprobe firmware, are the next things to try.
 | `Error: [bcm2711.cpu1] not halted` at the resume, then OpenOCD exits | a script that halted cores 1–3 and resumes them after core 0: the core 0 resume already restarted them through the CTI. Halt and resume core 0 only (`UOS_HW_CORES=0`) |
 | the output stops, and a core 1–3 shows `halted ... due to breakpoint`, `pc: 0x80`, EL1, registers equal to its first halt | that core was halted at the start of the session: OpenOCD later reads its stale cached registers and cannot serve its semihosting call. Do not halt cores 1–3 (`UOS_HW_CORES=0`) |
 | the run log shows `RESULT: ` without `PASS`/`FAIL` | the verdict was printed in pieces; the board's `uart.hpp` must mirror the whole verdict line (`mirror_verdict`) or use a single `puts()` |
-| nothing on the UART for minutes after the halt | the load is still running (see the table in step 2) |
+| nothing on the UART after the halt | the load is still running: a few seconds with the optimized probe firmware, minutes with the stock one (see the table in step 2) |
 | `mww phys` never ends | use the virtual address (step 4) |

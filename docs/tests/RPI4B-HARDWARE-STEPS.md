@@ -18,7 +18,7 @@ firmware (see "Load speed" below).
    watchdog (`0xfe100024` = `0x5a000001`, then `0xfe10001c` = `0x5a000020`).
    The whole SoC resets and boots again from the SD card. OpenOCD loses the
    link and exits.
-2. **Wait 15 s** for the firmware to boot and switch the JTAG pins on again.
+2. **Wait 10 s** for the firmware to boot and switch the JTAG pins on again.
    Core 0 runs the firmware stub; cores 1–3 wait in the stub's spin-table loop.
 3. **Connect and halt core 0** (it stops at EL2, MMU off). Cores 1–3 are not
    halted (see step 6).
@@ -73,6 +73,25 @@ xpm run build   --config $C
 Each test gives `<app>-hwd` (for the board) and `<app>-qemu`. The `-hwd`
 name is a symlink to `<app>-hwd.elf`.
 
+### Optional: semihosting prints (`SEMI_PRINTS`)
+
+By default (`SEMI_PRINTS=0`) a board image sends only its verdict lines
+through semihosting; the whole console is on the UART. To load the probe with
+semihosting traffic, build the hwd images with `SEMI_PRINTS=1`: every console
+line printed on **core 0** then also goes through semihosting (and appears in
+the OpenOCD output). Lines from cores 1–3 stay on the UART only, because
+OpenOCD 0.12 does not resume a core other than 0 after its semihosting call
+on this board (see "If something goes wrong").
+
+```sh
+cmake -DSEMI_PRINTS=1 $TESTS/build/$C     # back to the default: -DSEMI_PRINTS=0
+xpm run build --config $C
+```
+
+It is slow: OpenOCD reads each line from the board one byte at a time, about
+0.9 s per line. smp_mem_test (~300 lines from core 0) passes in 337 s instead
+of 54 s, smp_mem_inter_test (~480 lines) in 621 s instead of 186 s. The qemu images always mirror everything.
+
 ## Step 2 — choose the test
 
 ```sh
@@ -116,7 +135,8 @@ tio -b 115200 /dev/ttyUSB0
 ```
 
 The test's whole output appears here once it is started (step 6). On the
-board, only the verdict lines go through semihosting.
+board, only the verdict lines go through semihosting (with `SEMI_PRINTS=1`,
+core 0's lines too: step 1).
 
 ## Step 4 — reset the board
 
@@ -161,7 +181,7 @@ $OCD -s $BOARD -s $SCRIPTS -f $BOARD/reset.cfg
 ## Step 5 — wait for the board to boot
 
 ```sh
-sleep 15
+sleep 10
 ```
 
 ## Step 6 — load the test and start it
@@ -283,7 +303,8 @@ On the UART (`tio`), the test's own output, ending with the verdict:
 RESULT: PASS
 ```
 
-In the OpenOCD output, only the verdict line arrives (through semihosting).
+In the OpenOCD output, only the verdict line arrives (through semihosting),
+plus core 0's console lines in a `SEMI_PRINTS=1` build.
 The runner waits for one of:
 
 | In the OpenOCD output | Meaning |
@@ -353,7 +374,7 @@ Settings (environment variables) the scripts take:
 
 | Variable | Default | What |
 |---|---|---|
-| `UOS_HW_RESET_WAIT` | 15 | seconds between the watchdog reset and the connect |
+| `UOS_HW_RESET_WAIT` | 10 | seconds between the watchdog reset and the connect |
 | `UOS_HW_CORES` | `0` | cores that are halted, loaded through and resumed |
 | `UOS_HW_SEMIHOST_CORES` | `0 1 2 3` | cores with semihosting enabled (without halting them) |
 | `UOS_HW_ADAPTER_KHZ` | (config: 4000) | JTAG clock, set after `init` |
@@ -410,6 +431,7 @@ removed (above).
 | the reset session shows no `tap/device found` | no JTAG: the board is off, or the firmware has not enabled the pins (`enable_jtag_gpio=1`), or it is still booting (wait longer: `UOS_HW_RESET_WAIT=30`) |
 | `Error: [bcm2711.cpu1] not halted` at the resume, then OpenOCD exits | a script that halted cores 1–3 and resumes them after core 0: the core 0 resume already restarted them through the CTI. Halt and resume core 0 only (`UOS_HW_CORES=0`) |
 | the output stops, and a core 1–3 shows `halted ... due to breakpoint`, `pc: 0x80`, EL1, registers equal to its first halt | that core was halted at the start of the session: OpenOCD later reads its stale cached registers and cannot serve its semihosting call. Do not halt cores 1–3 (`UOS_HW_CORES=0`) |
+| the UART stops after a line from core 1–3, and the OpenOCD output has that line; OpenOCD keeps polling, that core stays `halted` | the core made a semihosting call: OpenOCD 0.12 prints the string but does not resume a core other than 0 on this board, and every other core then waits on the console lock. Only core 0 may print through semihosting (what `SEMI_PRINTS=1` does) |
 | the run log shows `RESULT: ` without `PASS`/`FAIL` | the verdict was printed in pieces; the board's `uart.hpp` must mirror the whole verdict line (`mirror_verdict`) or use a single `puts()` |
 | nothing on the UART after the halt | the load is still running: a few seconds with the optimized probe firmware, minutes with the stock one (see the table in step 2) |
 | `mww phys` never ends | use the virtual address (step 4) |

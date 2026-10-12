@@ -214,9 +214,49 @@ bcm2711.cpu0 halted in AArch64 state due to debug-request, current mode: EL2H
 cpsr: 0x000003c9 pc: 0x200
 ```
 
-The `STICKY ERROR` / `Failed to read memory at 0x80n10088` lines come from
-examining each A72 (it reads `EDSCR`); OpenOCD recovers by itself. The runner
-ignores exactly these (`UOS_HW_IGNORE_ERRORS` in `hw.sh`).
+### The `Failed to read memory at 0x80n10088` lines
+
+One pair of `JTAG-DP STICKY ERROR` / `Failed to read memory` lines per core,
+always the same four addresses. They are harmless: the test is not affected,
+and the runner ignores exactly these (`UOS_HW_IGNORE_ERRORS` in `hw.sh`).
+
+| Address | Core | Register |
+|---|---|---|
+| `0x80410088` | 0 | `EDSCR` (debug base `0x80410000` + `0x088`) |
+| `0x80510088` | 1 | `EDSCR` (`0x80510000` + `0x088`) |
+| `0x80610088` | 2 | `EDSCR` (`0x80610000` + `0x088`) |
+| `0x80710088` | 3 | `EDSCR` (`0x80710000` + `0x088`) |
+
+`EDSCR` is the core's External Debug Status and Control Register. What happens,
+for each core, in this order (OpenOCD `src/target/target.c`, `target_examine_one`):
+
+1. OpenOCD fires the core's `examine-start` event. The config hooks
+   `rpi4b_unwedge <debug base>` there, whose first action is to read `EDSCR`
+   through the APB-AP.
+2. Only then does OpenOCD examine the core (`aarch64_examine_first`), and the
+   first thing that does is write `OSLAR = 0`: it unlocks the core's debug
+   **OS Lock**.
+
+The board has just been reset by the watchdog (Step 4), and a reset sets the
+OS Lock of every core (OpenOCD reports it as `external reset detected`). While
+the OS Lock is set, the core refuses an external read of `EDSCR`; the JTAG-DP
+flags the refused access as a sticky error, and OpenOCD prints the two lines.
+
+Why it does no harm:
+
+- `rpi4b_unwedge` reads `EDSCR` inside `catch`: the failed read makes it
+  return, and the session goes on. After a fresh reset there is nothing to
+  unwedge anyway.
+- The same `EDSCR` read at `examine-end` (`rpi4b_enable_core_hde`), after
+  OpenOCD has unlocked the core, gives no error -- the proof that the OS Lock
+  is the cause.
+- `rpi4b_unwedge` matters for the reset session of Step 4, which connects to a
+  board that has *not* been reset yet: there the OS Lock is clear and a core
+  left stuck by a killed session can be recovered.
+
+To silence them, `rpi4b_unwedge` would have to write `OSLAR = 0`
+(`<debug base> + 0x300`) itself before its first read -- the same write
+OpenOCD does. The config does not do that today; the lines are only cosmetic.
 
 What the config file `$CFG` sets up, besides the board:
 

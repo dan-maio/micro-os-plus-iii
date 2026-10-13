@@ -110,7 +110,9 @@ $TESTS/build/$C/xpacks/.bin/aarch64-none-elf-readelf -lW $ELF | grep LOAD
 
 With the optimized probe firmware the load runs at about **39.5 KB/s**
 (smp_test4: 70,296 bytes in 1.78 s, measured). The stock debugprobe firmware
-did about 1 KB/s (see "Load speed" below). The new column is that rate applied
+did about 1 KB/s (see "Load speed" below). With the PIO probe firmware
+(JTAGprobe_smp_pio) and `UOS_HW_ADAPTER_KHZ=15000` the load runs at about
+**58–59 KB/s**, about 1.5× faster than this column. The new column is that rate applied
 to each test's size; only smp_test4 was timed:
 
 | Test | Loaded bytes | Load (optimized firmware) | Load (stock firmware) |
@@ -377,7 +379,7 @@ Settings (environment variables) the scripts take:
 | `UOS_HW_RESET_WAIT` | 10 | seconds between the watchdog reset and the connect |
 | `UOS_HW_CORES` | `0` | cores that are halted, loaded through and resumed |
 | `UOS_HW_SEMIHOST_CORES` | `0 1 2 3` | cores with semihosting enabled (without halting them) |
-| `UOS_HW_ADAPTER_KHZ` | (config: 4000) | JTAG clock, set after `init` |
+| `UOS_HW_ADAPTER_KHZ` | (config: 4000) | JTAG clock, set after `init`; 15000 tested with the PIO probe firmware (see "Load speed") |
 | `UOS_HW_PRELOAD` | the two watchdog writes | the reset commands of step 4 |
 | `UOS_HW_IGNORE_ERRORS` | `JTAG-DP STICKY ERROR\|Failed to read memory at 0x80[4-7][0-9a-f]+$` | `Error:` lines that do not end the run |
 | `OPENOCD` | newest xPack OpenOCD | the OpenOCD binary |
@@ -403,6 +405,30 @@ about **39.5 KB/s** (38.6 KiB/s), timed around `load_image` alone in OpenOCD
 (`clock milliseconds` before and after). That is about **38×** the stock
 firmware's ~1.05 KB/s, and the whole test ran and passed (29.6 s in CTest,
 the 15 s reset wait included).
+
+### Probe firmwares compared
+
+Measured on this setup, smp_mem_test and smp_mem_inter_test hwd with
+`SEMI_PRINTS=1`, all **PASS** (`load_image` timed alone; whole test in CTest,
+10 s reset wait included). The firmwares are at
+github.com/dan-maio/JTAGprobe_smp and github.com/dan-maio/JTAGprobe_smp_pio.
+
+| Probe firmware | `adapter speed` | smp_mem_test load | smp_mem_test total | smp_mem_inter_test load | smp_mem_inter_test total |
+|---|---|---|---|---|---|
+| JTAGprobe_smp, 64-byte DAP packets | 4000 | 1,994 ms | 337.4 s | 2,143 ms | 620.5 s |
+| JTAGprobe_smp, 512-byte DAP packets | 4000 | 1,528 ms | 308.1 s | 1,644 ms | 561.8 s |
+| JTAGprobe_smp_pio (PIO JTAG, TMS in the PIO stream) | 10000 | 1,286 ms | 291.5 s | — | — |
+| JTAGprobe_smp_pio | 15000 | 1,273–1,287 ms | 282.9–285.1 s | 1,399 ms | 537.4 s |
+
+* With the CPU bit-banging firmwares the TCK clock hardly matters (the USB
+  round trip per packet is the limit). With the PIO firmware it does: the
+  JTAG work per 512-byte packet goes from 581 µs (CPU, 4 MHz) to 292 µs
+  (PIO, 10 MHz); 15 MHz gives the same as 10 MHz, so the probe's CPU, not
+  TCK, is then the limit.
+* Most of a whole test with `SEMI_PRINTS=1` is semihosting: OpenOCD reads
+  each string one byte per JTAG access, ~0.9 s per line, whatever the probe.
+* The config keeps `adapter speed 4000`; use `UOS_HW_ADAPTER_KHZ=15000` with
+  the PIO firmware.
 
 ### Why the stock firmware was slow
 

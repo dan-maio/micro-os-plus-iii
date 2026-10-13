@@ -218,6 +218,19 @@ The six repositories were cloned as in §1b into `/tmp/rpi4b-local`, with no fil
 
 Conclusion: with the devices clone, the `~/Downloads/GIT` repositories install, build and test (QEMU and board) correctly as they are.
 
+### Fourth run: the guide's own commands, verbatim (2026-10-13)
+
+The `sh` blocks of this file were extracted unchanged and run as one script with `set -e`, in a new folder `/tmp/rpi4b-doc`. Only `W=` was set, and `T=smp_test2` before the board command. The script ran §1a, §2, §3, §4 `build`, §5 `test`, §5 `test-$T-qemu` and the §5 board command without rebuild.
+
+| Step (debug) | Result |
+|---|---|
+| §1a: 5× `git clone`, `npm install`, `xpm install` | ✅ |
+| §3: `xpm install --config $C`, `xpm run prepare --config $C` | ✅ |
+| §4: `xpm run build --config $C` | ✅ |
+| §5: `xpm run test --config $C` | ✅ 16/16 passed |
+| §5: `xpm run test-smp_mem_test-qemu --config $C` | ✅ |
+| §5: `ctest … -R aarch64-rpi4b-smp_test2-hwd`, 15 MHz | ✅ `RESULT: PASS`, 14 s |
+
 Golden workspace: `smp_mem_inter_test-hwd` at 15 MHz passed in 525 s.
 
 ### What was not verified

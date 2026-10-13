@@ -16,13 +16,13 @@ platform, test and probe). This file is only a short orientation.
 
 ## Platforms
 
-There are 22 platforms under `platforms/`, grouped by the port they exercise:
+There are 24 platforms under `platforms/`, grouped by the port they exercise:
 
 - `aarch32-rpi-zero-2w`, `aarch32-rpi3b`, `aarch32-luckfox-lyra` — the AArch32 port
-- `aarch64-rpi-zero-2w`, `aarch64-rpi3b` — the AArch64 port
+- `aarch64-rpi-zero-2w`, `aarch64-rpi3b`, `aarch64-rpi4b` — the AArch64 port
 - `cortexm-pico2`, `cortexm-pico2-pizero`, `cortexm-pico2-rp2350b-psram`,
-  `cortexm-nucleof411`, `cortexm-weactf411`, `cortexm-weactf412` — the Cortex-M
-  port on real boards
+  `cortexm-pico` (RP2040, 2× Cortex-M0+), `cortexm-nucleof411`,
+  `cortexm-weactf411`, `cortexm-weactf412` — the Cortex-M port on real boards
 - `pico2-1cpu`, `2xcortex-m33` — the Cortex-M port's generic Cortex-M33 core
   in QEMU (single core and dual-core SMP)
 - `qemu-cortex-m0`, `qemu-cortex-m3`, `qemu-cortex-m4f`, `qemu-cortex-m7f` —

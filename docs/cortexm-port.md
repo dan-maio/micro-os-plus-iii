@@ -29,7 +29,7 @@ micro-os-plus-iii-cortexm/
 └── test/
     ├── CMakeLists.txt  hw.sh  qemu.sh
     ├── boards/<id>/     board.cmake, include/, src/, linker.ld,
-    │                    openocd.cfg, hw.sh   (pico2 also: glue/, usb/)
+    │                    openocd.cfg, hw.sh   (pico2, pico also: glue/, usb/)
     └── <id>/            that board's test applications
 ```
 
@@ -41,6 +41,7 @@ micro-os-plus-iii-cortexm/
 | `pico2` | RP2350, 2× Cortex-M33, 4 MB flash | **2** | 26 — 12 port tests + 4 suites (6 QEMU `mps2-an500`, 16 hwd, 4 ram) |
 | `pico2-rp2350b-psram` | RP2350B, 16 MB flash + 8 MB PSRAM | **2** | 16 — 14 port tests (2 QEMU `mps2-an500`, 14 hwd) |
 | `pico2-pizero` | RP2350B, 16 MB flash, Pi-Zero form factor | **2** | 14 — hwd only |
+| `pico` | RP2040, 2× Cortex-M0+, 2 MB flash, 264 KB SRAM | **2** | 26 — 12 port tests + 4 suites (6 QEMU `mps2-an385`, 16 hwd, 4 ram) |
 
 `nucleof411` and `weactf411` execute cleanly under QEMU with machine `netduinoplus2`
 (`-M netduinoplus2 -cpu cortex-m4 -nographic -semihosting`), passing 4/4 and 5/5
@@ -53,6 +54,8 @@ On RP2350, `pico2` and `pico2-rp2350b-psram` build `-qemu` images on `mps2-an500
 (`pico2`: `smp-test1`, `sc-test-ko` and the four suites; `pico2-rp2350b-psram`:
 `smp-test1`, `sc-test-ko`). `pico2` also provides pure-RAM resident test targets
 (`smp-mat-test-ram`, `rtos-apis-ram`, `mutex-stress-ram`, `cmsis-os-validator-ram`).
+`pico` (RP2040) builds the same six `-qemu` images on `mps2-an385 -cpu cortex-m3`
+(the generic M0 core, single-core) and the same four pure-RAM targets.
 What each test does is in [`tests/TESTS-CATALOG.md`](tests/TESTS-CATALOG.md).
 
 **Verified on 2026-10-06** (rebuilt `smp` branches, xpack-dev-smp.md Part III),
@@ -108,6 +111,30 @@ Not carried, deliberately: everything under `*-loader-*` and `*xip*` (they
 need fixture images), the `mini-a` board (a USB-CDC console and a WS2812 in
 place of the UART and the LED), and `smp-test-mini-a-usb-cdc-acm_agy` —
 `main.cpp` and `Makefile` are byte-identical to the test that *is* carried.
+
+### The RP2040 board
+
+`pico` (Raspberry Pi Pico) is the `pico2` set brought one generation back,
+with no Pico SDK. It has its own board code in `test/boards/pico/` — the
+RP2040 has its own register map, a 256-byte flash second stage (`boot2.S`,
+copied as data) before the vector table at `0x10000100`, 26 IRQs, a 125 MHz
+clock tree and 264 KB of SRAM — and its own SoC target, `soc/rp2040`
+(`micro-os-plus::soc-rp2040`). Its USB reuses pico2's TinyUSB, `cdc/` and
+`hid/`, with only the address-, reset- and IRQ-carrying shim files of its own
+(`test/boards/pico/usb/pico-shim/`, searched first; RP2040-E2 on).
+
+| | `pico` |
+|---|---|
+| flash | 2 MB |
+| UART | GPIO0/1, 115200 |
+| LED | GPIO25 |
+| IPI | SIO FIFO, `SIO_IRQ_PROC0` (15) / `SIO_IRQ_PROC1` (16) |
+| probe | JTAGprobe `0x2e8a:0x000c`, SWD @15000 (`UOS_HW_ADAPTER_KHZ`) |
+
+Its tests are `test/pico/`, copied from `test/pico2/` and adapted: the RP2040
+TIMER, reset bits and UART divisors, `exc-test` without UsageFault,
+`smp-mat-test` at N = 80, B = 20, the onboard LED in place of the WS2812.
+All 26 cases passed on 2026-10-13 (debug).
 
 ---
 
@@ -186,6 +213,10 @@ headers already handle every M profile — `__ARM_ARCH_6M__`, `7M`, `7EM`,
 `src/rtos/os-core-m33.cpp` is the generic Cortex-M33 core, whose SMP branch
 uses the SSE-200's `CPUID`/MHU instead of the RP2350 SIO; the harness's
 `pico2-1cpu` and `2xcortex-m33` platforms link it.
+`src/rtos/os-core-rp2040.cpp` is the RP2350 core brought to the RP2040's
+Cortex-M0+ (ARMv6-M): a Thumb-1 context switch, PRIMASK critical sections (no
+BASEPRI), no FPU, and the per-core FIFO IRQs; `pico` names it, with
+`include-rp2040/` (the RP2040 TIMER for `clock_highres`).
 
 So they *could* be one file. They are not, for a reason rather than an
 oversight: **the three STM32 boards are hardware-proven on upstream's core.**
@@ -335,6 +366,7 @@ BOARD=nucleof411           ./test/hw.sh mos-test1
 BOARD=pico2                ./test/hw.sh smp-test2
 BOARD=pico2-rp2350b-psram  ./test/hw.sh smp-mat-test
 BOARD=pico2-pizero         ./test/hw.sh sc-test-ko
+BOARD=pico                 ./test/hw.sh smp-test2
 ```
 
 The STM32 boards: program, `arm semihosting enable`, `reset run`. Semihosting
@@ -352,6 +384,11 @@ and both carried in each `hw.sh`:
   software PSM reset `launch_core1()` issues — the launch then hangs forever
   waiting for the bootrom readiness word. Resuming `cm1` first leaves it in
   the bootrom core-1 launch loop, where it answers the FIFO handshake.
+
+`pico` (RP2040) follows the same two rules, with `rp2040.core1` before
+`rp2040.core0`, over SWD through the JTAGprobe. OpenOCD may log
+`Failed to select multidrop rp2040.dap1` once core 1 is launched; it
+re-examines the core and the run goes on.
 
 They trace over their own UART, not semihosting, so OpenOCD exits once both
 cores are running and the console is the board's serial port — on whichever
@@ -390,6 +427,11 @@ as `os::utils::double_list`) are destroyed while threads still hold list nodes,
 an assertion failure occurs in `double_list::~double_list()` (`assert(empty())`).
 Using `std::_Exit(0)` cleanly bypasses static destruction and directly invokes
 the semihosting exit breakpoint.
+
+The Cortex-M0+ (ARMv6-M) cannot read `DHCSR` from software, so on
+`__ARM_ARCH_6M__` `src/semihosting-exit.cpp` and
+`test/boards/shared/debug-host.h` skip the "debugger attached" check; the
+M4 and M33 builds are unchanged.
 
 
 ---

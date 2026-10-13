@@ -44,6 +44,13 @@ summary, the execution record and the complete commit list.
   8 configurations; `test-smp-cmake` — aarch32 and aarch64 rpi-zero-2w/rpi3b
   15/15, `2xcortex-m33` 4/4, `pico2-1cpu` 4/4, `cortexm-pico2` 6/6,
   `cortexm-pico2-rp2350b-psram` 3/3, each in debug and release.
+- **Added since: `cortexm-pico` (Raspberry Pi Pico, RP2040, 2× Cortex-M0+),
+  2026-10-13.** No Pico SDK. cortexm gains `soc/rp2040`, the RP2040 port core
+  (`src/rtos/os-core-rp2040.cpp`, `include-rp2040/`), the `pico` board and
+  `test/pico/` (the pico2 tests, adapted); the kernel repo gains
+  `tests/platforms/cortexm-pico` and its configs. The DHCSR "debugger
+  attached" check is skipped on ARMv6-M (M4/M33 unchanged). Debug: 6/6 QEMU,
+  20/20 on the board through the JTAGprobe (SWD, 15 MHz). Release not run.
 
 The sections below are the earlier log. Where they mention
 `micro-os-plus-iii-devices`, `UOS_DEVICES_DIR` or `scripts/smp/`, read them as

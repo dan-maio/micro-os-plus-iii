@@ -489,6 +489,14 @@
         "xpm run build --config cortexm-pico2-cmake-gcc-release",
         "xpm run test --config cortexm-pico2-cmake-gcc-release"
       ],
+      "test-cortexm-pico-cmake": [
+        "xpm run prepare --config cortexm-pico-cmake-gcc-debug",
+        "xpm run build --config cortexm-pico-cmake-gcc-debug",
+        "xpm run test --config cortexm-pico-cmake-gcc-debug",
+        "xpm run prepare --config cortexm-pico-cmake-gcc-release",
+        "xpm run build --config cortexm-pico-cmake-gcc-release",
+        "xpm run test --config cortexm-pico-cmake-gcc-release"
+      ],
       "test-cortexm-pico2-rp2350b-psram-cmake": [
         "xpm run prepare --config cortexm-pico2-rp2350b-psram-cmake-gcc-debug",
         "xpm run build --config cortexm-pico2-rp2350b-psram-cmake-gcc-debug",
@@ -1451,6 +1459,61 @@
         "properties": {
           "buildType": "MinSizeRel",
           "shortConfigurationName": "cp2r"
+        }
+      },
+      "cortexm-pico-cmake-gcc-debug": {
+        "inherit": [
+          "cortexm-actions",
+          "cmake-actions",
+          "cortexm-dependencies",
+          "arm-cmsis-dependencies",
+          "arm-none-eabi-gcc-dependencies",
+          "openocd-dependencies",
+          "short-win-paths-properties"
+        ],
+        "properties": {
+          "buildType": "Debug",
+          "platformName": "cortexm-pico",
+          "toolchainFileName": "arm-none-eabi-gcc.cmake",
+          "shortConfigurationName": "cp1d"
+        },
+        "actions": {
+          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE hwd",
+          "test-cmsis-os-validator-qemu": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R cortexm-pico-cmsis-os-validator-qemu",
+          "test-cmsis-os-validator-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R cortexm-pico-cmsis-os-validator-hwd",
+          "test-cmsis-os-validator-ram-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R cortexm-pico-cmsis-os-validator-ram-hwd",
+          "test-exc-test-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R cortexm-pico-exc-test-hwd",
+          "test-mutex-stress-qemu": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R cortexm-pico-mutex-stress-qemu",
+          "test-fp-switch-qemu": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R cortexm-pico-fp-switch-qemu",
+          "test-mutex-stress-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R cortexm-pico-mutex-stress-hwd",
+          "test-mutex-stress-ram-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R cortexm-pico-mutex-stress-ram-hwd",
+          "test-fp-switch-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R cortexm-pico-fp-switch-hwd",
+          "test-rtos-apis-qemu": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R cortexm-pico-rtos-apis-qemu",
+          "test-rtos-apis-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R cortexm-pico-rtos-apis-hwd",
+          "test-rtos-apis-ram-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R cortexm-pico-rtos-apis-ram-hwd",
+          "test-sc-test-ko-qemu": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R cortexm-pico-sc-test-ko-qemu",
+          "test-sc-test-ko-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R cortexm-pico-sc-test-ko-hwd",
+          "test-smp-mat-test-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R cortexm-pico-smp-mat-test-hwd",
+          "test-smp-mat-test-ram-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R cortexm-pico-smp-mat-test-ram-hwd",
+          "test-smp-test-ko-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R cortexm-pico-smp-test-ko-hwd",
+          "test-smp-test-usb-cdc-acm-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R cortexm-pico-smp-test-usb-cdc-acm-hwd",
+          "test-smp-test-usb-hid-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R cortexm-pico-smp-test-usb-hid-hwd",
+          "test-smp-test0-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R cortexm-pico-smp-test0-hwd",
+          "test-smp-test1-qemu": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R cortexm-pico-smp-test1-qemu",
+          "test-smp-test1-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R cortexm-pico-smp-test1-hwd",
+          "test-smp-test2-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R cortexm-pico-smp-test2-hwd",
+          "test-smp-test3-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R cortexm-pico-smp-test3-hwd",
+          "test-smp-test4-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R cortexm-pico-smp-test4-hwd",
+          "test-smp-test5-hwd": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R cortexm-pico-smp-test5-hwd"
+        }
+      },
+      "cortexm-pico-cmake-gcc-release": {
+        "inherit": [
+          "cortexm-pico-cmake-gcc-debug"
+        ],
+        "properties": {
+          "buildType": "MinSizeRel",
+          "shortConfigurationName": "cp1r"
         }
       },
       "pico2-1cpu-cmake-gcc-debug": {

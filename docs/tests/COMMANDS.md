@@ -265,6 +265,7 @@ The `<name>` values, per configuration (`-debug` and `-release` alike):
 | `aarch32-rpi3b-*`, `aarch64-rpi3b-*` | the same, without `usb_test` |
 | `aarch32-luckfox-lyra-*` | `sd_test`, `smp-mat-sdcard-test`, `smp-mat-test`, `smp-num-test`, `smp-pipeline-test`, `smp-pro-cons-test`, `smp_test0` … `smp_test7`, `smp_test_int`, `smp_test_int2` … `smp_test_int5`, `mutex-stress-test` |
 | `cortexm-pico2-*` | `cmsis-os-validator`, `cmsis-os-validator-ram`, `exc-test`, `mutex-stress`, `mutex-stress-ram`, `fp-switch`, `rtos-apis`, `rtos-apis-ram`, `sc-test-ko`, `smp-mat-test`, `smp-mat-test-ram`, `smp-test-ko`, `smp-test-usb-cdc-acm`, `smp-test-usb-hid`, `smp-test0` … `smp-test5` |
+| `cortexm-pico-*` (RP2040) | the same as `cortexm-pico2-*` |
 | `cortexm-pico2-pizero-*` | `exc-test`, `sc-test-ko`, `smp-mat-test`, `smp-test-ko`, `psram-exec`, `psram-mat-test-250`, `smp-test-usb-cdc-acm`, `smp-test-usb-hid`, `smp-test0` … `smp-test5` |
 | `cortexm-pico2-rp2350b-psram-*` | `exc-test`, `fp-switch`, `sc-test-ko`, `smp-mat-test`, `smp-test0` … `smp-test5`, `smp-test-ko`, `smp-test-nested`, `smp-test-nested-clock`, `smp-test-nested-clock_200`, `smp-test-nested-clock_250` |
 | `cortexm-nucleof411-*` | `cmsis-os-validator`, `mos-test1`, `mutex-stress`, `rtos-apis` |

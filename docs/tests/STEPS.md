@@ -138,7 +138,7 @@ got confused, delete only `build/C/CMakeCache.txt` and run `prepare` again.
 | run one test; it builds whatever it needs first | `xpm run test-<test>-<variant> --config C` |
 | see which tests exist | `PATH="$PWD/build/C/xpacks/.bin:$PATH" ctest --test-dir build/C -N` |
 | run one case by hand | same `PATH`, then `ctest --test-dir build/C -V -R <platform>-<test>-<variant>` |
-| run debug and release in one go | `xpm run test-<platform>-cmake`, for every platform with emulated or host tests: `native`, `2xcortex-m33`, `pico2-1cpu`, `cortexm-pico2`, `cortexm-pico2-rp2350b-psram`, the four Raspberry Pi boards, and the four `qemu-cortex-m*` (also via `test-cortex-cmake`). |
+| run debug and release in one go | `xpm run test-<platform>-cmake`, for every platform with emulated or host tests: `native`, `2xcortex-m33`, `pico2-1cpu`, `cortexm-pico2`, `cortexm-pico2-rp2350b-psram`, `cortexm-pico`, the four Raspberry Pi boards, and the four `qemu-cortex-m*` (also via `test-cortex-cmake`). |
 
 Examples:
 
@@ -249,7 +249,7 @@ Mailbox 1 (see `TESTS-CATALOG.md` §4).
 ## 7. Run a harness suite as a cortexm board app
 
 **What:** run a suite on a cortexm board, on the real board and, where the
-board has a QEMU image, in QEMU too. `cortexm-pico2`, `cortexm-nucleof411`,
+board has a QEMU image, in QEMU too. `cortexm-pico2`, `cortexm-pico`, `cortexm-nucleof411`,
 `cortexm-weactf411` and `cortexm-weactf412` already do this for `rtos-apis`,
 `mutex-stress` and `cmsis-os-validator`. To do it on another board, copy
 these five pieces. **All five are needed.**
@@ -348,6 +348,7 @@ probe each board uses are in [`TESTS-CATALOG.md`](TESTS-CATALOG.md).
 | `cortexm-pico2` | 12 port tests + the 3 suites and `fp-switch` as board apps | 6 qemu | 16 |
 | `cortexm-pico2-rp2350b-psram` | 14 port tests | 2 qemu | 14 |
 | `cortexm-pico2-pizero` | 14 port tests | – | 14 |
+| `cortexm-pico` (RP2040, 2 × Cortex-M0+) | 16 port tests (4 RAM-resident) + the 3 suites and `fp-switch` as board apps | 6 qemu | 20 |
 | `cortexm-nucleof411` | `mos-test1` + the 3 suites | – | 4 |
 | `cortexm-weactf411` | `mos-test1`, `spi-pipeline` + the 3 suites | – | 5 |
 | `cortexm-weactf412` | `mos-test1`, `uart-test1` + the 3 suites | – | 5 |
@@ -367,6 +368,9 @@ that is registered):
 * on 2026-09-26, every local configuration's emulated/host set, run one
   configuration at a time; on the boards, `cortexm-pico2` 16/16 and
   `cortexm-pico2-rp2350b-psram` 14/14;
+* on 2026-10-13, `cortexm-pico` (debug): 6/6 emulated and 20/20 on the
+  board, through the JTAGprobe over SWD at 15 MHz (the two USB tests
+  interactively);
 * `cmsis-os-validator` 60/60 on the four Raspberry Pi platforms, emulated and
   on the boards, debug and release;
 * on the Raspberry Pi Zero 2 W platforms, `mutex-stress`, `rtos-apis` and

@@ -58,6 +58,7 @@ semihosting and mirrored on the UART.
 | `cortexm-pico2` | cortexm | Raspberry Pi Pico 2 (RP2350) | 2× Cortex-M33 | 2 | qemu (6 tests), hwd, ram (4 tests) | any CMSIS-DAP |
 | `cortexm-pico2-pizero` | cortexm | Pi-Zero RP2350B, 16 MB flash | 2× Cortex-M33 | 2 | hwd only | XV-Link CMSIS-DAP |
 | `cortexm-pico2-rp2350b-psram` | cortexm | WeAct RP2350B, 16 MB flash + 8 MB PSRAM | 2× Cortex-M33 | 2 | qemu (3 tests), hwd | CMSIS-DAP `c251:f001` |
+| `cortexm-pico` | cortexm | Raspberry Pi Pico (RP2040) | 2× Cortex-M0+ | 2 | qemu (6 tests), hwd, ram (4 tests) | JTAGprobe CMSIS-DAP `2e8a:000c` |
 | `cortexm-nucleof411` | cortexm | ST Nucleo-F411RE | 1× Cortex-M4F | 1 | qemu (netduinoplus2, 4 tests), hwd | on-board ST-Link v2.1 |
 | `cortexm-weactf411` | cortexm | WeAct Studio F411CE | 1× Cortex-M4F | 1 | qemu (netduinoplus2, 5 tests), hwd | DAPLink CMSIS-DAP (or WCH-Link) |
 | `cortexm-weactf412` | cortexm | WeAct Studio F412RE | 1× Cortex-M4F | 1 | hwd only (SRAM 256K > QEMU 128K) | ST-Link |
@@ -83,7 +84,8 @@ configurations inherit them from debug).
 The QEMU machine for the Pis is `raspi3b -smp 4`; the AArch32 images are
 started through a small AArch64 boot shim (`shim8.img`, image at `0x10000`).
 The Cortex-M `-qemu` images of `cortexm-pico2` and `cortexm-pico2-rp2350b-psram`
-run on `mps2-an500 -cpu cortex-m7`.
+run on `mps2-an500 -cpu cortex-m7`; those of `cortexm-pico` on
+`mps2-an385 -cpu cortex-m3` (the generic M0 core).
 
 The four `qemu-cortex-*` platforms link the local Cortex-M port's generic
 single-core QEMU cores (`micro-os-plus::cortexm-qemu-m0/-m3/-m4f/-m7`) and the
@@ -103,6 +105,7 @@ local generic M33 core, `micro-os-plus::cortexm-qemu-m33`.)
 | Pico 2 | any CMSIS-DAP (auto-selected, no vid_pid pinned) | — | SWD, 1000 kHz | `test/boards/pico2/openocd.cfg` |
 | Pi-Zero RP2350B | XV-Link CMSIS-DAP | `0416:5951` | SWD, 2000 kHz | `test/boards/pico2-pizero/openocd.cfg` |
 | WeAct RP2350B + PSRAM | CMSIS-DAP | `c251:f001` | SWD, 1000 kHz | `test/boards/pico2-rp2350b-psram/openocd.cfg` |
+| Pico (RP2040) | JTAGprobe (JTAGprobe_smp firmware on a second Pico), CMSIS-DAP v2 | `2e8a:000c` | SWD, 15000 kHz (`UOS_HW_ADAPTER_KHZ`) | `test/boards/pico/openocd.cfg` |
 | Nucleo-F411RE | on-board ST-Link v2.1 | — | SWD, `connect_assert_srst` | `test/boards/nucleof411/openocd.cfg` |
 | WeAct F411CE | DAPLink CMSIS-DAP (override: WCH-Link `1a86:8011` through `DAP_VID_PID`) | `0d28:0204` | SWD, 1000 kHz (`ADAPTER_KHZ`) | `test/boards/weactf411/openocd.cfg` |
 | WeAct F412RE | ST-Link V2 / V2-1 / V3 | by class | SWD (`ADAPTER_KHZ`) | `test/boards/weactf412/openocd.cfg` |
@@ -136,6 +139,7 @@ Where each suite runs:
 | `aarch32-rpi-zero-2w`, `aarch32-rpi3b`, `aarch64-rpi-zero-2w`, `aarch64-rpi3b` | qemu, hwd | qemu, hwd | qemu, hwd | SMP 4 |
 | `aarch32-luckfox-lyra` | — | hwd (`mutex-stress-test`) | — | SMP 3 |
 | `cortexm-pico2` | qemu, hwd, ram | qemu, hwd, ram | qemu, hwd, ram | SMP 2 on hwd; single on qemu & ram (SRAM load) |
+| `cortexm-pico` | qemu, hwd, ram | qemu, hwd, ram | qemu, hwd, ram | as `cortexm-pico2` |
 | `cortexm-nucleof411`, `cortexm-weactf411` | qemu, hwd | qemu, hwd | qemu, hwd | SMP ×1 |
 | `cortexm-weactf412` | hwd | hwd | hwd | SMP ×1 |
 | `native` | host (`rtos-apis`, single; `smp-rtos-apis`, SMP 4) | host (`mutex-stress`, single; `smp-mutex-stress`, SMP 4) | host | see §8 |
@@ -145,7 +149,8 @@ Where each suite runs:
 | `nucleo-*`, `raspberrypi-pico` | yes | yes | yes | single (upstream); `nucleo-f411re` adds `blinky-test` |
 
 `fp-switch` runs where an M33 FPU does: `cortexm-pico2` (qemu, hwd),
-`2xcortex-m33` (QEMU, SMP 2) and `pico2-1cpu` (QEMU, single).
+`2xcortex-m33` (QEMU, SMP 2) and `pico2-1cpu` (QEMU, single). On
+`cortexm-pico` (Cortex-M0+, no FPU) it builds and passes with nothing to test.
 
 On `cortexm-pico2` the `-qemu` image of a suite does not run the board at
 all: QEMU has no RP2350, so the image links the generic single-core
@@ -254,6 +259,22 @@ Three boards on the same silicon (2× Cortex-M33): `pico2`, `pico2-pizero` and
 
 Case counts: `pico2` 26, `pico2-pizero` 14, `pico2-rp2350b-psram` 18.
 
+### 7.1a RP2040 board
+
+`pico` (Raspberry Pi Pico, RP2040, 2× Cortex-M0+) runs the `pico2` column of
+the table above, adapted to the RP2040, with no Pico SDK: the same 26 cases
+(20 `hwd`, 6 `qemu`). The differences: 125 MHz clocks; the RP2040 TIMER,
+reset bits and IRQs (the SIO FIFO IPI on IRQs 15/16, UART0 on 20, USB on 5);
+`smp-mat-test` at N = 80, B = 20 to fit 264 KB of SRAM; `exc-test` without
+UsageFault (ARMv6-M has HardFault only); the USB CDC test lights the onboard
+LED instead of a WS2812; `fp-switch` has no FPU to test. The `-qemu` images
+run single-core on `mps2-an385 -cpu cortex-m3`. The probe is the JTAGprobe
+over SWD at 15 MHz.
+
+All 26 passed on 2026-10-13 (debug): 6/6 QEMU and 20/20 on the board, the two
+USB tests interactively (Escape then Return in the CDC terminal; Escape
+through `kbd_forward` for HID).
+
 ### 7.2 STM32F4 boards (one CPU)
 
 `cortexm-nucleof411` and `cortexm-weactf411` run both on hardware and on
@@ -337,6 +358,7 @@ compilers, every QEMU and host case (`ctest -LE hwd`), debug and release:
 | `pico2-1cpu` | 4/4 |
 | `cortexm-pico2` | 6/6 |
 | `cortexm-pico2-rp2350b-psram` | 3/3 |
+| `cortexm-pico` (added later, debug only) | 6/6 |
 
 The `-hwd` cases and the hardware-only platforms (`cortexm-pico2-pizero`,
 `cortexm-nucleof411`, `cortexm-weactf411`, `cortexm-weactf412`,

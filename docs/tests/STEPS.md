@@ -370,7 +370,8 @@ that is registered):
   `cortexm-pico2-rp2350b-psram` 14/14;
 * on 2026-10-13, `cortexm-pico` (debug): 6/6 emulated and 20/20 on the
   board, through the JTAGprobe over SWD at 15 MHz (the two USB tests
-  interactively);
+  interactively); release: 6/6 emulated and 18/18 on the board (the two
+  USB tests not run);
 * `cmsis-os-validator` 60/60 on the four Raspberry Pi platforms, emulated and
   on the boards, debug and release;
 * on the Raspberry Pi Zero 2 W platforms, `mutex-stress`, `rtos-apis` and

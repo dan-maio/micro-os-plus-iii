@@ -50,7 +50,8 @@ summary, the execution record and the complete commit list.
   `test/pico/` (the pico2 tests, adapted); the kernel repo gains
   `tests/platforms/cortexm-pico` and its configs. The DHCSR "debugger
   attached" check is skipped on ARMv6-M (M4/M33 unchanged). Debug: 6/6 QEMU,
-  20/20 on the board through the JTAGprobe (SWD, 15 MHz). Release not run.
+  20/20 on the board through the JTAGprobe (SWD, 15 MHz). Release: 6/6 QEMU,
+  18/18 hwd (the USB tests not run).
 
 The sections below are the earlier log. Where they mention
 `micro-os-plus-iii-devices`, `UOS_DEVICES_DIR` or `scripts/smp/`, read them as

@@ -134,7 +134,8 @@ clock tree and 264 KB of SRAM — and its own SoC target, `soc/rp2040`
 Its tests are `test/pico/`, copied from `test/pico2/` and adapted: the RP2040
 TIMER, reset bits and UART divisors, `exc-test` without UsageFault,
 `smp-mat-test` at N = 80, B = 20, the onboard LED in place of the WS2812.
-All 26 cases passed on 2026-10-13 (debug).
+All 26 cases passed on 2026-10-13 (debug); in release, the 6 QEMU and the 18
+non-USB hardware cases.
 
 ---
 

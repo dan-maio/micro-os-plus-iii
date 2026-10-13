@@ -273,7 +273,8 @@ over SWD at 15 MHz.
 
 All 26 passed on 2026-10-13 (debug): 6/6 QEMU and 20/20 on the board, the two
 USB tests interactively (Escape then Return in the CDC terminal; Escape
-through `kbd_forward` for HID).
+through `kbd_forward` for HID). Release: 6/6 QEMU and 18/18 on the board
+(the two USB tests not run).
 
 ### 7.2 STM32F4 boards (one CPU)
 
@@ -358,7 +359,7 @@ compilers, every QEMU and host case (`ctest -LE hwd`), debug and release:
 | `pico2-1cpu` | 4/4 |
 | `cortexm-pico2` | 6/6 |
 | `cortexm-pico2-rp2350b-psram` | 3/3 |
-| `cortexm-pico` (added later, debug only) | 6/6 |
+| `cortexm-pico` (added later, debug and release) | 6/6 |
 
 The `-hwd` cases and the hardware-only platforms (`cortexm-pico2-pizero`,
 `cortexm-nucleof411`, `cortexm-weactf411`, `cortexm-weactf412`,

@@ -723,10 +723,12 @@ namespace os
 
       port::scheduler::reschedule ();
 
-#if defined(OS_INTEGER_RTOS_PORT_NCPU) && (OS_INTEGER_RTOS_PORT_NCPU > 1)
+#if defined(OS_USE_SMP_SCHEDULER) && (OS_NCPU > 1)
       // If the waking CPU is not in this thread's affinity mask,
       // actively trigger a reschedule IPI to an eligible core so it
       // doesn't wait up to 1 ms for its next local clock tick.
+      // (This block used to be gated on OS_INTEGER_RTOS_PORT_NCPU, which
+      // nothing defines, so it was never compiled.)
       unsigned this_cpu = port_cpu_id ();
       if ((cpu_affinity () & (1u << this_cpu)) == 0)
         {

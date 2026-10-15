@@ -233,11 +233,16 @@ namespace os
           {
             timer_node_.unlink ();
           }
+        // Changed under the same lock as the callback's re-arm, so that a
+        // callback running on another CPU cannot re-arm a destroyed timer.
+        state_ = state::destroyed;
         // ----- Exit critical section ----------------------------------------
       }
 
 #endif
+#if defined(OS_USE_RTOS_PORT_TIMER)
       state_ = state::destroyed;
+#endif
 
       instrumentation::timer::destroy_return (this);
     }
@@ -328,17 +333,18 @@ namespace os
       // Don't call this from interrupt handlers.
       os_assert_err (!interrupts::in_handler_mode (), EPERM);
 
+      result_t res;
+
+#if defined(OS_USE_RTOS_PORT_TIMER)
+
       if (state_ != state::running)
         {
           instrumentation::timer::stop_retval (this, EAGAIN);
           return EAGAIN;
         }
 
-      result_t res;
-
-#if defined(OS_USE_RTOS_PORT_TIMER)
-
       res = port::timer::stop (this);
+      state_ = state::stopped;
 
 #else
 
@@ -346,14 +352,22 @@ namespace os
         // ----- Enter critical section ---------------------------------------
         interrupts::critical_section ics;
 
+        // The state is checked and changed under the same lock as the
+        // callback's re-arm (see internal_callback()): on SMP the callback
+        // may run on another CPU while this timer is stopped.
+        if (state_ != state::running)
+          {
+            instrumentation::timer::stop_retval (this, EAGAIN);
+            return EAGAIN;
+          }
+
         timer_node_.unlink ();
+        state_ = state::stopped;
         // ----- Exit critical section ----------------------------------------
       }
       res = result::ok;
 
 #endif
-
-      state_ = state::stopped;
 
       instrumentation::timer::stop_retval (this, res);
       return res;
@@ -370,33 +384,53 @@ namespace os
     {
       instrumentation::timer::callback (this);
 
-      if (type_ == run::periodic)
-        {
-          // Re-arm the timer for the next period.
-          timer_node_.timestamp += period_;
-          clock::timestamp_t now = clock_->steady_now ();
-          if (timer_node_.timestamp <= now)
-            {
-              // Prevent burst loop if callback or ISR was delayed
-              timer_node_.timestamp = now + period_;
-            }
+      // The clock list unlinked this timer's node and calls this outside its
+      // lock, so on SMP another CPU may stop (or destroy) the timer
+      // meanwhile. The state is therefore checked, and the timer re-armed,
+      // under the lock stop() and the destructor take; the function and its
+      // argument are read there too, so the timer is not touched after the
+      // lock. Re-arming without the check re-armed a stopped timer, which then
+      // kept firing from memory that was gone and corrupted the clock list.
+      func_t func;
+      func_args_t func_args;
+      {
+        // ----- Enter critical section ---------------------------------------
+        interrupts::critical_section ics;
 
+        if (state_ != state::running)
           {
-            interrupts::critical_section ics;
+            return; // stopped meanwhile
+          }
+
+        if (type_ == run::periodic)
+          {
+            // Re-arm the timer for the next period.
+            timer_node_.timestamp += period_;
+            clock::timestamp_t now = clock_->steady_now ();
+            if (timer_node_.timestamp <= now)
+              {
+                // Prevent burst loop if callback or ISR was delayed
+                timer_node_.timestamp = now + period_;
+              }
+
             clock_->steady_list ().link (timer_node_);
           }
-        }
-      else
-        {
-          state_ = state::completed;
-        }
+        else
+          {
+            state_ = state::completed;
+          }
+
+        func = func_;
+        func_args = func_args_;
+        // ----- Exit critical section ----------------------------------------
+      }
 
 #if defined(OS_USE_RTOS_PORT_TIMER)
       trace::puts (name ());
 #endif
 
       // Call the user function.
-      func_ (func_args_);
+      func (func_args);
 
       instrumentation::timer::callback_return (this);
     }

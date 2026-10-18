@@ -189,13 +189,21 @@ The board scripts do the same, relative to themselves. For example, the Pi 4 B
 ```sh
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../../.." && pwd)"          # the aarch64 clone
-SMP_DIR="${UOS_SMP_DIR:-$(cd "$ROOT/.." && pwd)/micro-os-plus-iii-smp}"
-[ -d "$SMP_DIR" ] || SMP_DIR="$SMP_DIR.git"
-[ -d "$SMP_DIR" ] || SMP_DIR="$(cd "$ROOT/.." && pwd)/micro-os-plus-iii"
+_siblings="$(cd "$ROOT/.." && pwd)"
+SMP_DIR="${UOS_SMP_DIR:-}"
+if [[ -z "$SMP_DIR" ]]; then
+  for _d in micro-os-plus-iii micro-os-plus-iii.git \
+            micro-os-plus-iii-smp micro-os-plus-iii-smp.git; do
+    if [[ -d "$_siblings/$_d" ]]; then SMP_DIR="$_siblings/$_d"; break; fi
+  done
+  SMP_DIR="${SMP_DIR:-$_siblings/micro-os-plus-iii}"
+fi
 ```
 
-It tries the kernel clone under three names: `micro-os-plus-iii-smp`,
-`micro-os-plus-iii-smp.git` and `micro-os-plus-iii`.
+It tries the kernel clone under four names, in this order:
+`micro-os-plus-iii` (the name used here: the `smp` branch of
+`micro-os-plus-iii-smp.git`), `micro-os-plus-iii.git`,
+`micro-os-plus-iii-smp` and `micro-os-plus-iii-smp.git`.
 
 ### 3.4 The one `xpm link` that is left
 
@@ -339,16 +347,13 @@ golden (`~/Work2/micro-os-plus`), both building the Pi 4 B tests.
 - **A.** It does not matter; link 1 records whatever the folder is called.
 - **B.** It matters: the names are a contract. CMake accepts
   `micro-os-plus-iii-aarch64` or `micro-os-plus-iii-aarch64.git`; `hw.sh`
-  accepts three names for the kernel clone. Any other name needs an override.
-  Example from this workspace: the Zero 2 W's `hw.sh` looks only for
-  `micro-os-plus-iii-smp[.git]`, but the kernel clone here is named
-  `micro-os-plus-iii`, so its hardware runs need
+  accepts four names for the kernel clone (`micro-os-plus-iii`, else
+  `micro-os-plus-iii-smp`, each with or without `.git`). Any other name needs
+  an override:
 
   ```sh
-  export UOS_SMP_DIR=/home/dan/Desktop/micro-os-plu-iii-smp-pr-github/micro-os-plus-iii
+  export UOS_SMP_DIR=/path/to/the/kernel/clone
   ```
-
-  The Pi 4 B's `hw.sh` also tries `micro-os-plus-iii`, so it needs nothing.
 
 ### 4.7 Summary table
 
@@ -562,7 +567,7 @@ in use, that path goes **through** the link:
 
 ```sh
 ROOT="$(cd "$HERE/../../.." && pwd)"
-SMP_DIR="${UOS_SMP_DIR:-$(cd "$ROOT/.." && pwd)/micro-os-plus-iii-smp}"
+_siblings="$(cd "$ROOT/.." && pwd)"          # then micro-os-plus-iii, ... in it
 ```
 
 Plain `pwd` reports the path **as typed**, through the link. So `$ROOT/..` is

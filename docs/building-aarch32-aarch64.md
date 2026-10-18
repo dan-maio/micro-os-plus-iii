@@ -65,7 +65,7 @@ cmake -DUOS_TOOLCHAIN_BIN=~/.local/xPacks/@xpack-dev-tools/aarch64-none-elf-gcc/
 ```sh
 cd micro-os-plus-iii-aarch64
 cmake -S . -B build \
-      -DCMAKE_TOOLCHAIN_FILE=../micro-os-plus-iii-smp/cmake/toolchains/aarch64-none-elf.cmake
+      -DCMAKE_TOOLCHAIN_FILE=../micro-os-plus-iii/cmake/toolchains/aarch64-none-elf.cmake
 cmake --build build -j8
 ```
 
@@ -74,7 +74,7 @@ cmake --build build -j8
 ```sh
 cd micro-os-plus-iii-aarch32
 cmake -S . -B build \
-      -DCMAKE_TOOLCHAIN_FILE=../micro-os-plus-iii-smp/cmake/toolchains/arm-none-eabi.cmake
+      -DCMAKE_TOOLCHAIN_FILE=../micro-os-plus-iii/cmake/toolchains/arm-none-eabi.cmake
 cmake --build build -j8
 ```
 
@@ -159,7 +159,7 @@ One runner serves every architecture; the caller supplies the machine.
 ### AArch64 — straight to `-kernel`
 
 ```sh
-../micro-os-plus-iii-smp/test_smpl/run-qemu.sh build/test \
+../micro-os-plus-iii/test_smpl/run-qemu.sh build/test \
     "$(ls ~/.local/xPacks/@xpack-dev-tools/qemu-arm/*/.content/bin/qemu-system-aarch64 | tail -1)" \
     -M raspi3b -smp 4
 ```
@@ -171,7 +171,7 @@ drops to AArch32 and jumps to the image. CMake builds it as `qemu-shim`.
 
 ```sh
 UOS_QEMU_SHIM=build/test/shim8.img UOS_QEMU_LOAD_ADDR=0x10000 \
-../micro-os-plus-iii-smp/test_smpl/run-qemu.sh build/test \
+../micro-os-plus-iii/test_smpl/run-qemu.sh build/test \
     "$(ls ~/.local/xPacks/@xpack-dev-tools/qemu-arm/*/.content/bin/qemu-system-aarch64 | tail -1)" \
     -M raspi3b -smp 4
 ```
@@ -269,7 +269,7 @@ nine lines a second and each is a debug halt and resume over JTAG.
 ```bash
 cd micro-os-plus-iii-aarch32
 cmake -S . -B build-lyra -DBOARD=luckfox-lyra \
-      -DCMAKE_TOOLCHAIN_FILE=../micro-os-plus-iii-smp/cmake/toolchains/arm-none-eabi.cmake
+      -DCMAKE_TOOLCHAIN_FILE=../micro-os-plus-iii/cmake/toolchains/arm-none-eabi.cmake
 cmake --build build-lyra -j8
 
 BOARD=luckfox-lyra test/hw.sh list         # the seven tests, and their budgets

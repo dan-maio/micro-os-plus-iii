@@ -4529,11 +4529,10 @@ Cortex-M QEMU suites, `<platform>-<suite>-test`. The Cortex-M boards' `hw.sh`
 run OpenOCD themselves (sections 6 and 7); `ctest` gives them 240 s
 (`cortexm-pico2`) or 600 s (the others).
 
-The AArch32/AArch64 board `hw.sh` looks for the shared runner in `micro-os-plus-iii-smp` (or
-`micro-os-plus-iii-smp.git`) next to the port. When the kernel folder is named
-`micro-os-plus-iii`, as here, it fails with
-`.../micro-os-plus-iii-smp.git/test_smpl/run-hw.sh: No such file or directory`
-unless `UOS_SMP_DIR` is set:
+The AArch32/AArch64 board `hw.sh` looks for the shared runner in the kernel
+folder next to the port: `micro-os-plus-iii`, as here, else
+`micro-os-plus-iii-smp`, each with or without `.git`. A kernel kept anywhere
+else needs `UOS_SMP_DIR`:
 
 ```bash
 UOS_SMP_DIR=$K ctest -R '^aarch32-rpi3b-smp_test0-hwd$' -V

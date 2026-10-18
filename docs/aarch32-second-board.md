@@ -148,7 +148,7 @@ to AArch64 as well. Both ports were re-run afterwards: 11 passed, 1 skipped
 
 ```sh
 cmake -S . -B build-lyra -DBOARD=luckfox-lyra \
-      -DCMAKE_TOOLCHAIN_FILE=../micro-os-plus-iii-smp/cmake/toolchains/arm-none-eabi.cmake
+      -DCMAKE_TOOLCHAIN_FILE=../micro-os-plus-iii/cmake/toolchains/arm-none-eabi.cmake
 ```
 
 | knob | zero2w / rpi3b | luckfox-lyra |

@@ -245,6 +245,20 @@ that failed first where one could be written.
   `if constexpr (port::clock_highres::has_hardware_counter())`. Implemented on
   AArch64 (`CNTPCT_EL0`), AArch32 (`CNTPCT`), RP2350 (`TIMER0` 1 MHz latch),
   and POSIX (`CLOCK_MONOTONIC`), with fallback to SysTick on generic Cortex-M.
+- **`hrclock` consistent with its own sleeps (2026-10-22).** The hardware
+  counters above were raw: `now()` counted from power-on (AArch64, AArch32),
+  from TIMER0's reset (RP2350) or from the host's boot (POSIX), while
+  `hrclock`'s sleeps compare with the tick-driven steady count, from the
+  kernel's start -- `hrclock.sleep_until (now () + 100 ms)` slept 391 ms
+  (rpi4b, QEMU), and on POSIX the host's uptime. Each port now subtracts its
+  tick origin. Also: the AArch tick is re-armed on an absolute grid
+  (`CNTP_CVAL += period`; re-arming one period from now lost the handler's
+  latency every tick), the counter's frequency is calibrated once instead of
+  by every core, the RP2350's `cycles_per_tick()` is in TIMER0 microseconds
+  (it was CPU cycles, ~150 times too much) and its ticks are caught up from
+  TIMER0. New board test `clock-test` (rpi4b, pico2, and the Zero 2 W and Pi 3 B
+  of both ports), PASS on the Pi 4, the Pico 2 and the Zero 2 W (aarch64 and aarch32); the
+  Zero 2 W and Pi 3 B also take a CMSIS-DAP probe (`PROBE=cmsis-dap`).
 - **Duplicate gate repo and path normalization.** `verify-no-duplicate-sources.py`
   now normalizes repository directory names (stripping trailing `.git` and
   resolving symlinks) and sibling comparison paths so canonical repo names and

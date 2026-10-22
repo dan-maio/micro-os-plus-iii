@@ -313,6 +313,15 @@ Steps 3, 7 and 8 are the same as for AArch32.
 In steps 4 and 6, write `openocd-olimex.cfg` instead of
 `openocd-jlink-rpi3.cfg`. Nothing else changes.
 
+## With a CMSIS-DAP probe instead of the J-Link
+
+A Raspberry Pi Debug Probe, or a Pico running the debugprobe firmware, on the
+same JTAG pins: in steps 4 and 6, write `openocd-cmsisdap-rpi3.cfg` instead of
+`openocd-jlink-rpi3.cfg` (with `hw.sh`: `PROBE=cmsis-dap`). Leave the probe's
+reset line off the Pi's RUN pad: held low, it keeps the Pi in reset and the
+JTAG chain reads all zeroes. With two CMSIS-DAP probes connected, OpenOCD takes
+the first one it finds; add `-c "adapter serial <serial>"` before the config.
+
 ## If something goes wrong
 
 - **`LIBUSB_ERROR_BUSY`** — another OpenOCD still holds the probe:

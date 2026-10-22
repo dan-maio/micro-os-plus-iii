@@ -79,7 +79,7 @@ xpm install
 **Tests:** `smp_test0` … `smp_test4`, `smp_mem_test`, `smp_mem_inter_test`, `smp-mat-test`,
 `smp-mat-sdcard-test`, `smp-num-test`, `smp-pipeline-test`, `smp-pro-cons-test`,
 `sd_test`, `cmsis-os-validator`, `mutex-stress`, `rtos-apis`, `smp-list-storage-test`,
-`smp-shapes-test`.
+`smp-shapes-test`, `clock-test`.
 
 The last two are the C++ versions of tests first written for the Zig port, check for check:
 `smp-list-storage-test` is a generic intrusive list with its nodes on thread stacks, in `.data` and
@@ -88,6 +88,17 @@ polymorphic shapes (an abstract C++ base class and four derived ones, built and 
 threads on the 4 cores), with a logger thread writing every line to the UART and to
 `tests/shapes.log` on the SD card, read back and CRC-checked. Both passed on the board on
 2026-10-22 (35 s and 125 s).
+
+`clock-test` checks the kernel's clocks against the BCM2711 System Timer (1 MHz): 5000 ticks of
+`sysclock`, and `hrclock` over them, keep its time; `hrclock.sleep_until (now () + 100 ms)` lasts
+100 ms (+1 tick) on core 0 and on core 1; and a thread on core 1 wakes promptly after core 0's
+tick. It guards the clock fixes of 2026-10-22: the tick re-armed on an absolute grid
+(`timer_arm::rearm_1ms()`, `CNTP_CVAL += period`; re-arming one period from *now* in the
+interrupt lost the handler's latency every tick), `hrclock.now()` counted from core 0's tick
+origin (`timer_arm::hr_base()`; it was the raw counter since power-on, while its sleeps count
+from the tick's start), and the counter's frequency calibrated once instead of by every core.
+On the board: 5000 ticks = 5 000 000 µs, the 100 ms sleep 101.0 ms on both cores (11 s). The
+same test exists for the Pico 2 and for the Zero 2 W and Pi 3 B of both ports.
 
 ```sh
 cd "$W/micro-os-plus-iii/tests"

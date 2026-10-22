@@ -1399,7 +1399,11 @@ uint32_t clock_highres::input_clock_frequency_hz (void) { return 1000000; }
 
 `CLOCK_MONOTONIC` read at microsecond resolution. `port::clock_highres::has_hardware_counter()`
 returns `true`, and `port::clock_highres::hardware_counter()` reads `::clock_gettime(CLOCK_MONOTONIC)`
-directly, allowing `os::rtos::clock_highres::now()` to query time lock-free across host threads.
+directly, minus `port::hr_origin_us` (the value when `clock_highres::start()` ran), allowing
+`os::rtos::clock_highres::now()` to query time lock-free across host threads. The origin is what
+makes `now()` agree with the steady count `hrclock`'s sleeps compare with (the microseconds
+measured at each tick, from the start): without it `now()` was the host's uptime, and
+`hrclock.sleep_until (now () + d)` waited that long plus `d` (fixed on 2026-10-22).
 Claiming nanoseconds would be claiming a precision the read does not have once the syscall
 (or vDSO call) and the division are counted. `cycles_per_tick()` and `cycles_since_tick()` remain
 deltas against a timestamp taken at the last tick.

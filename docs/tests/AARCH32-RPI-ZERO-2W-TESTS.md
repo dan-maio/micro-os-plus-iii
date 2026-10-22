@@ -681,7 +681,7 @@ harness already supports.
 | Link | `test/boards/rpi-zero-2w/linker.ld`: `ORIGIN = 0x10000`, so **one binary** runs under QEMU (`-kernel` loads at 0x10000) and on hardware (`kernel_address`). |
 | QEMU | `raspi3b` + the AArch64→AArch32 `shim8.img`; the image is loaded at `0x10000` with `-device loader`. **Not** `raspi2b`. |
 | Console | PL011 UART0 on GPIO14/15, 115200 8N1; under `SEMIHOST` also the semihosting channel. |
-| Hardware debug | OpenOCD with an **`aarch64` target + CTI** (ARMv7 `cortex_a` cannot halt an A53). Configs: `openocd-jlink-rpi3.cfg` (J-Link) or `openocd-olimex.cfg` (Olimex), both sourcing `rpi3-aarch32.cfg` → `bcm2837-aarch32.cfg`. |
+| Hardware debug | OpenOCD with an **`aarch64` target + CTI** (ARMv7 `cortex_a` cannot halt an A53). Configs: `openocd-jlink-rpi3.cfg` (J-Link), `openocd-olimex.cfg` (Olimex) or `openocd-cmsisdap-rpi3.cfg` (CMSIS-DAP), all sourcing `rpi3-aarch32.cfg` → `bcm2837-aarch32.cfg`. |
 | Semihosting on hardware | Uses the `HLT #0xF000` form (not the classic `SVC 0x123456` trap), which the OpenOCD `aarch64` target supports; `arm semihosting enable` is issued per core and the verdict is read from OpenOCD's log. |
 | Reset | The Pi exposes only TRST, no SRST; the A53 debug target has no reset method. The runner does a deterministic halt/load/resume and **one test per power cycle**. |
 | SMP | `OS_NCPU=4`, `OS_USE_SMP_SCHEDULER=1`; secondary cores park in `startup.S` and are released via `__smp_spin` + `SEV`. |

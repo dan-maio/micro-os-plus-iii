@@ -101,6 +101,7 @@ local generic M33 core, `micro-os-plus::cortexm-qemu-m33`.)
 |---|---|---|---|---|
 | Pi Zero 2 W, Pi 3 B (aarch32 and aarch64) | SEGGER J-Link — default | — | JTAG | `test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg` |
 | Pi Zero 2 W, Pi 3 B, with `PROBE=olimex` | Olimex ARM-USB-OCD (FTDI) | — | JTAG, 1000 kHz | `test/boards/rpi-zero-2w/openocd-olimex.cfg` |
+| Pi Zero 2 W, Pi 3 B (aarch32 and aarch64), with `PROBE=cmsis-dap` | any CMSIS-DAP (Raspberry Pi Debug Probe, a Pico with the debugprobe firmware) | `2e8a:000c` | JTAG (the target config's clock: 4000 kHz aarch64, 1000 kHz aarch32) | `test/boards/rpi-zero-2w/openocd-cmsisdap-rpi3.cfg` |
 | Luckfox Lyra B | WCH-Link in ARM mode (CMSIS-DAP) | `1a86:8011` | SWD, 4000 kHz | `test/boards/luckfox-lyra/openocd.cfg` |
 | Pico 2 | any CMSIS-DAP (auto-selected, no vid_pid pinned) | — | SWD, 1000 kHz | `test/boards/pico2/openocd.cfg` |
 | Pi-Zero RP2350B | XV-Link CMSIS-DAP | `0416:5951` | SWD, 2000 kHz | `test/boards/pico2-pizero/openocd.cfg` |
@@ -170,7 +171,7 @@ xpack's own `SIGUSR1`/`SIGALRM` shims stand in for the NVIC.
 
 ## 5. AArch32 and AArch64 — Raspberry Pi Zero 2 W and Pi 3 B
 
-The same fifteen test directories exist on all four (port, board) pairs:
+The same sixteen test directories exist on all four (port, board) pairs:
 `<port>/test/rpi-zero-2w/` and `<port>/test/rpi3b/`. The Pi 3 B builds use the
 Zero 2 W's board sources with `BOARD_RPI3B`. Every test is built twice, `-qemu`
 and `-hwd`, except as noted.
@@ -189,12 +190,13 @@ and `-hwd`, except as noted.
 | `smp-pro-cons-test` | Producer/consumer that uses every kernel object (thread, memory pool, message queue, both semaphores, mutex, condition variable, event flags, timer, sysclock, suspend/resume). | SMP 4 |
 | `sd_test` | SD card: under QEMU, `sd::SdCard` + flatfs on a host-seeded `disk.img` (host ↔ device round trip); on hardware, FatFs read/write under `/tests` on the boot card (never formatted). | SMP 4 |
 | `usb_test` | DWC2 USB gadget file transfer: a host tool sends files over bulk OUT, stored to the SD card and hex-dumped to the UART and semihosting, with unpinned workers keeping every core busy. | SMP 4 |
+| `clock-test` | The kernel's clocks against the BCM2837 System Timer: 5000 ticks of `sysclock` and `hrclock` keep its time; `hrclock.sleep_until (now () + 100 ms)` lasts 100 ms on cores 0 and 1, each woken promptly after core 0's tick. Guards the 2026-10-22 clock fixes. | SMP 4 |
 | `rtos-apis`, `mutex-stress`, `cmsis-os-validator` | The harness suites (§4). | SMP 4 |
 
 **Exception**: `usb_test` has **no `-hwd` case on the Pi 3 B**, only `-qemu`. The
 Pi 3 B's USB ports sit behind the LAN9514 hub, so the DWC2 can only be a host.
 
-Case counts: Zero 2 W 30 (15 × 2), Pi 3 B 29.
+Case counts: Zero 2 W 32 (16 × 2), Pi 3 B 31.
 
 ## 6. AArch32 — Luckfox Lyra B (RK3506)
 
@@ -243,6 +245,7 @@ Three boards on the same silicon (2× Cortex-M33): `pico2`, `pico2-pizero` and
 | `smp-test3` | Cross-core IPI through the SIO FIFO: semaphore ping-pong with the one-way wake latency measured on TIMER0. | SMP 2 | hwd | hwd | hwd |
 | `smp-test4` | Kernel objects under dual-core contention: seven round-trip sub-tests between a controller (core 0) and a worker (core 1). | SMP 2 | hwd | hwd | hwd |
 | `smp-test5` | First peripheral interrupt: UART0 TX IRQ serviced on core 1, draining a ring filled by core 0. | SMP 2 | hwd | hwd | hwd |
+| `clock-test` | The kernel's clocks against TIMER0 on both cores: sysclock and hrclock keep its time, `hrclock.sleep_until (now () + 100 ms)` lasts 100 ms. Guards the 2026-10-22 fixes (hrclock's units and origin, the tick caught up from TIMER0). | SMP 2 | hwd | — | — |
 | `smp-mat-test` | Parallel block solver (N = 100, B = 50) on two cores. On `pico2-rp2350b-psram` its data lives in PSRAM. | SMP 2 | hwd | hwd | hwd |
 | `smp-test-usb-cdc-acm` | USB CDC-ACM virtual serial port: echoes what the host types, mirrored on the UART. | SMP 2 | hwd | hwd | — |
 | `smp-test-usb-hid` | USB HID keyboard forwarding; keystrokes printed on the UART. | SMP 2 | hwd | hwd | — |
@@ -321,8 +324,9 @@ cases are `-host`.
 | `flatfs-test` | flatfs on a host-file card: append 64 KiB to a file created empty, then check it, a file beside it and a fresh mount. | SMP 4 |
 | `mutex-ceiling-test` | A thread above a robust protect mutex's ceiling gets `EINVAL`; after it is destroyed, lock/unlock at the ceiling must still work (no `EOWNERDEAD`). | SMP 4 |
 | `cmsis-os-validator` | The validator (§4), registered by the harness platform itself. | SMP 4, validator on core 0 |
+| `clock-test` | `hrclock.sleep_until (now () + 100 ms)` lasts 100 ms of `CLOCK_MONOTONIC`, and `hrclock.now()` is close to its steady count (the 2026-10-22 origin fix: it used to wait the host's uptime). | SMP 4 |
 
-16 cases.
+17 cases.
 
 ## 9. How to run
 
@@ -337,7 +341,8 @@ PATH="$PWD/build/C/xpacks/.bin:$PATH" ctest --test-dir build/C -N   # list the c
 ```
 
 For a `-hwd` case, power-cycle the board first and run exactly one case. On the
-Pis choose the probe with `PROBE=jlink|olimex`:
+Pis choose the probe with `PROBE=jlink|olimex|cmsis-dap` (`cmsis-dap` on the Zero 2 W and
+the Pi 3 B, both ports):
 
 ```sh
 cd build/C && PROBE=olimex PATH="$PWD/xpacks/.bin:$PATH" ctest -V -R <platform>-<app>-hwd

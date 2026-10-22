@@ -167,11 +167,21 @@ core 0 advances the RTOS clock; core 1's SysTick reschedules core 1 alone.
 
 **High-resolution clock (`clock_highres`).** On RP2350 (`include-rp2350/`),
 `clock_highres::has_hardware_counter()` returns `true` under SMP, reading the
-latched 64-bit hardware timer (`TIMER0` `TIMEHR`/`TIMELR`) clocked at 1 MHz
-(`input_clock_frequency_hz() == 1000000`). `clock_highres::start()` ensures
-the timer peripheral is unreset and configured. On generic Cortex-M and M33
-(`include/`, `include-m33/`), `has_hardware_counter()` returns `false`, safely
-retaining the SysTick phase calculation.
+64-bit hardware timer `TIMER0` at 1 MHz (`input_clock_frequency_hz() ==
+1000000`) through its raw registers (`TIMERAWH`/`TIMERAWL`, a hi-lo-hi retry,
+`port::timer0_us()`): lock-free and safe from both cores, which the latched
+`TIMEHR`/`TIMELR` pair is not. `now()` counts from the kernel's tick origin
+(`port::hr_base_us`), and `cycles_per_tick()` is in the same unit (1000 µs),
+so `hrclock.now()` and the steady count its sleeps are measured against agree.
+The SMP `SysTick_Handler()` on core 0 runs the ticks TIMER0 says are due since
+that origin -- usually one, several after interrupts were masked (SysTick
+latches one pending interrupt only, and lost 3-10 ms at the start-up), none
+when SysTick runs a little fast -- so the kernel's clocks follow TIMER0 (fixed
+on 2026-10-22; `test/pico2/clock-test` checks it on the board).
+`clock_highres::start()` ensures the timer peripheral is unreset and
+configured. On generic Cortex-M and M33 (`include/`, `include-m33/`),
+`has_hardware_counter()` returns `false`, safely retaining the SysTick phase
+calculation.
 
 **FPU context.** Both SMP port cores (`os-core-rp2350.cpp`, `os-core-m33.cpp`)
 keep FPCCR.ASPEN and LSPEN **on**, on both cores (RP2350: core 0 in the

@@ -98,4 +98,5 @@ argument and prints what a build has, with each budget.
 `run-qemu.sh` and `run-hw.sh` replace what the predecessor repository kept as
 `hw.sh` + `hw-olimex.sh` in every test directory of every port — about 200
 near-identical lines, 48 files. The probe choice that `hw-olimex.sh` made is
-now `PROBE=jlink|olimex` on the Pi boards' `hw.sh`.
+now `PROBE=jlink|olimex` on the Pi boards' `hw.sh` (and, on the Zero 2 W / Pi 3 B of both
+ports, `PROBE=cmsis-dap`, `openocd-cmsisdap-rpi3.cfg`).

@@ -789,6 +789,7 @@ passed this way, on both ports.
 |---|---|---|
 | OpenOCD config, J-Link (default) | `$A32/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg` | `$A64/test/boards/rpi-zero-2w/openocd-jlink-rpi3.cfg` |
 | OpenOCD config, Olimex ARM-USB-OCD | `$A32/test/boards/rpi-zero-2w/openocd-olimex.cfg` | `$A64/test/boards/rpi-zero-2w/openocd-olimex.cfg` |
+| OpenOCD config, CMSIS-DAP (`PROBE=cmsis-dap`) | `$A32/test/boards/rpi-zero-2w/openocd-cmsisdap-rpi3.cfg` | `$A64/test/boards/rpi-zero-2w/openocd-cmsisdap-rpi3.cfg` |
 | `-c init` | yes (the config is declarative) | yes (the config is declarative) |
 | entry | `0x1003c` | `0x80000` |
 | start core 0 | set CPSR to `0x600001da`, then resume at the entry | set PC to the entry, then resume |
@@ -805,7 +806,8 @@ steps:
 3. **Run OpenOCD** with the config and the session.
 
 The sections below write every test with the J-Link config; for the Olimex
-probe replace `openocd-jlink-rpi3.cfg` by `openocd-olimex.cfg`.
+probe replace `openocd-jlink-rpi3.cfg` by `openocd-olimex.cfg`, for a CMSIS-DAP
+probe by `openocd-cmsisdap-rpi3.cfg`.
 
 ### 4.3 `aarch32-rpi-zero-2w` — hardware
 

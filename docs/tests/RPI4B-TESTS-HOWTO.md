@@ -78,7 +78,16 @@ xpm install
 
 **Tests:** `smp_test0` … `smp_test4`, `smp_mem_test`, `smp_mem_inter_test`, `smp-mat-test`,
 `smp-mat-sdcard-test`, `smp-num-test`, `smp-pipeline-test`, `smp-pro-cons-test`,
-`sd_test`, `cmsis-os-validator`, `mutex-stress`, `rtos-apis`.
+`sd_test`, `cmsis-os-validator`, `mutex-stress`, `rtos-apis`, `smp-list-storage-test`,
+`smp-shapes-test`.
+
+The last two are the C++ versions of tests first written for the Zig port, check for check:
+`smp-list-storage-test` is a generic intrusive list with its nodes on thread stacks, in `.data` and
+on the heap, under thread churn on the 4 cores (UART only); `smp-shapes-test` is a list of
+polymorphic shapes (an abstract C++ base class and four derived ones, built and destroyed by
+threads on the 4 cores), with a logger thread writing every line to the UART and to
+`tests/shapes.log` on the SD card, read back and CRC-checked. Both passed on the board on
+2026-10-22 (35 s and 125 s).
 
 ```sh
 cd "$W/micro-os-plus-iii/tests"

@@ -200,7 +200,7 @@ Case counts: Zero 2 W 32 (16 × 2), Pi 3 B 31.
 
 ## 6. AArch32 — Luckfox Lyra B (RK3506)
 
-Hardware only: the board declares no QEMU linker script. 19 port tests plus one
+Hardware only: the board declares no QEMU linker script. 20 port tests plus one
 harness suite, all `-hwd`, all SMP 3.
 
 | Test | What it does |
@@ -215,6 +215,7 @@ harness suite, all `-hwd`, all SMP 3.
 | `smp_test_int3` | PC keyboard → board: USB OTG1 as an interrupt-driven vendor gadget on core 0 (GIC ID discovered at runtime), UART1 interrupt-driven on core 1. Needs the host tool `kbd_forward`. |
 | `smp_test_int4` | Keystroke logger with three IRQs on three cores: USB (core 0) → ring → `keys.log` on the card, written with the DW-MMC data-transfer-over IRQ (core 2); UART on core 1. |
 | `smp_test_int5` | AMP doorbell: the RK3506's Cortex-M0 fires Mailbox interrupts every ~40 ms to A7 cores 1 and 2, which report to core 0 over a shared ring. |
+| `clock-test` | The kernel's clocks against the generic timer's counter read directly (CNTPCT, 24 MHz; the RK3506 has no BCM System Timer): 5000 ticks keep its time, `hrclock.sleep_until (now () + 100 ms)` lasts 100 ms on cores 0 and 1. Its console is the UART alone, sent through semihosting once at the end. |
 | `mutex-stress-test` | The harness suite, built by the platform itself (not a port test directory). |
 
 Every Lyra test ends with a `RESULT:` line and a semihosting exit. The four

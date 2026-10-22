@@ -259,6 +259,15 @@ that failed first where one could be written.
   TIMER0. New board test `clock-test` (rpi4b, pico2, and the Zero 2 W and Pi 3 B
   of both ports), PASS on the Pi 4, the Pico 2 and the Zero 2 W (aarch64 and aarch32); the
   Zero 2 W and Pi 3 B also take a CMSIS-DAP probe (`PROBE=cmsis-dap`).
+- **The skipped ticks move `hrclock`'s origin (2026-10-22, aarch32).** The
+  absolute re-arm skips the ticks of a halt longer than 1000 periods (a
+  debugger, or a slow semihosting call: the counter keeps running) instead
+  of replaying them; core 0's skipped ticks now move `hr_base` too. On the
+  Lyra the start-up's semihosting halts over the WCH-Link skipped 8.9 s of
+  ticks, and `hrclock.now()` stayed that far ahead of its steady count:
+  `hrclock.sleep_until (now () + 100 ms)` took 8.98 s. `clock-test` added to
+  the Lyra; it passes there with the change. (The same resync is in the
+  aarch64 ports, not changed yet.)
 - **Duplicate gate repo and path normalization.** `verify-no-duplicate-sources.py`
   now normalizes repository directory names (stripping trailing `.git` and
   resolving symlinks) and sibling comparison paths so canonical repo names and

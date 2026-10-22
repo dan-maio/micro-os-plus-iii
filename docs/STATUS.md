@@ -266,8 +266,8 @@ that failed first where one could be written.
   Lyra the start-up's semihosting halts over the WCH-Link skipped 8.9 s of
   ticks, and `hrclock.now()` stayed that far ahead of its steady count:
   `hrclock.sleep_until (now () + 100 ms)` took 8.98 s. `clock-test` added to
-  the Lyra; it passes there with the change. (The same resync is in the
-  aarch64 ports, not changed yet.)
+  the Lyra; it passes there with the change. The same change is in the
+  aarch64 ports (rpi4b, rpi-zero-2w) and the Zig port's `rearmTick()`.
 - **Duplicate gate repo and path normalization.** `verify-no-duplicate-sources.py`
   now normalizes repository directory names (stripping trailing `.git` and
   resolving symlinks) and sibling comparison paths so canonical repo names and

@@ -233,7 +233,17 @@ namespace os
 #if defined(OS_INCLUDE_RTOS_STATISTICS_THREAD_CPU_CYCLES)
 
         scheduler::statistics::cpu_cycles_ = 0;
+#if defined(OS_USE_SMP_SCHEDULER)
+        {
+          const clock::timestamp_t now = hrclock.now ();
+          for (unsigned c = 0; c < OS_NCPU; ++c)
+            {
+              scheduler::statistics::switch_timestamp_[c] = now;
+            }
+        }
+#else
         scheduler::statistics::switch_timestamp_ = hrclock.now ();
+#endif /* defined(OS_USE_SMP_SCHEDULER) */
 
 #endif /* defined(OS_INCLUDE_RTOS_STATISTICS_THREAD_CPU_CYCLES) */
 
@@ -530,6 +540,14 @@ namespace os
         // Get the high resolution timestamp.
         clock::timestamp_t now = hrclock.now ();
 
+#if defined(OS_USE_SMP_SCHEDULER)
+        clock::timestamp_t& switch_timestamp
+            = scheduler::statistics::switch_timestamp_[port_cpu_id ()];
+#else
+        clock::timestamp_t& switch_timestamp
+            = scheduler::statistics::switch_timestamp_;
+#endif /* defined(OS_USE_SMP_SCHEDULER) */
+
 #pragma GCC diagnostic push
 #if defined(__clang__)
 #elif defined(__GNUC__)
@@ -540,7 +558,7 @@ namespace os
         // Assume scheduler is not disabled for very long.
         rtos::statistics::duration_t delta
             = static_cast<rtos::statistics::duration_t> (
-                now - scheduler::statistics::switch_timestamp_);
+                now - switch_timestamp);
 
 #pragma GCC diagnostic pop
 
@@ -555,7 +573,7 @@ namespace os
 #endif /* defined(OS_USE_SMP_SCHEDULER) */
 
         // Remember the timestamp for the next context switch.
-        scheduler::statistics::switch_timestamp_ = now;
+        switch_timestamp = now;
 
 #endif /* defined(OS_INCLUDE_RTOS_STATISTICS_THREAD_CPU_CYCLES) */
 
@@ -682,7 +700,11 @@ namespace os
 
 #if defined(OS_INCLUDE_RTOS_STATISTICS_THREAD_CPU_CYCLES)
 
+#if defined(OS_USE_SMP_SCHEDULER)
+        clock::timestamp_t switch_timestamp_[OS_NCPU];
+#else
         clock::timestamp_t switch_timestamp_;
+#endif /* defined(OS_USE_SMP_SCHEDULER) */
         rtos::statistics::duration_t cpu_cycles_;
 
 #endif /* defined(OS_INCLUDE_RTOS_STATISTICS_THREAD_CPU_CYCLES) */

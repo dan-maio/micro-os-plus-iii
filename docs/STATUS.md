@@ -117,6 +117,20 @@ pushed to `origin`.
   failed to link; nothing had used it before. Now inline, like
   `first_fit_top`'s. Found by the golden tutorial (lesson 12, memory); all 20
   debug configurations build.
+- **SMP: thread CPU time counted per CPU** (`os-sched.h`, `os-core.cpp`). The
+  scheduler kept one `switch_timestamp_` for all CPUs, so each switch charged
+  the outgoing thread the time since the last switch of *any* CPU: with four
+  busy cores every thread got about a quarter of its CPU time, and all threads
+  together added up to 1x the elapsed time instead of 4x. Now one timestamp per
+  CPU (`switch_timestamp_[OS_NCPU]`); single-core builds unchanged.
+- **SMP: `kill()` of a thread running on another CPU returns** (`os-thread.cpp`).
+  `kill()` waited, sending IPIs, for the thread to leave that CPU; but that
+  CPU's switch re-linked the running thread and picked it again, so a busy
+  thread was never left and `kill()` never returned. It is now marked
+  suspended under the kernel lock before the IPI, so the switch leaves it off
+  the ready list. Both found by the golden tutorial (lesson 15, thread
+  control); rtos-apis passes on the rpi4b and pico2 boards and natively (SMP
+  host).
 
 ---
 

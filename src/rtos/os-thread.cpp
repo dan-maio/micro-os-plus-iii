@@ -1523,6 +1523,18 @@ namespace os
             // Actively trigger reschedule IPI if running on another core
             if (busy_cpu < OS_NCPU && busy_cpu != port_cpu_id ())
               {
+                // A thread still running there would stay running after the
+                // IPI: that CPU's switch re-links a running thread to the
+                // ready list and picks it again. Mark it suspended (the lock
+                // held means it is in no kernel call now), so the switch
+                // leaves it off the list and runs another.
+                {
+                  interrupts::critical_section ics;
+                  if (state_ == state::running)
+                    {
+                      state_ = state::suspended;
+                    }
+                }
                 port_smp_ipi (busy_cpu);
               }
 

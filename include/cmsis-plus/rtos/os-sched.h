@@ -467,7 +467,13 @@ namespace os
          * @cond ignore
          */
 
+#if defined(OS_USE_SMP_SCHEDULER)
+        // One per CPU: a CPU's switch charges the time since its own
+        // previous switch, not since the last switch of any CPU.
+        extern clock::timestamp_t switch_timestamp_[OS_NCPU];
+#else
         extern clock::timestamp_t switch_timestamp_;
+#endif /* defined(OS_USE_SMP_SCHEDULER) */
         extern rtos::statistics::duration_t cpu_cycles_;
 
         /**

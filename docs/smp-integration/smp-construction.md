@@ -105,10 +105,14 @@ namespaces, and the four objects a port must **define**:
 
 ```cpp
 extern volatile state_t  lock_state[OS_NCPU];
+extern volatile state_t  kernel_lock_state[OS_NCPU];
 extern smp_klock_t       _smp_klock;
 extern smp_tlock_t       _smp_tlock;
 extern volatile unsigned _port_ctx_pending[OS_NCPU];
 ```
+
+`kernel_lock_state[]` (2026-10-23) is declared for every port but defined and
+used only by a port that also defines `OS_HAS_PORT_KERNEL_LOCK` (section 3.3).
 
 This file contains no machine instructions, and the two AArch ports had it
 byte-identical but for one missing `volatile` (cortexm keeps its own, larger
@@ -137,10 +141,22 @@ Per ISA. The kernel calls, and the port supplies:
 | `port_cpu_id_inline()` | `mrc p15, 0, Rd, c0, c0, 5` | `mrs Xd, mpidr_el1` |
 | `interrupts::critical_section::enter/exit` | `cpsid i` / `cpsie i` | `msr daifset/daifclr, #2` |
 | `interrupts::uncritical_section::enter/exit` | as above, inverted | as above, inverted |
-| `scheduler::lock/unlock/locked` | recursive kernel lock | recursive kernel lock |
+| `scheduler::lock/unlock/locked` | recursive kernel lock | per-core `lock_state[cpu]` only (the classic scheduler lock) |
+| `scheduler::kernel_lock/kernel_locked` | — (the kernel falls back to the scheduler lock) | `interrupts::critical_section` + per-core `kernel_lock_state[cpu]` |
 | `_smp_klock_raw_acquire/release` | `ldrex`/`strex` | `ldaxr`/`stlxr` |
 | `clock_highres::has_hardware_counter()` | `true` | `true` |
 | `clock_highres::hardware_counter()` | `timer_arm::get_count()` (`CNTPCT`) | `timer_arm::get_count()` (`CNTPCT_EL0`) |
+
+**The kernel's own critical section (2026-10-23).** The kernel protects its
+data with `scheduler::kernel_critical_section` (and `kernel_uncritical_section`,
+`kernel_lockable`). A port that defines `OS_HAS_PORT_KERNEL_LOCK` in
+`os-c-decls.h` supplies `port::scheduler::kernel_lock()` and
+`kernel_locked(state)`; its `locked()` query must return true under either lock.
+The aarch64 port does, which leaves its `scheduler::lock()` the classic per-core
+lock (IRQs on, no spinlock). Without the macro the kernel uses the scheduler
+lock, as AArch32 does. Either way, a `reschedule()` asked for under a lock must
+not be lost: the aarch64 port keeps it in `resched_pending[cpu]` and switches
+when the last lock is released.
 
 ### 3.4 Functions with C linkage
 

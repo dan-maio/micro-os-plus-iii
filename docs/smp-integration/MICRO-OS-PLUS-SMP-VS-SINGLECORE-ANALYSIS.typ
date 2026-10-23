@@ -359,6 +359,26 @@ Disables all maskable hardware interrupts on the calling core and takes the glob
 *Why Duration Must Be Minimized*:  
 Because hardware interrupts are masked, any ISR raised while in `interrupts::critical_section` is delayed until exit. Prolonged interrupt critical sections cause *dropped hardware packets, UART buffer overruns, and motor control jitter*.
 
+=== 3. The Kernel's Own Critical Section (`scheduler::kernel_critical_section`)
+*Why a third section* (2026-10-23):  
+The kernel protects its own data — the heap (`malloc`, `new`, `allocator_typed`), `atexit`, and the internals of mutexes, condition variables and threads — from code that runs on every core and from ISRs. It used to take `scheduler::critical_section` for that. On an SMP port that made the application's scheduler lock heavy: to protect the kernel it had to mask IRQs and take `_smp_klock`, so it behaved like `interrupts::critical_section`, not like the classic thread-only lock above.
+
+The kernel now has its own section, and the application's scheduler lock is free to be the classic one:
+
+#align(center)[
+#table(
+  columns: (1fr, 1.6fr, 1.6fr),
+  [], [Application: `scheduler::critical_section`], [Kernel: `scheduler::kernel_critical_section`],
+  [*Used by*], [application code], [the kernel only (29 sites, plus `kernel_uncritical_section` at 4 and `kernel_lockable` in `allocator_typed`)],
+  [*Ports with `OS_HAS_PORT_KERNEL_LOCK`* (aarch64)], [per-core `lock_state[cpu]` only: this core's thread switches stop; IRQs stay enabled, no spinlock, the other cores are not affected], [`port::scheduler::kernel_lock()` / `kernel_locked(state)`: `interrupts::critical_section` (IRQs masked, `_smp_klock`) plus a per-core `kernel_lock_state[cpu]`, so that `scheduler::locked()` is true inside],
+  [*Other ports* (cortexm, aarch32, posix-arch)], [unchanged], [the scheduler lock, as before (fallback in `os-sched.h`)],
+)
+]
+
+`scheduler::locked()` reports either lock, so the ISR and `reschedule()` still defer a switch inside a kernel section. The C API (`os_sched_lock()` …) and `scheduler::lock()/unlock()` are unchanged.
+
+*Deferred switches.* A `reschedule()` asked for while this core is locked — a thread made ready, a priority lowered — is no longer dropped: it sets the per-core `resched_pending[cpu]`, and the switch is done when the last of the two locks is released (the kernel section's unlock or the scheduler unlock). The tick's time-slice request (`_port_ctx_pending`) keeps its own rules: it is honoured at the scheduler unlock and by the next ISR, not at the end of every kernel section — doing that made equal-priority threads switch in the middle of a heap allocation.
+
 == Fine-Grained Locking: The Timer Leaf Lock (`_smp_tlock`)
 
 Holding the global `_smp_klock` during high-frequency hardware timer updates creates severe bus contention. The `smp` branch implements a fine-grained *Timer Leaf Lock* (`_smp_tlock`):
@@ -572,6 +592,7 @@ The destructor `double_list::~double_list()` asserts `empty()`. In multi-core te
 
 - *Execution State*: 64-bit general-purpose registers `x0-x30`, `SP_EL0`, `SPSR_EL1`.
 - *Interrupt Masking*: `msr daifset, #2` (disable IRQ) / `msr daifclr, #2` (enable IRQ).
+- *Two Locks* (2026-10-23): the first port with `OS_HAS_PORT_KERNEL_LOCK`: the application's scheduler lock is the classic per-core one, and the kernel's own section is the interrupt section plus a per-core flag. A switch asked for under either lock is kept in `resched_pending[cpu]` and done at the release.
 - *Semihosting & Fault Handling*: `HLT 0xF000` traps. Implements an independent UART-only `FaultConsole` to avoid fatal recursive semihosting traps when a JTAG debugger is disconnected during a panic.
 
 == RISC-V Port (`micro-os-plus-iii-riscv`)
@@ -597,6 +618,8 @@ The destructor `double_list::~double_list()` asserts `empty()`. In multi-core te
   [`os-thread.cpp`], [`join()` returned before target was off stack.], [Stack corruption on multi-core.], [Added spin-wait checking `current_thread_[c] != this` across all cores.],
   [`os-memory.h`], [`align_size()` overflowed `SIZE_MAX`.], [Heap corruption on large requests.], [Added overflow saturation checks.],
   [`file-descriptors-manager.cpp`], [Unprotected static file descriptor array.], [Duplicate file descriptors and leaked handles.], [Wrapped operations in `interrupts::critical_section`.],
+  [`os-thread.cpp`], [`priority_inherited()` skipped the reschedule when the *effective* priority dropped from a mutex boost (2026-10-23).], [A higher thread made ready meanwhile waited until the owner blocked or a tick (50 producer waits for 400 items instead of 392).], [Yield when the effective priority drops.],
+  [aarch64 `os-core.cpp`], [`reschedule()` under a lock was dropped until the next tick (2026-10-23).], [A thread made ready inside a lock waited up to 1 ms.], [Kept in `resched_pending[cpu]`, done when the last lock is released; the tick's own request keeps its rules.],
 )
 ]
 

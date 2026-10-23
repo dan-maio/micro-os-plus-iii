@@ -1,6 +1,7 @@
 # Migration status
 
-**Updated:** 2026-10-06 · **Phase:** commit-only migration executed from scratch
+**Updated:** 2026-10-23 (the kernel's own critical section, two scheduling
+fixes, `smp` pushed) · **Phase:** commit-only migration executed from scratch
 (343 single-subject commits, local `smp` branches, nothing pushed) and verified
 with the full xPack test run. Five repositories: the kernel (`micro-os-plus-iii`)
 and four architecture ports (`cortexm`, `aarch32`, `aarch64`, `posix-arch`). The
@@ -11,6 +12,62 @@ This file is the cold-start entry point. Read it, then
 `docs/specs/2026-09-20-micro-os-plus-iii-smp-unification-design.md` for the
 full design and the measurements behind it. The sections after *Today* are
 the migration log, dated where they were measured.
+
+---
+
+## Today (2026-10-23)
+
+Made in the golden workspace, carried here on the branch
+`new-critical-sections`, fast-forwarded into `smp` in all five repositories and
+pushed to `origin`.
+
+- **The kernel's own critical section.** The kernel protects its data (the
+  heap, `new`, `atexit`, the internals of mutexes, condition variables and
+  threads) with `scheduler::kernel_critical_section`,
+  `kernel_uncritical_section` and `kernel_lockable` (29 + 4 sites and
+  `allocator_typed`). A port that defines `OS_HAS_PORT_KERNEL_LOCK` supplies
+  `port::scheduler::kernel_lock()` / `kernel_locked()`: the interrupt critical
+  section plus a per-core `kernel_lock_state[]`. Only aarch64 does; there the
+  application's `scheduler::critical_section` is now the classic per-core lock
+  (IRQs on, no spinlock, the other cores unaffected). cortexm, aarch32 and
+  posix-arch fall back to the scheduler lock, as before. See
+  `smp-integration/MICRO-OS-PLUS-SMP-VS-SINGLECORE-ANALYSIS.md` §2.4.3 and
+  `smp-integration/smp-construction.md` §3.3.
+- **`thread::priority_inherited()` reschedules when the effective priority
+  drops.** It skipped the reschedule whenever the new inherited priority was
+  below the assigned one, also right after a mutex boost was undone; a higher
+  thread made ready meanwhile then waited for the owner to block or for a tick.
+  Found by a condition-variable producer/consumer: 50 producer waits for 400
+  items instead of 392. All ports.
+- **A switch asked for under a lock is kept** (aarch64). `reschedule()` under
+  the scheduler lock or a kernel section used to return and lose the request
+  until the next tick; it now sets `resched_pending[cpu]`, and the switch is
+  done when the last lock is released. The tick's time-slice request
+  (`_port_ctx_pending`) keeps its old rules: honouring it at the end of every
+  kernel section broke equal-priority round-robin in the middle of a heap
+  allocation.
+- **Tests** (debug builds; boards one test at a time, 180 s cap):
+  - aarch64 rpi4b: QEMU 19/19.
+  - aarch32 and aarch64 rpi-zero-2w, through a CMSIS-DAP JTAG probe: board
+    15/16 each, `smp-mat-test` hitting the cap (900 s in the board's list);
+    `usb_test` driven from the host with `host_xfer.py` (PUT/GET 0–4096 B,
+    LIST). QEMU 14/16 and 15/16, `usb_test` skipped (no device mode).
+    aarch32's `cmsis-os-validator` failed once under load and passed 3/3 alone.
+  - Luckfox Lyra: `smp_test6` and `smp_test7` pass; `usb_test_host --big`
+    echoes 2 KB–153 KB identically on `smp_test6`. On `smp_test7` the file is
+    stored on the card, but its echo does not reach the host.
+  - native: ctest 17/17.
+- **Also on `smp` now**, not yet built or tested: Lyra and rpi4b
+  `smp_test1`/`smp_test4` stop their threads before the verdict; weactf411
+  traces and prints to the UART instead of semihosting and accepts the WCH-Link
+  probe.
+- **Build directories.** Ten of them (lyra, rpi4b, pico2, weactf411,
+  qemu-cortex-m4f; debug and release) had been configured from an old copy of
+  this workspace, so their builds compiled that copy. Lyra was rebuilt from the
+  right tree; the other eight still need it. Check `build.ninja` for a foreign
+  path before trusting a result.
+- **Messages to read with care.** `usb_test` prints `USB power domain: FAILED
+  (… state=0x00000003 …)` on both Zero 2 W ports, yet USB works.
 
 ---
 
@@ -715,6 +772,8 @@ of listing four, so it no longer assumes a four-core BCM2837.
   but on the POSIX host it is two `pthread_sigmask()` system calls, so
   `smp_test2` faulted in 21 runs out of 25 at four CPUs. The fix captures the
   owner under the lock and re-checks ownership inside the uncritical section.
+  (Since 2026-10-23 the kernel opens `scheduler::kernel_uncritical_section`
+  there; see *Today (2026-10-23)*.)
   **This is what a synthetic SMP host is for**, and it is the whole
   justification for step 5.
 

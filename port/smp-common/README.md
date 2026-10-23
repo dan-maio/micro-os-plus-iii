@@ -14,6 +14,13 @@ byte-identical copies, and the Cortex-A7 port's copy differed by one word --
 it was missing `volatile` on `lock_state[]`, which is read and written by
 several cores. The copy here is the `volatile` one.
 
+It also declares `kernel_lock_state[OS_NCPU]` (2026-10-23), the per-core flag
+of the kernel's own critical section (`scheduler::kernel_critical_section`). A
+port defines and uses it only together with `OS_HAS_PORT_KERNEL_LOCK` in its
+`os-c-decls.h` (the aarch64 port); a port without that macro leaves it
+undefined, and the kernel's section falls back to the scheduler lock (the
+AArch32 port).
+
 ## Using it
 
 An architecture project that wants these declarations puts this directory on

@@ -68,6 +68,16 @@ pushed to `origin`.
   path before trusting a result.
 - **Messages to read with care.** `usb_test` prints `USB power domain: FAILED
   (… state=0x00000003 …)` on both Zero 2 W ports, yet USB works.
+- **`resume_all()` wakes only the threads waiting when it is called** (all
+  ports, added later the same day). It was `while (resume_one ())`; a woken
+  thread whose condition is still false links itself again into the same list
+  (two waiters for one event flag with `mode::clear`, the first taking it),
+  and when the waiters run above the caller it was woken again and again:
+  `event_flags::raise()` never returned. The waiters of the moment are now
+  moved to a local list under the interrupt lock and woken from there. Also
+  behind `condition_variable::broadcast()` and the reset paths of semaphores,
+  mutexes, memory pools and message queues. Found by the golden workspace's
+  tutorial (lesson 10, flags).
 
 ---
 

@@ -302,7 +302,32 @@ namespace os
       void
       waiting_threads_list::resume_all (void)
       {
-        while (resume_one ())
+        // Wake the threads waiting now, and only those. A woken thread whose
+        // condition is still false (two waiters for one event flag, the
+        // first one clearing it) links itself again into this list; waking
+        // it again here would never end. So the current waiters are moved
+        // to a local list first, and woken from there. A waiter that leaves
+        // meanwhile (timeout, interrupt) unlinks itself from that list.
+        waiting_threads_list now;
+        {
+          // ----- Enter critical section -------------------------------------
+          interrupts::critical_section ics;
+
+          if (empty ())
+            {
+              return;
+            }
+          auto* first = head_.next ();
+          auto* last = head_.prev ();
+          now.head_.next (first);
+          now.head_.prev (last);
+          first->prev (&now.head_);
+          last->next (&now.head_);
+          clear ();
+          // ----- Exit critical section --------------------------------------
+        }
+
+        while (now.resume_one ())
           ;
       }
 

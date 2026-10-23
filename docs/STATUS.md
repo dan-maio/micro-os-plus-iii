@@ -67,8 +67,29 @@ pushed to `origin`.
     alone does not). `smp-test-usb-hid` (cafe:4012) ends the same way, through
     an HID OUTPUT report; opening it from the host needs a udev rule for
     vendor `cafe` (or the test's own `host/kbd_forward` under sudo).
+  - aarch32 **Luckfox Lyra board** (WCH-Link, SWD), all 21, with
+    `resume_all()` fixed. PASS 14: `clock-test`, `sd_test`,
+    `mutex-stress-test`, `smp-pro-cons-test`, `smp_test0`–`3`, `smp_test5`,
+    `smp_test_int2`, and the four USB tests — `smp_test6` (`usb_test_host`
+    write, loopback, 150 KB echoed identically), `smp_test_int3` and
+    `smp_test_int4` (key records `'K'`/value/code/seq sent to 2207:001B on
+    OTG1, five presses each), `smp_test7` (file over USB, the `y/n` answered on
+    the UART). TIMEOUT at the 180 s cap 6: `smp-mat-sdcard-test`,
+    `smp-mat-test`, `smp-num-test`, `smp-pipeline-test` (600–900 s in the
+    board's list), `smp_test4` (6.5 of its 10 s of OS time) and
+    `smp_test_int5` (20 s of OS time needed): on this probe every console line
+    is a semihosting call that stops the cores, so the OS clock runs about 7×
+    slower than the wall clock (`smp_test0`'s 10 heartbeats take ~70 s).
+    Open: `smp_test_int` lost the debug link in both runs (`Could not read
+    DSCR register`) and halted on an exception at the vector table
+    (`pc 0x00200008`). `smp_test7` stopped after the transfer header
+    (`[USB] Receiving 0x00000800 bytes`) in two of four runs, both driven from
+    a script 3 s after enumeration; the runs that passed (one by hand) got
+    past it. `mutex-stress-test`'s image has no `.elf` suffix
+    (`mutex-stress-test-hwd`).
 - **Also on `smp` now:** Lyra and rpi4b `smp_test1`/`smp_test4` stop their
-  threads before the verdict (rpi4b board tested, Lyra not yet); weactf411
+  threads before the verdict (both boards tested: `smp_test1` passes;
+  `smp_test4` passes on rpi4b, and on the Lyra runs out of the cap); weactf411
   traces and prints to the UART instead of semihosting and accepts the WCH-Link
   probe (builds; not yet run on the board).
 - **Build directories.** Ten of them (lyra, rpi4b, pico2, weactf411,

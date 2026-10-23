@@ -603,7 +603,7 @@ namespace os
         // forever (smp-pro-cons-test stalled this way on 4 cores, 1 run in
         // about 20). Other CPUs are not held back: they can still take the
         // mutex, and signal(), as soon as it is released.
-        scheduler::critical_section scs;
+        scheduler::kernel_critical_section scs;
 
         {
           // ----- Enter critical section -------------------------------------
@@ -793,7 +793,7 @@ namespace os
       {
         // ----- Enter critical section ---------------------------------------
         // Link and unlock as one step for this CPU's scheduler; see wait().
-        scheduler::critical_section scs;
+        scheduler::kernel_critical_section scs;
 
         {
           // ----- Enter critical section -------------------------------------

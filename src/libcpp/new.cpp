@@ -142,7 +142,7 @@ void* __attribute__ ((weak)) operator new (std::size_t bytes)
     }
 
   // ----- Begin of critical section ------------------------------------------
-  rtos::scheduler::critical_section scs;
+  rtos::scheduler::kernel_critical_section scs;
 
   while (true)
     {
@@ -207,7 +207,7 @@ void* __attribute__ ((weak)) operator new (std::size_t bytes,
     }
 
   // ----- Begin of critical section ------------------------------------------
-  rtos::scheduler::critical_section scs;
+  rtos::scheduler::kernel_critical_section scs;
 
   while (true)
     {
@@ -313,7 +313,7 @@ operator new (std::size_t bytes, std::align_val_t alignment)
     }
 
   // ----- Begin of critical section ------------------------------------------
-  rtos::scheduler::critical_section scs;
+  rtos::scheduler::kernel_critical_section scs;
 
   while (true)
     {
@@ -359,7 +359,7 @@ operator new (std::size_t bytes, std::align_val_t alignment,
     }
 
   // ----- Begin of critical section ------------------------------------------
-  rtos::scheduler::critical_section scs;
+  rtos::scheduler::kernel_critical_section scs;
 
   while (true)
     {
@@ -452,7 +452,7 @@ void __attribute__ ((weak)) operator delete (void* ptr) noexcept
   if (ptr)
     {
       // ----- Begin of critical section --------------------------------------
-      rtos::scheduler::critical_section scs;
+      rtos::scheduler::kernel_critical_section scs;
 
       // The unknown size is passed as 0.
       estd::pmr::get_default_resource ()->deallocate (ptr, 0);
@@ -507,7 +507,7 @@ void __attribute__ ((weak)) operator delete (void* ptr,
   if (ptr)
     {
       // ----- Begin of critical section --------------------------------------
-      rtos::scheduler::critical_section scs;
+      rtos::scheduler::kernel_critical_section scs;
 
       estd::pmr::get_default_resource ()->deallocate (ptr, bytes);
       // ----- End of critical section ----------------------------------------
@@ -548,7 +548,7 @@ void __attribute__ ((weak)) operator delete (void* ptr, const std::nothrow_t
   if (ptr)
     {
       // ----- Begin of critical section --------------------------------------
-      rtos::scheduler::critical_section scs;
+      rtos::scheduler::kernel_critical_section scs;
 
       estd::pmr::get_default_resource ()->deallocate (ptr, 0);
       // ----- End of critical section ----------------------------------------
@@ -668,7 +668,7 @@ operator delete (void* ptr, std::align_val_t alignment) noexcept
   if (ptr)
     {
       // ----- Begin of critical section --------------------------------------
-      rtos::scheduler::critical_section scs;
+      rtos::scheduler::kernel_critical_section scs;
 
       estd::pmr::get_default_resource ()->deallocate (
           ptr, 0, static_cast<std::size_t> (alignment));
@@ -696,7 +696,7 @@ operator delete (void* ptr, std::size_t bytes,
   if (ptr)
     {
       // ----- Begin of critical section --------------------------------------
-      rtos::scheduler::critical_section scs;
+      rtos::scheduler::kernel_critical_section scs;
 
       estd::pmr::get_default_resource ()->deallocate (
           ptr, bytes, static_cast<std::size_t> (alignment));

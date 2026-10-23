@@ -88,7 +88,7 @@ malloc (size_t bytes)
   void* mem;
   {
     // ----- Begin of critical section --------------------------------------
-    rtos::scheduler::critical_section scs;
+    rtos::scheduler::kernel_critical_section scs;
 
     errno = 0;
     mem = estd::pmr::get_default_resource ()->allocate (bytes);
@@ -174,7 +174,7 @@ calloc (size_t nelem, size_t elbytes)
   void* mem;
   {
     // ----- Begin of critical section ----------------------------------------
-    rtos::scheduler::critical_section scs;
+    rtos::scheduler::kernel_critical_section scs;
 
     mem = estd::pmr::get_default_resource ()->allocate (nelem * elbytes);
 
@@ -270,7 +270,7 @@ realloc (void* ptr, size_t bytes)
 
   {
     // ----- Begin of critical section ----------------------------------------
-    rtos::scheduler::critical_section scs;
+    rtos::scheduler::kernel_critical_section scs;
 
     errno = 0;
     if (ptr == nullptr)
@@ -374,7 +374,7 @@ free (void* ptr)
     }
 
   // ----- Begin of critical section ------------------------------------------
-  rtos::scheduler::critical_section scs;
+  rtos::scheduler::kernel_critical_section scs;
 
 #if defined(OS_TRACE_LIBC_MALLOC)
   trace::printf ("::%s(%p)\n", __func__, ptr);

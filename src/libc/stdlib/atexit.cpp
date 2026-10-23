@@ -127,7 +127,7 @@ __register_exitproc (int type, exit_func_t fn,
 #endif
 
   // Use scheduler lock to synchronise access to the array.
-  os::rtos::scheduler::critical_section scs;
+  os::rtos::scheduler::kernel_critical_section scs;
 
   __atexit_functions[__atexit_count++] = fn;
   return 0;

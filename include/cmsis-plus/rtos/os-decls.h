@@ -896,6 +896,16 @@ namespace os
         bool
         locked (void);
 
+        // The kernel's own critical section, on ports that keep it apart
+        // from the application's scheduler lock (OS_HAS_PORT_KERNEL_LOCK):
+        // it protects the kernel's shared data (the heap, the objects'
+        // internals) from the other threads and, on SMP, the other cores.
+        port::scheduler::state_t
+        kernel_lock (void);
+
+        port::scheduler::state_t
+        kernel_locked (port::scheduler::state_t state);
+
         void
         reschedule (void);
 

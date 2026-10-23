@@ -559,7 +559,7 @@ namespace os
       {
         // Prevent the new thread to execute before all members are set.
         // ----- Enter critical section ---------------------------------------
-        scheduler::critical_section scs;
+        scheduler::kernel_critical_section scs;
 
         // Get attributes from user structure.
         prio_assigned_ = attr.th_priority;
@@ -929,9 +929,15 @@ namespace os
           return result::ok;
         }
 
+      const priority_t prev_inherited = prio_inherited_;
       prio_inherited_ = prio;
 
-      if (prio_inherited_ < prio_assigned_)
+      // The effective priority is the higher of the two; when it does not
+      // change, there is nothing to do. When it drops (a mutex unlocked,
+      // its boost undone), a thread above the new one may be ready -- the
+      // one the boost was for: the yield below lets it run now, not at the
+      // next tick.
+      if (prio_inherited_ < prio_assigned_ && prev_inherited <= prio_assigned_)
         {
           // Optimise, no need to reschedule.
           instrumentation::thread::priority_inherited_set_retval (this,
@@ -1276,7 +1282,7 @@ namespace os
 
       {
         // ----- Enter critical section ---------------------------------------
-        scheduler::critical_section scs;
+        scheduler::kernel_critical_section scs;
 
         {
           // ----- Enter critical section -------------------------------------
@@ -1396,7 +1402,7 @@ namespace os
 
       {
         // ----- Enter critical section ---------------------------------------
-        scheduler::critical_section scs;
+        scheduler::kernel_critical_section scs;
 
         mutexes_list& mx_list = reinterpret_cast<mutexes_list&> (mutexes_);
         while (not mx_list.empty ())
@@ -1464,7 +1470,7 @@ namespace os
 
       {
         // ----- Enter critical section ---------------------------------------
-        scheduler::critical_section scs;
+        scheduler::kernel_critical_section scs;
 
 #if defined(OS_USE_SMP_SCHEDULER)
         // On SMP the thread may be running on another CPU -- typically
@@ -1522,7 +1528,7 @@ namespace os
 
             {
               // ----- Enter uncritical section -------------------------------
-              scheduler::uncritical_section sucs;
+              scheduler::kernel_uncritical_section sucs;
 
               this_thread::yield ();
               // ----- Exit uncritical section --------------------------------
@@ -1576,7 +1582,7 @@ namespace os
             // Wait with lock released until it is completely destroyed.
             while (state_ != state::destroyed)
               {
-                scheduler::uncritical_section sucs;
+                scheduler::kernel_uncritical_section sucs;
                 this_thread::yield ();
               }
             instrumentation::thread::kill_retval (this, result::ok);

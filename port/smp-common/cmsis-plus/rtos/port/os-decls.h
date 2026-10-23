@@ -75,6 +75,10 @@ namespace os
         }
 
         extern volatile state_t lock_state[OS_NCPU];
+        // The kernel's own critical section, per core (ports with
+        // OS_HAS_PORT_KERNEL_LOCK): apart from lock_state, which is the
+        // application's scheduler lock.
+        extern volatile state_t kernel_lock_state[OS_NCPU];
 
         struct smp_klock_t
         {

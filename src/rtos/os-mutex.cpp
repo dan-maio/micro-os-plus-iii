@@ -683,7 +683,7 @@ namespace os
               if (boosted_prio_ > owner_->priority_inherited ())
                 {
                   // ----- Enter uncritical section ---------------------------
-                  scheduler::uncritical_section sucs;
+                  scheduler::kernel_uncritical_section sucs;
 
                   owner_->priority_inherited (boosted_prio_);
                   // ----- Exit uncritical section ----------------------------
@@ -818,7 +818,7 @@ namespace os
                 {
                   {
                     // ----- Enter uncritical section -------------------------
-                    scheduler::uncritical_section sucs;
+                    scheduler::kernel_uncritical_section sucs;
 
                     // Still the owner? If it released the mutex while this
                     // section was open there is nothing to inherit, and
@@ -864,7 +864,7 @@ namespace os
 
       {
         // ----- Enter critical section ---------------------------------------
-        scheduler::critical_section scs;
+        scheduler::kernel_critical_section scs;
 
         // Is the rightful owner?
         if (owner_ == th)
@@ -1090,7 +1090,7 @@ namespace os
       result_t res;
       {
         // ----- Enter critical section ---------------------------------------
-        scheduler::critical_section scs;
+        scheduler::kernel_critical_section scs;
 
         res = internal_try_lock_ (&crt_thread);
         if (res != EWOULDBLOCK)
@@ -1110,7 +1110,7 @@ namespace os
         {
           {
             // ----- Enter critical section -----------------------------------
-            scheduler::critical_section scs;
+            scheduler::kernel_critical_section scs;
 
             res = internal_try_lock_ (&crt_thread);
             if (res != EWOULDBLOCK)
@@ -1221,7 +1221,7 @@ namespace os
 
       {
         // ----- Enter critical section ---------------------------------------
-        scheduler::critical_section scs;
+        scheduler::kernel_critical_section scs;
 
         result_t res = internal_try_lock_ (&crt_thread);
 
@@ -1322,7 +1322,7 @@ namespace os
       // Trade size for speed.
       {
         // ----- Enter critical section ---------------------------------------
-        scheduler::critical_section scs;
+        scheduler::kernel_critical_section scs;
 
         res = internal_try_lock_ (&crt_thread);
         if (res != EWOULDBLOCK)
@@ -1349,7 +1349,7 @@ namespace os
         {
           {
             // ----- Enter critical section -----------------------------------
-            scheduler::critical_section scs;
+            scheduler::kernel_critical_section scs;
 
             res = internal_try_lock_ (&crt_thread);
             if (res != EWOULDBLOCK)
@@ -1679,7 +1679,7 @@ namespace os
 
       {
         // ----- Enter critical section ---------------------------------------
-        scheduler::critical_section scs;
+        scheduler::kernel_critical_section scs;
 
         internal_init_ ();
 

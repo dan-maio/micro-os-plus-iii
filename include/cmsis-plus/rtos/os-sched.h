@@ -968,6 +968,165 @@ namespace os
         scheduler::locked (state_);
       }
 
+      // ======================================================================
+
+        /**
+         * @brief The kernel's own critical section.
+         *
+         * @details
+         * What the kernel's code takes to keep its shared data -- the heap,
+         * the objects' internals -- consistent. On a port that defines
+         * `OS_HAS_PORT_KERNEL_LOCK` it is the port's kernel lock (on the SMP
+         * ports: interrupts masked on the core and the kernel spinlock
+         * held), apart from the application's `scheduler::critical_section`,
+         * which then only stops this core's thread switches. Elsewhere it is
+         * the scheduler lock, as before.
+         *
+         * @warning Cannot be invoked from Interrupt Service Routines.
+         */
+        class kernel_critical_section
+        {
+        public:
+          kernel_critical_section ();
+          ~kernel_critical_section ();
+
+          kernel_critical_section (const kernel_critical_section&) = delete;
+          kernel_critical_section (kernel_critical_section&&) = delete;
+          kernel_critical_section&
+          operator= (const kernel_critical_section&)
+              = delete;
+          kernel_critical_section&
+          operator= (kernel_critical_section&&)
+              = delete;
+
+        private:
+          const state_t state_;
+        };
+
+        /**
+         * @brief The kernel's critical section released until the end of
+         * this scope (where kernel code inside one must let a switch
+         * happen: a yield, a priority change), then restored.
+         */
+        class kernel_uncritical_section
+        {
+        public:
+          kernel_uncritical_section ();
+          ~kernel_uncritical_section ();
+
+          kernel_uncritical_section (const kernel_uncritical_section&) = delete;
+          kernel_uncritical_section (kernel_uncritical_section&&) = delete;
+          kernel_uncritical_section&
+          operator= (const kernel_uncritical_section&)
+              = delete;
+          kernel_uncritical_section&
+          operator= (kernel_uncritical_section&&)
+              = delete;
+
+        private:
+          const state_t state_;
+        };
+
+        /**
+         * @brief The kernel's own critical section as a lockable (the
+         * allocators' lock).
+         */
+        class kernel_lockable
+        {
+        public:
+          void
+          lock (void);
+
+          bool
+          try_lock (void);
+
+          void
+          unlock (void);
+
+        private:
+          state_t state_ = 0;
+        };
+
+#if defined(OS_HAS_PORT_KERNEL_LOCK)
+        inline kernel_critical_section::kernel_critical_section ()
+            : state_ (port::scheduler::kernel_lock ())
+        {
+        }
+
+        inline kernel_critical_section::~kernel_critical_section ()
+        {
+          port::scheduler::kernel_locked (state_);
+        }
+
+        inline kernel_uncritical_section::kernel_uncritical_section ()
+            : state_ (port::scheduler::kernel_locked (port::scheduler::state::unlocked))
+        {
+        }
+
+        inline kernel_uncritical_section::~kernel_uncritical_section ()
+        {
+          port::scheduler::kernel_locked (state_);
+        }
+
+        inline void
+        kernel_lockable::lock (void)
+        {
+          state_ = port::scheduler::kernel_lock ();
+        }
+
+        inline bool
+        kernel_lockable::try_lock (void)
+        {
+          state_ = port::scheduler::kernel_lock ();
+          return true;
+        }
+
+        inline void
+        kernel_lockable::unlock (void)
+        {
+          port::scheduler::kernel_locked (state_);
+        }
+#else
+        inline kernel_critical_section::kernel_critical_section ()
+            : state_ (scheduler::lock ())
+        {
+        }
+
+        inline kernel_critical_section::~kernel_critical_section ()
+        {
+          scheduler::locked (state_);
+        }
+
+        inline kernel_uncritical_section::kernel_uncritical_section ()
+            : state_ (scheduler::unlock ())
+        {
+        }
+
+        inline kernel_uncritical_section::~kernel_uncritical_section ()
+        {
+          scheduler::locked (state_);
+        }
+
+        inline void
+        kernel_lockable::lock (void)
+        {
+          state_ = scheduler::lock ();
+        }
+
+        inline bool
+        kernel_lockable::try_lock (void)
+        {
+          state_ = scheduler::lock ();
+          return true;
+        }
+
+        inline void
+        kernel_lockable::unlock (void)
+        {
+          scheduler::locked (state_);
+        }
+#endif
+
       namespace statistics
       {
 #if defined(OS_INCLUDE_RTOS_STATISTICS_THREAD_CONTEXT_SWITCHES)

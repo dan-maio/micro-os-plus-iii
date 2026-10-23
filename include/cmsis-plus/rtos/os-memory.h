@@ -1098,12 +1098,12 @@ namespace os
        * @tparam T type of object.
        *
        * @details
-       * The allocator uses scheduler critical sections to be thread safe,
+       * The allocator uses the kernel's critical sections to be thread safe,
        * and the default memory resource associated with the given type.
        */
       template <typename T, typename U = T>
       using allocator_typed = allocator_stateless_polymorphic_synchronized<
-          T, scheduler::lockable, get_resource_typed<U>>;
+          T, scheduler::kernel_lockable, get_resource_typed<U>>;
 
       /**
        * @brief Type of a RTOS unique pointer to objects of type T.
@@ -1528,7 +1528,7 @@ namespace os
       inline typename allocator_stateless_default_resource<T>::value_type*
       allocator_stateless_default_resource<T>::allocate (std::size_t elements)
       {
-        scheduler::critical_section scs;
+        scheduler::kernel_critical_section scs;
 
         return static_cast<value_type*> (get_default_resource ()->allocate (
             elements * sizeof (value_type)));
@@ -1539,7 +1539,7 @@ namespace os
       allocator_stateless_default_resource<T>::deallocate (
           value_type* addr, std::size_t elements) noexcept
       {
-        scheduler::critical_section scs;
+        scheduler::kernel_critical_section scs;
 
         get_default_resource ()->deallocate (addr,
                                              elements * sizeof (value_type));

@@ -57,15 +57,27 @@ pushed to `origin`.
     echoes 2 KB–153 KB identically on `smp_test6`. On `smp_test7` the file is
     stored on the card, but its echo does not reach the host.
   - native: ctest 17/17.
-- **Also on `smp` now**, not yet built or tested: Lyra and rpi4b
-  `smp_test1`/`smp_test4` stop their threads before the verdict; weactf411
+  - With `resume_all()` fixed (below): aarch64 rpi4b **board** 19/19 through
+    the CMSIS-DAP JTAG probe, `smp_test1`/`smp_test4` included; native ctest
+    17/17; qemu-cortex-m4f 3/3.
+  - cortexm **pico2 board** (Raspberry Pi Debug Probe, CMSIS-DAP SWD), all 21:
+    the 19 non-USB tests pass, and both USB tests. `smp-test-usb-cdc-acm`
+    (cafe:4013) is driven from the host on its own `/dev/ttyACM*`: a line
+    sent is echoed back, and Escape followed by Return ends the run (Escape
+    alone does not). `smp-test-usb-hid` (cafe:4012) ends the same way, through
+    an HID OUTPUT report; opening it from the host needs a udev rule for
+    vendor `cafe` (or the test's own `host/kbd_forward` under sudo).
+- **Also on `smp` now:** Lyra and rpi4b `smp_test1`/`smp_test4` stop their
+  threads before the verdict (rpi4b board tested, Lyra not yet); weactf411
   traces and prints to the UART instead of semihosting and accepts the WCH-Link
-  probe.
+  probe (builds; not yet run on the board).
 - **Build directories.** Ten of them (lyra, rpi4b, pico2, weactf411,
   qemu-cortex-m4f; debug and release) had been configured from an old copy of
-  this workspace, so their builds compiled that copy. Lyra was rebuilt from the
-  right tree; the other eight still need it. Check `build.ninja` for a foreign
-  path before trusting a result.
+  this workspace (`…-pr-github_agy`, since renamed), so their builds compiled
+  that copy. All ten are now generated from this tree; deleting a build
+  directory also deletes its per-configuration `xpacks/`, which
+  `xpm install --config <name>` brings back. All 20 debug configurations build.
+  Check `build.ninja` for a foreign path before trusting a result.
 - **Messages to read with care.** `usb_test` prints `USB power domain: FAILED
   (… state=0x00000003 …)` on both Zero 2 W ports, yet USB works.
 - **`resume_all()` wakes only the threads waiting when it is called** (all

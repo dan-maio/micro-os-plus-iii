@@ -111,6 +111,12 @@ pushed to `origin`.
   behind `condition_variable::broadcast()` and the reset paths of semaphores,
   mutexes, memory pools and message queues. Found by the golden workspace's
   tutorial (lesson 10, flags).
+- **`lifo (const char* name)` defined** (`include/cmsis-plus/memory/lifo.h`).
+  `lifo_inclusive<N> (name)` calls it, but it was declared and never defined
+  (`first_fit_top` has its own, inline), so any use of `lifo_inclusive<N>`
+  failed to link; nothing had used it before. Now inline, like
+  `first_fit_top`'s. Found by the golden tutorial (lesson 12, memory); all 20
+  debug configurations build.
 
 ---
 

@@ -362,6 +362,13 @@ namespace os
 
     // ========================================================================
 
+    // The arena is supplied later, by internal_construct_() (as
+    // lifo_inclusive<N> does); declared above but missing, so
+    // lifo_inclusive<N> could not be linked.
+    inline lifo::lifo (const char* name) : first_fit_top{ name }
+    {
+    }
+
     inline lifo::lifo (void* addr, std::size_t bytes)
         : first_fit_top{ nullptr, addr, bytes }
     {

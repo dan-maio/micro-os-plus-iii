@@ -995,21 +995,28 @@ namespace os
             // ----- Enter critical section -----------------------------------
             interrupts::critical_section ics;
 
-            if (internal_try_send_ (msg, nbytes, mprio))
+            sent = internal_try_send_ (msg, nbytes, mprio);
+            if (!sent)
               {
-                instrumentation::message_queue::send_retval (this, result::ok);
-                return result::ok;
+                // Add this thread to the message queue send waiting list.
+                scheduler::internal_link_node (
+                    send_list_, node,
+                    OS_INTEGER_INSTRUMENTATION_SUSPEND_CAUSE_MESSAGE_QUEUE_SEND);
+                // state::suspended set in above link().
               }
-
-            // Add this thread to the message queue send waiting list.
-            scheduler::internal_link_node (
-                send_list_, node,
-                OS_INTEGER_INSTRUMENTATION_SUSPEND_CAUSE_MESSAGE_QUEUE_SEND);
-            // state::suspended set in above link().
             // ----- Exit critical section ------------------------------------
           }
 
+          // Sent: internal_try_send_() may have resumed a waiting
+          // receiver, which runs at once, as after the first attempt above.
+          // Otherwise this thread waits here.
           port::scheduler::reschedule ();
+
+          if (sent)
+            {
+              instrumentation::message_queue::send_retval (this, result::ok);
+              return result::ok;
+            }
 
           // Remove the thread from the message queue send waiting list,
           // if not already removed by receive().
@@ -1242,23 +1249,30 @@ namespace os
             // ----- Enter critical section -----------------------------------
             interrupts::critical_section ics;
 
-            if (internal_try_send_ (msg, nbytes, mprio))
+            sent = internal_try_send_ (msg, nbytes, mprio);
+            if (!sent)
               {
-                instrumentation::message_queue::timed_send_retval (this,
-                                                                   result::ok);
-                return result::ok;
+                // Add this thread to the semaphore waiting list,
+                // and the clock timeout list.
+                scheduler::internal_link_node (
+                    send_list_, node, clock_list, timeout_node,
+                    OS_INTEGER_INSTRUMENTATION_SUSPEND_CAUSE_MESSAGE_QUEUE_SEND);
+                // state::suspended set in above link().
               }
-
-            // Add this thread to the semaphore waiting list,
-            // and the clock timeout list.
-            scheduler::internal_link_node (
-                send_list_, node, clock_list, timeout_node,
-                OS_INTEGER_INSTRUMENTATION_SUSPEND_CAUSE_MESSAGE_QUEUE_SEND);
-            // state::suspended set in above link().
             // ----- Exit critical section ------------------------------------
           }
 
+          // Sent: internal_try_send_() may have resumed a waiting
+          // receiver, which runs at once, as after the first attempt above.
+          // Otherwise this thread waits here.
           port::scheduler::reschedule ();
+
+          if (sent)
+            {
+              instrumentation::message_queue::timed_send_retval (this,
+                                                                 result::ok);
+              return result::ok;
+            }
 
           // Remove the thread from the message queue send waiting list,
           // if not already removed by receive() and from the clock timeout
@@ -1394,22 +1408,29 @@ namespace os
             // ----- Enter critical section -----------------------------------
             interrupts::critical_section ics;
 
-            if (internal_try_receive_ (msg, nbytes, mprio))
+            received = internal_try_receive_ (msg, nbytes, mprio);
+            if (!received)
               {
-                instrumentation::message_queue::receive_retval (this,
-                                                                result::ok);
-                return result::ok;
+                // Add this thread to the message queue receive waiting list.
+                scheduler::internal_link_node (
+                    receive_list_, node,
+                    OS_INTEGER_INSTRUMENTATION_SUSPEND_CAUSE_MESSAGE_QUEUE_RECEIVE);
+                // state::suspended set in above link().
               }
-
-            // Add this thread to the message queue receive waiting list.
-            scheduler::internal_link_node (
-                receive_list_, node,
-                OS_INTEGER_INSTRUMENTATION_SUSPEND_CAUSE_MESSAGE_QUEUE_RECEIVE);
-            // state::suspended set in above link().
             // ----- Exit critical section ------------------------------------
           }
 
+          // Received: internal_try_receive_() may have resumed a waiting
+          // sender, which runs at once, as after the first attempt above.
+          // Otherwise this thread waits here.
           port::scheduler::reschedule ();
+
+          if (received)
+            {
+              instrumentation::message_queue::receive_retval (this,
+                                                              result::ok);
+              return result::ok;
+            }
 
           // Remove the thread from the message queue receive waiting list,
           // if not already removed by send().
@@ -1654,23 +1675,30 @@ namespace os
             // ----- Enter critical section -----------------------------------
             interrupts::critical_section ics;
 
-            if (internal_try_receive_ (msg, nbytes, mprio))
+            received = internal_try_receive_ (msg, nbytes, mprio);
+            if (!received)
               {
-                instrumentation::message_queue::timed_receive_retval (
-                    this, result::ok);
-                return result::ok;
+                // Add this thread to the message queue receive waiting list,
+                // and the clock timeout list.
+                scheduler::internal_link_node (
+                    receive_list_, node, clock_list, timeout_node,
+                    OS_INTEGER_INSTRUMENTATION_SUSPEND_CAUSE_MESSAGE_QUEUE_RECEIVE);
+                // state::suspended set in above link().
               }
-
-            // Add this thread to the message queue receive waiting list,
-            // and the clock timeout list.
-            scheduler::internal_link_node (
-                receive_list_, node, clock_list, timeout_node,
-                OS_INTEGER_INSTRUMENTATION_SUSPEND_CAUSE_MESSAGE_QUEUE_RECEIVE);
-            // state::suspended set in above link().
             // ----- Exit critical section ------------------------------------
           }
 
+          // Received: internal_try_receive_() may have resumed a waiting
+          // sender, which runs at once, as after the first attempt above.
+          // Otherwise this thread waits here.
           port::scheduler::reschedule ();
+
+          if (received)
+            {
+              instrumentation::message_queue::timed_receive_retval (
+                  this, result::ok);
+              return result::ok;
+            }
 
           // Remove the thread from the semaphore waiting list,
           // if not already removed by send()and from the clock

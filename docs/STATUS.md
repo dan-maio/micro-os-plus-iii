@@ -131,6 +131,19 @@ pushed to `origin`.
   the ready list. Both found by the golden tutorial (lesson 15, thread
   control); rtos-apis passes on the rpi4b and pico2 boards and natively (SMP
   host).
+- **Message queue: reschedule after a send or a receive that waited**
+  (`os-mqueue.cpp`). The first attempt of `send`, `timed_send`, `receive` and
+  `timed_receive` reschedules after it succeeds, since it may have resumed a
+  thread waiting on the other side; the same success inside the wait loop —
+  after the caller had waited — returned without it. A higher-priority thread
+  resumed there stayed ready while the caller went on, until the caller's next
+  kernel call or the tick (one CPU and SMP alike). All four loops now
+  reschedule after the attempt, whatever its outcome. Found by the golden
+  tutorial (lesson 16, sd card: 65 lines into a 64-slot queue before the
+  producer waited); rtos-apis, mutex-stress, cmsis-os-validator,
+  smp-pro-cons-test and smp-pipeline-test pass on the rpi4b (QEMU, and
+  rtos-apis and smp-pro-cons-test on the board), rtos-apis on the pico2 board
+  and under QEMU (Cortex-M4F), and natively.
 
 ---
 

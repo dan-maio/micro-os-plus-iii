@@ -623,6 +623,7 @@ The destructor `double_list::~double_list()` asserts `empty()`. In multi-core te
   [`os-lists.cpp`], [`resume_all()` woke again a thread that had linked itself back into the list (2026-10-23).], [`event_flags::raise()` never returned with two waiters using `clear`, above the raiser.], [Move the current waiters to a local list under the interrupt lock and wake only those.],
   [`os-core.cpp`], [One `switch_timestamp_` for all CPUs: a switch charged the time since the last switch of any CPU (2026-10-23).], [Thread CPU times about 1/N of the truth; all threads together 1x the elapsed time instead of Nx.], [`switch_timestamp_[OS_NCPU]`, one per CPU.],
   [`os-thread.cpp`], [`kill()` of a thread running on another CPU: that CPU's switch re-linked it and picked it again (2026-10-23).], [`kill()` of a busy thread on another core never returned.], [Mark it suspended under the kernel lock before the IPI.],
+  [`os-mqueue.cpp`], [`send`/`receive` (and timed): a success after waiting returned without the reschedule of the first attempt (2026-10-24).], [A higher thread it resumed waited for the caller's next kernel call or the tick (one CPU and SMP).], [Reschedule after every attempt of the wait loop.],
 )
 ]
 

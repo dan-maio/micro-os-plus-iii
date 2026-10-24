@@ -144,6 +144,30 @@ pushed to `origin`.
   smp-pro-cons-test and smp-pipeline-test pass on the rpi4b (QEMU, and
   rtos-apis and smp-pro-cons-test on the board), rtos-apis on the pico2 board
   and under QEMU (Cortex-M4F), and natively.
+- **USB (DWC2) EP0: a SETUP's own completion is not the end of a status
+  stage** (`micro-os-plus-iii-aarch64/drivers/src/usb_dwc2.cpp` and the
+  aarch32 copy). In buffer-DMA mode the receipt of a SETUP also raises
+  XFERCOMPL, before the SETUP-phase-done interrupt; the driver took every EP0
+  OUT completion for the end of a status stage and re-armed, which could leave
+  EP0 OUT disabled with the next SETUP stuck in the RX FIFO (host: descriptor
+  reads and SET_CONFIGURATION timing out). EP0 OUT now records what it is
+  armed for, and the status stage is armed into the SETUP buffer. From the
+  golden workspace (its tutorial's capstone, on the Pi 4's USB-C).
+- **`usb_test` (rpi-zero-2w, aarch64 and aarch32): the USB thread no longer
+  waits on the consoles.** After a PUT it listed the folder (an SD walk) and
+  sent a dozen lines to semihosting, each a debug trap through the probe;
+  with the 16-message queues full it blocked for seconds before replying, and
+  through a USB hub the host then failed the next command with I/O errors.
+  The UART queue is now 64 messages, the per-PUT listing is gone (finish ()
+  still lists the folder), a UART-only line helper exists. Board, through a
+  hub, `send_file.py --get --terminate`: aarch64 and aarch32 PASS (PING, PUT,
+  GET, terminate). Before: the original driver failed the first PUT, the
+  fixed one the GET after it.
+- **Open: a second host session in one board run.** Each `send_file.py`
+  starts with SET_CONFIGURATION; the second one, mid-session, is accepted but
+  the first bulk IN after it fails with -71 (usbmon capture). One
+  `send_file.py` per board run passes. Not yet fixed (suspect: EP1 re-armed
+  without resetting its data toggle).
 
 ---
 

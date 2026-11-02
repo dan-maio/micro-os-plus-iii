@@ -1,3 +1,187 @@
+# SMP in plain English (start here)
+
+> This part avoids code names for the first few pages. If you already know
+> what a core, a thread and a context switch are, skip to section 1.
+
+## The one-paragraph version
+
+µOS++ III on an SMP board is one small operating system running on several
+processor cores at once. There is **one** list of threads that are ready to
+run, **one** scheduler, and **one** set of rules. Each core runs one thread at
+a time and remembers which thread it is running. Because the cores share
+memory, they need a way to take turns when they change shared data: a single
+"kernel lock" that only one core can hold at a time. When a core switches from
+one thread to another, it must finish saving the old thread before any other
+core is allowed to run it. That rule is the "claim and publish" protocol.
+Everything else in this document is bookkeeping around those ideas.
+
+## The kitchen analogy
+
+Think of the board as one busy restaurant kitchen.
+
+- The **cores** are cooks. Two, three or four of them work in the same kitchen.
+- A **thread** is a recipe card: a list of instructions that someone wants
+  cooked. The operating system does not know what the recipe means; it only
+  knows how to hand it to a cook.
+- The **ready list** is the rail where recipe cards wait for a free cook.
+  Cards are ordered by importance (priority), and equally important cards take
+  turns.
+- Each cook holds one card at a time. The card in a cook's hand is that core's
+  **current thread**.
+- The **kernel lock** is the single key to the pantry. Only the cook holding
+  the key may change the shared shelves: the order rail, the waiting lists,
+  the message queues, the heap. Everyone else waits outside.
+- **Masking interrupts** means "do not tap me on the shoulder for a moment."
+  It stops that one cook from being interrupted. It does **not** stop the
+  other cooks, which is exactly why the pantry key is needed.
+- When a cook puts a half-finished dish down, they must step away from the
+  stove before another cook can pick it up. In the kernel, a thread's saved
+  context is put back on the "can run" shelf only after the core has left that
+  thread's stack. That is **deferred publish**.
+- An **IPI** is one cook tapping another on the shoulder: "look at the rail
+  now." It is how one core asks another to reschedule immediately.
+- A cook with nothing to do stands by the stove and waits for an order. That
+  is the **idle thread**.
+- A recipe may say which stoves it is allowed to use. That is **affinity**.
+
+The analogy is not perfect, but it captures the important part: several
+workers, one set of shared shelves, one key, and a strict rule about when a
+half-finished dish may be touched.
+
+## The five rules in everyday words
+
+1. **One queue, one key.** There is one list of runnable threads and one
+   kernel lock. Any core that wants to change the list, a queue, a mutex or
+   the heap takes the key first.
+   *If you break it:* two cores edit the same list at once and a thread
+   disappears, appears twice, or points at freed memory.
+
+2. **Each cook holds one recipe, and the ticket says which.** Every core has
+   its own current thread. A thread that is running on one core is not also
+   sitting in the queue.
+   *If you break it:* the same thread is resumed on two cores at once and
+   both use the same stack.
+
+3. **A recipe card goes back on the rail only when the cook's hands are off
+   it.** A saved context becomes visible to other cores only after the CPU has
+   left that thread's stack. Until then it is marked "not claimable."
+   *If you break it:* another core starts running a thread whose registers are
+   still being saved, and the two cores write the same stack.
+
+4. **"Do not switch recipes on my stove" is not the same as "lock the
+   pantry."** The scheduler lock stops this core from switching threads. It
+   may or may not exclude other cores, depending on the port. The kernel lock
+   is what protects shared data.
+   *If you break it:* you "protect" a shared counter with the scheduler lock,
+   and on AArch64 the other core changes it anyway.
+
+5. **Never sit down to wait while holding the pantry key.** Kernel critical
+   sections are short: update a pointer, unlink a node, release. Do not print,
+   do not do I/O, do not block.
+   *If you break it:* every other core spins with its interrupts masked until
+   you finish, and the system looks frozen.
+
+## What SMP is not
+
+- **It is not two operating systems.** There is one kernel, one thread list,
+  one clock, one heap. The cores are workers inside the same system.
+- **It is not automatic speed-up.** One thread still runs on one core. Only
+  independent work can use more than one core at a time.
+- **It is not a licence to share data carelessly.** The kernel protects its
+  own data. Your data needs your own mutex, queue, atomic or explicit kernel
+  section.
+- **It is not "interrupts off everywhere."** Masking interrupts on core 0 has
+  no effect on core 1. That is the whole reason the kernel lock exists.
+- **It is not instant remote preemption.** A thread made ready on another
+  core usually starts at that core's next tick, unless the kernel sends an
+  IPI. One tick is 1 ms by default.
+- **It is not a runtime mode.** SMP is chosen when the image is built. A
+  single-core image and an SMP image are different binaries.
+
+## The words, translated
+
+| Word in the code | What it means in plain English | Kitchen picture |
+|---|---|---|
+| core, CPU | One processor that can execute instructions | One cook |
+| thread | An independent sequence of instructions | A recipe card |
+| scheduler | The code that decides which thread runs next | The head chef |
+| ready list | The threads that could run now | The order rail |
+| current thread | The thread a core is running | The card in a cook's hand |
+| context switch | Saving one thread and starting another | Putting down one recipe and picking up another |
+| kernel lock | The one lock that protects shared kernel data | The pantry key |
+| scheduler lock | A lock that stops this core from switching threads | "Do not change my recipe yet" |
+| interrupt mask | Tells this core's hardware "do not interrupt me now" | "Do not tap my shoulder" |
+| spinlock | A lock whose waiter keeps asking until it is free | Waiting at the pantry door |
+| IPI | An interrupt one core sends to another | A tap on the shoulder |
+| tick | The periodic timer interrupt | The kitchen timer |
+| idle thread | The thread a core runs when nothing is ready | A cook waiting for orders |
+| affinity | The set of cores a thread may run on | Which stoves a cook may use |
+| claim | Mark a saved thread "in use, do not pick it" | Taking the card off the rail |
+| publish | Make a saved thread available to other cores | Putting the card back on the rail |
+| mutex | A lock for application data, with blocking | A reservation on one shelf |
+| semaphore | A counter that wakes waiters | A stack of order tokens |
+| message queue | A bounded buffer with blocking send/receive | The pass-through window |
+
+## One story: a producer, a consumer, two cores
+
+Let us follow one concrete run. There are two worker threads: a **producer**
+on core 0 and a **consumer** on core 1. They share a message queue. For this
+story both threads are pinned to their cores, so the IPI path is visible.
+
+1. **Both threads are created.** Each gets a stack, a saved context and a node
+   on the ready list. They are not running yet; they are cards on the rail.
+2. **Core 0 picks the producer, core 1 picks the consumer.** Each core removes
+   its card from the rail, marks the thread "running," and stores it in its
+   own `current_thread_[cpu]`. The threads are now in the cooks' hands.
+3. **The consumer asks for a message and the queue is empty.** Inside the
+   kernel lock, it puts a wait node on the queue's waiting list, marks itself
+   "suspended," and releases the lock. Then it asks the scheduler to switch.
+   Core 1 now runs its idle thread, because there is nothing else for it.
+4. **The producer sends a message.** Inside the kernel lock, it copies the
+   message into the queue's buffer and unlinks the consumer's wait node. It
+   puts the consumer back on the ready list: the card goes back on the rail.
+   Then it releases the lock.
+5. **The producer asks the scheduler to switch.** On core 0, the producer may
+   keep running if it still has the highest priority. But the consumer is
+   pinned to core 1, and core 0 is not allowed to run it, so the kernel sends
+   an IPI to core 1: "look at the rail now."
+6. **Core 1 takes the IPI.** The interrupt handler acknowledges the interrupt,
+   sets "a switch is pending" for core 1, and returns. On the way out of the
+   handler, the port performs the switch.
+7. **Core 1's scheduler scans the ready list.** The first eligible thread is
+   the consumer. Its saved context is complete and visible, so core 1 **claims**
+   it: it removes the card from the rail and marks the saved context "in use."
+8. **Core 1 switches to the consumer.** It restores the consumer's registers
+   and stack, and the consumer continues exactly after its `receive()` call.
+   The message is there, so it processes it.
+9. **The producer eventually exits.** It removes itself from the ready list
+   and puts itself on the "terminated" list. It does not free its own stack,
+   because it is still standing on it.
+10. **The idle thread reaps the producer.** When core 0 is idle, its idle
+    thread takes the terminated thread, checks that no core is still running
+    it, frees its stack, marks it "destroyed," and wakes anyone who was waiting
+    in `join()`. Only then may the joiner free the thread object.
+
+Now the same story with **default affinity**. The consumer is allowed on any
+core. When the producer makes it ready, the producer's own core may run it
+immediately if it has higher priority. If not, it stays on the rail, and the
+next core that goes idle takes it. No IPI is required. That is the normal
+work-distribution path: idle cores take work from the shared rail.
+
+What the story shows:
+
+- The ready list is the only place a runnable thread waits.
+- A blocked thread is not in the ready list at all.
+- The kernel lock is held only while the queue and the wait list are being
+  changed, not while the consumer runs.
+- The claim flag is what prevents core 0 and core 1 from both running the
+  consumer.
+- A pinned thread may need an IPI; an unpinned thread may simply be taken by
+  the next free core.
+- A thread that exits is cleaned up by the idle thread, not by itself.
+
+---
+
 # 1. The short version
 
 µOS++ III does not have a second, separate SMP kernel. It has **one portable
@@ -45,10 +229,14 @@ provide a machine-specific answer.
 
 ## How to read this document
 
+- If you are new to SMP, read **SMP in plain English** above, then 2–7.
 - If you want the architecture, read sections 2–7.
 - If you are bringing up a new board, read sections 8, 13 and 14.
 - If you are debugging a hang or a lost wake-up, read sections 5, 7, 9, 11
-  and 16.
+  and 16, then the symptom table in section 20.
+- If you want a short answer to a practical question, read sections 18 and
+  19; section 21 is the printable summary.
+- If you want to read the source, section 22 gives the order.
 - If you are looking for a file, section 17 is the map.
 
 The source references are to this workspace: `micro-os-plus-iii` (the
@@ -1527,3 +1715,140 @@ No design is free. These are the deliberate limits of this one.
 - `docs/STATUS.md` — the measured state of every board and test, including
   the bugs that produced several of the rules above.
 - `docs/tests/` — the test harness, board guides and command references.
+
+---
+
+# 18. What happens when...?
+
+A quick, plain-language reference for the situations that come up most often.
+
+| Situation | What the kernel does |
+|---|---|
+| A thread calls `sleep_for(10)` | Removes it from the ready list, puts a timeout node on the clock list, and switches to another thread. Ten ticks later the timer removes the node and resumes the thread. |
+| A thread waits on a mutex already held | Suspends it on the mutex's wait list. The owner's `unlock()` wakes one waiter. The woken thread runs on the unlocker's core if allowed and higher priority, otherwise on another core at its tick or after an IPI. |
+| Two threads print without a mutex | Their bytes interleave. The kernel does not protect the UART; the device is application data. Use a µOS++ mutex around the console. |
+| A thread is woken on another core | It goes back on the ready list. The target core notices at its next tick, or earlier if the kernel sends an IPI because of affinity. |
+| A thread exits | It joins the terminated list and switches away. The idle thread later frees its stack, marks it destroyed, and wakes a joiner. |
+| A thread is killed while running on another core | The killer marks it suspended under the kernel lock, sends an IPI to that core, and waits until the thread is off every core and its context is saved. |
+| A core has nothing to run | It runs its idle thread, which waits for an interrupt (`wfi` on ARM, `sigsuspend` on POSIX) and then checks the ready list again. |
+| A secondary core is released | It enters `port_smp_secondary_start`, sets up its own timer and IPI, installs a fake current thread, and reschedules into its idle or first real thread. |
+| A secondary core never prints anything | Check the release handshake, the cache clean before the release, the idle-thread registration, `port_sys_init()`, and `_port_core_alive[core]`. |
+| A high-priority thread is made ready | On the current core it preempts immediately. On another core it waits for that core's tick, unless an IPI is sent. |
+| A thread takes `scheduler::critical_section` | This core stops switching threads. On AArch64 other cores keep running; on AArch32, Cortex-M and POSIX the same section also holds the kernel spinlock and blocks them. |
+| Two cores call `malloc` or `new` | The kernel lock serialises them. There is one heap, not one per core. |
+| A running thread changes its affinity | The new mask is stored immediately. The thread keeps running until it blocks or is switched out; the next selection only considers cores in the mask. |
+| A thread is created with affinity `0` | It can never be selected. Always leave at least one bit set. |
+
+# 19. Common misunderstandings
+
+| Question | Short answer |
+|---|---|
+| Does each core have its own scheduler? | No. There is one scheduler and one ready list. Each core has its own "current thread" pointer. |
+| Is disabling interrupts enough to protect shared data? | Only on one core. The other cores are not affected. Use the kernel lock or a mutex. |
+| Does `scheduler::critical_section` protect data shared between cores? | Not on AArch64, where it is only a per-core switch lock. On AArch32, Cortex-M and POSIX it also takes the kernel spinlock, but portable code should not rely on that difference. |
+| Can two cores run the same thread? | No. The claim flag (`stack_ptr == nullptr`) marks a thread whose context is live on a core, and the picker skips it. |
+| Will a higher-priority thread preempt another core immediately? | Usually not. The target core notices at its next tick, or earlier if the kernel sends an IPI. |
+| Is the heap per core? | No. One heap, protected by the kernel lock. |
+| Does `resume()` always run the woken thread immediately? | No. It runs immediately only if this core is allowed to run it and it has higher priority; otherwise it waits on the ready list, or an IPI is sent to a core that is allowed. |
+| Is the idle thread special? | It is a normal thread at the lowest priority, one per core. The kernel's `os_idle` is CPU 0's; secondaries get application-provided idle threads. |
+| Is the kernel lock a mutex? | No. It is a spinlock with interrupts masked. It never blocks, and it has no priority inheritance. Keep sections short. |
+| Why is `main` always on core 0? | `os_main` pins it there, and the CMSIS-RTOS v1 compatibility layer pins the threads it creates there, because the v1 API assumes one core. |
+| Does `yield()` make another core run? | No. It reschedules the current core. The other cores are already running or idle independently. |
+| With default affinity, is a thread load-balanced? | It may run on any core, but a thread that is already running is never migrated. Idle cores take ready threads from the shared list; busy cores keep theirs. |
+
+# 20. Debug by symptom
+
+| Symptom | Most likely cause | Where to look |
+|---|---|---|
+| Every core spins forever, no output | Lock release order wrong, or a core died holding the lock | `_smp_klock.depth`/`owner` must be cleared before `lock = 0`; see 5.4 |
+| Random crash or wild jump inside a thread | A thread was resumed before its context was fully saved | Deferred publish and the `stack_ptr` claim; see 7.2 |
+| Corruption only when three or four cores run | Application data protected by the scheduler lock instead of a mutex, or a missing barrier | 5.3, 5.4 and 11 |
+| `join()` never returns | The reaper never ran because CPU 0 never idled, or the target is still current on a core | `os_rtos_idle_actions()`, `current_thread_[c]`; see 12 |
+| A high-priority thread runs late | Remote preemption is tick-bounded; no IPI was sent | 6.3 and 9 |
+| A secondary core never prints | Release handshake failed, cache not cleaned, idle thread not registered | 8.2 and 8.3 |
+| `no ready thread and no idle thread on Core N` | `idleN` was not created or not stored in `os_idle_thread_core[]` before release | 6.2 and 8.1 |
+| The clock stops or drifts | CPU 0 stalled; or skipped ticks were not accounted for in the high-resolution origin | 10 |
+| A thread never runs at all | Affinity mask is zero or names a core that was never released | 6.2 and 16 |
+| An IPI seems to be lost | The receiver's IPI source is disabled, the wrong SGI/mailbox is used, or interrupts stayed masked too long | 9 and the board's `port_sys.cpp` |
+
+# 21. One-page cheat sheet
+
+## The five invariants
+
+1. One ready list and one recursive kernel spinlock protect all shared kernel
+   data.
+2. One `current_thread_[cpu]` per core; a running thread is not in the ready
+   list.
+3. A thread is claimable only when its saved context is published; a core
+   clears the flag when it claims the thread.
+4. The kernel lock is not the application scheduler lock. On AArch64 the
+   scheduler lock is local to one core.
+5. Never switch while owning the kernel lock. Defer the switch, or refuse it.
+
+## The three locks
+
+| Lock | Protects | Scope |
+|---|---|---|
+| `interrupts::critical_section` | Lists, queues, shared fields | IRQ mask + kernel spinlock |
+| `scheduler::critical_section` | This core's thread switches | Per-core on AArch64; also the kernel lock on the other ports |
+| `scheduler::kernel_critical_section` | Heap, `new`, `atexit`, object internals | IRQ mask + kernel spinlock, plus a per-core flag on AArch64 |
+
+## Boot a secondary in six steps
+
+1. Core 0 creates and registers `idleN` in `os_idle_thread_core[N]`.
+2. Core 0 writes the entry address to the board's release mechanism.
+3. The secondary enters `port_smp_secondary_start`.
+4. It calls `port_sys_init()`: its timer, its IPI, its interrupt interface.
+5. It installs a fake current thread and calls `reschedule()`.
+6. It runs its idle thread or the first ready thread, and sets
+   `_port_core_alive[N]` on its first tick.
+
+## Thread states
+
+`ready` → `running` → (`suspended` → `ready`) or (`terminated` →
+`destroying` → `destroyed`).
+
+## When an IPI is sent
+
+- a woken thread is not allowed on the waking core (affinity mismatch);
+- a thread running on another core is being killed.
+
+Everything else waits for the target core's next tick: at most 1 ms by
+default.
+
+## Numbers to remember
+
+- `OS_NCPU`: the number of cores, fixed at build time.
+- 1 ms: the default tick, and the worst-case remote preemption delay.
+- `0`: the value of a claimed `stack_ptr`; never resume a thread with it.
+- `SMP_NO_OWNER`: the value of `_smp_klock.owner` when the lock is free.
+
+# 22. Read the source in this order
+
+If you want to see the implementation, these six functions tell most of the
+story. Read them in this order; each one is short.
+
+1. **`scheduler::internal_switch_threads()`** in `src/rtos/os-core.cpp`.
+   This is the decision: re-link the outgoing thread if it is still runnable,
+   scan the ready list for the first thread allowed on this CPU, select it
+   and remove it from the list, or fall back to idle.
+2. **`port::scheduler::switch_stacks()`** in the port's `src/rtos/os-core.cpp`.
+   This is the switch: take the kernel lock, stage the outgoing frame, clear
+   the incoming claim flag, release the lock, return the incoming stack
+   pointer. Read the comment about the release order.
+3. **`port_isr_handler()`** in the board's `src/rtos/port_isr.cpp`.
+   This is how a tick or an IPI becomes a switch: acknowledge, set the pending
+   flag, and switch on the way out if the core is not locked.
+4. **`port_smp_secondary_start()`** in the port's `src/rtos/os-core.cpp`.
+   This is how another core joins: mask, set up its timer and IPI, install a
+   fake current thread, reschedule.
+5. **`thread::resume()`** in `src/rtos/os-thread.cpp`.
+   This is how a blocked thread becomes runnable: link the ready node under
+   the lock, reschedule, and send an IPI if the thread is pinned elsewhere.
+6. **`port::scheduler::kernel_locked()`** in the AArch64 port.
+   This is the modern kernel lock: an interrupt critical section plus a
+   per-core flag, with a deferred switch when the section ends. Comparing it
+   with the AArch32 `locked()` shows why the two ports differ.
+
+After those six, the port's `os-inlines.h` is the machine-specific half of
+the story: core id, IRQ mask, atomic acquire/release, and the spinlock word.

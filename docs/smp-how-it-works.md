@@ -330,7 +330,7 @@ The AArch ports now say, in `include/cmsis-plus/rtos/port/os-c-decls.h`:
 #error "OS_NCPU is a board fact: set UOS_BOARD_NCPU in boards/<board>/board.cmake."
 #endif
 #if (OS_NCPU > 1) && !defined(OS_SMP_IPI_SGI)
-#error "OS_SMP_IPI_SGI is a board fact: the interrupt a core uses to ask another to reschedule."
+#error "OS_SMP_IPI_SGI is a board fact: add it to UOS_BOARD_DEFINES in boards/<board>/board.cmake -- the interrupt a core uses to ask another to reschedule."
 #endif
 ```
 
@@ -404,20 +404,21 @@ lock. The kernel lock is the only lock that protects them.
 | `thread* volatile current_thread_[OS_NCPU]` | kernel `os-core.cpp` | The thread each CPU is running |
 | `volatile state_t lock_state[OS_NCPU]` | port `os-decls.h` | The application's scheduler lock, per core |
 | `volatile state_t kernel_lock_state[OS_NCPU]` | port `os-decls.h` | The kernel's own section, only on ports with `OS_HAS_PORT_KERNEL_LOCK` |
-| `volatile unsigned _port_ctx_pending[OS_NCPU]` | port `os-decls.h` | A switch was requested by an ISR on this CPU |
+| `volatile unsigned _port_ctx_pending[OS_NCPU]` | AArch/POSIX port `os-decls.h` | A switch was requested by an ISR on this CPU |
 | `bool resched_pending[OS_NCPU]` | AArch64 port only | A switch was requested under a lock |
 | `clock::timestamp_t switch_timestamp_[OS_NCPU]` | kernel `os-core.cpp` | CPU-time accounting per CPU |
 | `thread* os_idle_thread_core[OS_NCPU]` | kernel `os-core.cpp` | The idle thread each CPU falls back to |
-| `smp_klock_t _smp_klock` | port `port_sys.cpp` | The recursive kernel spinlock |
-| `smp_tlock_t _smp_tlock` | port `port_sys.cpp` | A reserved non-recursive leaf lock (see 5.3) |
-| `_smp_pub_addr[]`, `_smp_pub_val[]` | port `os-core.cpp` | Deferred-publish slots |
-| `_in_isr[OS_NCPU]` | port `os-core.cpp` | Handler-mode flag, because AArch64/POSIX have no banked modes |
-| `_port_core_alive[OS_NCPU]` | port `os-core.cpp` | Set on a secondary's first tick |
+| `smp_klock_t _smp_klock` | AArch board `port_sys.cpp`; Cortex-M/POSIX port `os-core.cpp` | The recursive kernel spinlock |
+| `smp_tlock_t _smp_tlock` | AArch port `port_sys.cpp` | A reserved non-recursive leaf lock (see 5.3) |
+| `_smp_pub_addr[]`, `_smp_pub_val[]` | AArch port `os-core.cpp` (POSIX uses `g_publish` in `host_cpu.cpp`) | Deferred-publish slots |
+| `_in_isr[OS_NCPU]` | AArch/POSIX port `os-core.cpp` | Handler-mode flag, because these ports have no banked modes |
+| `_port_core_alive[OS_NCPU]` | AArch port `os-core.cpp` | Set on a secondary's first tick |
 | per-core timer, IRQ interface, MMU state, stacks | board / startup | Machine state |
 
 The split is the whole point: a core's own scheduling decision is local
-(`current_thread_[cpu]`, `lock_state[cpu]`, `_port_ctx_pending[cpu]`), while
-the set of threads it may choose from is global and lock-protected.
+(`current_thread_[cpu]`, `lock_state[cpu]`, and the port's pending-switch
+flag, where it has one), while the set of threads it may choose from is
+global and lock-protected.
 
 ## 4.3 The thread object in SMP
 
@@ -474,11 +475,16 @@ typedef struct {
 } os_port_smp_klock_t;
 ```
 
-and one instance, defined by each board's `port_sys.cpp`:
+and one instance, defined by the port (on the AArch boards, in the board's
+`port_sys.cpp`):
 
 ```c
 smp_klock_t _smp_klock = {0, SMP_NO_OWNER, 0};
 ```
+
+On the RP2040 and RP2350 the lock word is the SIO hardware spinlock, so
+`os_port_smp_klock_t` carries only `owner` and `depth`; the portable code is
+the same.
 
 The raw operations are ISA-specific. AArch32 uses `LDREX`/`STREX`; AArch64
 uses `LDAXR`/`STLXR`; Cortex-M uses the RP2040/RP2350 SIO hardware spinlock
@@ -604,20 +610,21 @@ template <typename T, class Lockable, ...>
 class allocator_typed { ... };   // takes the kernel lock per allocation
 ```
 
-That is what makes `malloc`, `operator new`, and `atexit` safe from several
-cores. Before this existed, the heap was protected by the scheduler lock,
-which on AArch64 no longer excludes other cores — a real SMP bug that the
-per-port kernel lock closes.
+The same kernel section makes `malloc`, `operator new`, and `atexit` safe
+from several cores; the typed allocators reach it through `kernel_lockable`.
+Before this existed, the heap was protected by the scheduler lock, which on
+AArch64 no longer excludes other cores — a real SMP bug that the per-port
+kernel lock closes.
 
 ### The reserved timer leaf lock
 
-The port contract also declares `smp_tlock_t _smp_tlock` and
+The shared AArch port contract also declares `smp_tlock_t _smp_tlock` and
 `port_tmr_lock()` / `port_tmr_unlock()`. It is a simple, non-recursive lock
 word intended for a future timer back-end with a finer-grained queue. In this
 tree no portable kernel caller takes it; the clock timestamp lists are
-currently protected by `interrupts::critical_section`. The storage exists on
-every ARM board so the contract is uniform, but calling it "the timer lock in
-use" would be inaccurate.
+currently protected by `interrupts::critical_section`. The AArch boards
+define the storage; the Cortex-M and POSIX ports do not carry it at all.
+Calling it "the timer lock in use" would be inaccurate.
 
 ## 5.4 The rules that keep it correct
 
@@ -632,8 +639,8 @@ corruption that has been observed.
    ports call this out explicitly in their `locked()` implementations.
 2. **Clear `owner`/`depth` before clearing the lock word.** Every release
    site does this in one order: set `depth = 0`, set `owner = SMP_NO_OWNER`,
-   execute `dmb`, store `0` to `lock`, execute `dsb`. Reversing the first two
-   stores opens a two-instruction window in which
+   execute `dmb`, store `0` to `lock`, execute `dsb`. Storing `lock = 0`
+   before clearing `owner`/`depth` opens a two-instruction window in which
    another core wins the lock, installs its own owner/depth, and then has
    them wiped by the first core's stores. Its `exit()` is guarded by
    `owner == cpu && depth > 0`, so it never releases the word again; every
@@ -645,8 +652,8 @@ corruption that has been observed.
    either sets a pending flag or returns; the actual switch waits until the
    section is left.
 4. **Never call a blocking kernel function inside an interrupt or kernel
-   section.** `lock()`, `wait()`, `sleep_for()`, `join()` and `kill()` assert
-   that the scheduler is not locked or that the call is not in handler mode.
+   section.** The blocking operations reject handler mode; `lock()`,
+   `wait()`, `sleep_for()` and `join()` also reject a locked scheduler.
 5. **A critical section is short.** Other cores spin with their own
    interrupts masked while they wait. A long section (a UART write, an SD
    transfer, a debug print) turns into a machine-wide stall. That is why
@@ -790,22 +797,29 @@ cores. The kernel creates `os_idle_thread` for CPU 0 during
 Cortex-M tests create their `idle1` directly in the test source. Either way
 they are registered before the core is released. A secondary that is
 released without a registered idle thread has no fallback: the picker
-returns `nullptr`, and the port halts with
-`no ready thread and no idle thread on Core N`.
+returns `nullptr`, and the port halts with a "no ready thread and no idle
+thread" fatal message.
 
 ## 6.3 Preemption and time slicing
 
 The default tick is 1 ms (`OS_INTEGER_SYSTICK_FREQUENCY_HZ`), driven by each
 core's private timer. The timer ISR does two things:
 
-1. If this is CPU 0, call `os_systick_handler()` to advance the system clocks
-   and expire timeouts. On other CPUs, only reschedule.
-2. Set `_port_ctx_pending[cpu] = 1` and, on the way out of the handler, take
-   a context switch if the core is not locked.
+1. On the ARM ports and on Linux, if this is CPU 0, call
+   `os_systick_handler()` to advance the system clocks and expire timeouts;
+   on the other CPUs, only reschedule. The non-Linux host port has one
+   process-wide timer, so its handler calls `os_systick_handler()` once,
+   whichever host thread receives the signal.
+2. On the AArch and POSIX ports, set `_port_ctx_pending[cpu] = 1` and, on
+   the way out of the handler, take a context switch if the core is not
+   locked. The Cortex-M ports pend PendSV instead; it is their deferred
+   switch.
 
-So every core gets a preemption point every tick, and equal-priority threads
-on the same core are round-robin: the outgoing thread is re-linked at the
-end of its band and the next one at the head runs.
+So, on the ARM ports and on Linux, every core gets a preemption point every
+tick, and equal-priority threads on the same core are round-robin: the
+outgoing thread is re-linked at the end of its band and the next one at the
+head runs. The non-Linux host port has one process-wide tick; its other
+host threads are preempted by the host scheduler, not by a per-CPU tick.
 
 There are three preemption paths:
 
@@ -1066,7 +1080,9 @@ core 0 (os_main, after the scheduler is running):
     ... create workers, pin them, run the test ...
 
 secondary core (released):
-    _start -> secondary_park -> coreN_entry -> boot_coreN
+    _start -> secondary_park -> coreN_entry -> boot_coreN   // Pi boards;
+                                                            // Lyra dispatches
+                                                            // directly
     port_smp_secondary_start():
         mask interrupts
         port_sys_init()                       // this core's timer + IPI
@@ -1092,9 +1108,9 @@ unmasked. Constructing the object instead would re-mask at the closing brace.
 
 | Board | Mechanism |
 |---|---|
-| Raspberry Pi 3 / Zero 2 W (BCM2837) | Spin table or GPU armstub mailbox: write the entry (`_start` or `coreN_entry`) to the core's mailbox, clean the line to the point of coherency, `sev`. The parked core polls with MMU/caches off, so the cache clean is mandatory on real hardware. |
+| Raspberry Pi 3 / Zero 2 W (BCM2837) | QEMU: write `coreN_entry` to `__smp_spin[core]` and `sev`. Real hardware: write `&_start` to the core's mailbox-3 set register, clean the line to the point of coherency, `sev`. The parked core polls with MMU/caches off, so the cache clean is mandatory on real hardware. |
 | Raspberry Pi 4 B (BCM2711) | AArch64 spin table at `0xD8 + 8*core`: write `coreN_entry` to `__smp_spin[core]`, write `&_start` to the release word, clean the line, `dsb`, `sev`. |
-| Luckfox Lyra (RK3506) | SRAM mailbox word `0x00200000` + magic, then clear the core's reset bits in `CRU_SOFTRST_CON00`, `dsb`, `isb`, `sev`. |
+| Luckfox Lyra (RK3506) | SRAM mailbox word `0x00200000` + magic, then clear the core's reset bits in `cru::SOFTRST_CON00`, `dsb`, `isb`, `sev`. |
 | Raspberry Pi Pico (RP2040) | Bootrom inter-core FIFO handshake: `multicore::launch_core1(port_smp_secondary_start, port_core1_stack_top())`. The bootrom loads the given MSP. The FIFO IRQ must stay disabled during the handshake, or the handler would drain the bootrom's words. |
 | Raspberry Pi Pico 2 (RP2350) | Same bootrom FIFO handshake as the RP2040, with the RP2350's shared SIO FIFO IRQ 25 instead of the RP2040's per-core 15/16. |
 | QEMU `2xcortex-m33` (SSE-200) | The platform's CPU1 release, with the MHU as the IPI. |
@@ -1109,7 +1125,7 @@ never sees it.
 
 ## 8.3 The join handshake
 
-There are two different "joins" in the tree, and they are easy to confuse:
+The AArch ports use two different "joins", and they are easy to confuse:
 
 - **`_port_core_alive[core]`** is a port-level flag, set in each core's timer
   ISR on its first tick. It means "this core has completed bring-up and is
@@ -1122,18 +1138,23 @@ There are two different "joins" in the tree, and they are easy to confuse:
 
 Keeping these separate matters: a board can be correct about `_port_core_alive`
 while a test's `g_core_stage` is not yet written, and the test should report a
-join timeout rather than assume the core is dead.
+join timeout rather than assume the core is dead. The Cortex-M ports do not
+use either flag; their bootrom/MHU handshake is the join.
 
 ## 8.4 The secondary's own state
 
-`port_smp_secondary_start()` is board-independent and lives in the port's
-`src/rtos/os-core.cpp`. It:
+`port_smp_secondary_start()` is the AArch and Cortex-M secondary entry. It
+lives in the port's `src/rtos/os-core.cpp` on the AArch ports; the Cortex-M
+ports have their own copies in `os-core-rp2040.cpp`, `os-core-rp2350.cpp`
+and `os-core-m33.cpp`. The POSIX port uses its file-static
+`secondary_cpu_body()` as the `pthread_create` entry and performs the same
+steps. It:
 
 1. masks interrupts;
-2. calls `port_sys_init()`: on AArch32/AArch64 this routes the private timer
-   and the IPI to this core and starts the 1 ms tick; on the Cortex-M ports it
-   sets PendSV/SysTick priorities and enables the FIFO/MHU IRQ; on POSIX it
-   arms the per-thread timer and installs the signal handlers;
+2. initialises this core's machine state: on AArch32/AArch64, `port_sys_init()`
+   routes the private timer and the IPI to this core and starts the 1 ms tick;
+   on the Cortex-M ports it sets PendSV/SysTick priorities and enables the
+   FIFO/MHU IRQ; on POSIX it arms the per-thread timer (on Linux);
 3. installs the fake current thread;
 4. calls `reschedule()` to enter the scheduler;
 5. unmasks and parks in `wfi`/`pause` if the scheduler ever returns.
@@ -1165,10 +1186,11 @@ Its implementations are:
 | Cortex-M SSE-200 | Message Handling Unit (MHU) doorbell |
 | POSIX | `pthread_kill(target, SIGRTMIN+1)` |
 
-The receive side is a normal ISR that does two things: acknowledge the
-source, and set `_port_ctx_pending[cpu] = 1`. When the handler exits, the
-same epilogue as the timer path calls `port_switch_stacks()` if the core is
-not locked and does not own the kernel spinlock. The IPI therefore costs one
+The receive side is a normal ISR that acknowledges the source and asks for a
+switch: on the AArch and POSIX ports it sets `_port_ctx_pending[cpu] = 1`;
+on Cortex-M, `reschedule()` pends PendSV. When the handler exits, the same
+epilogue as the timer path calls `port_switch_stacks()` if the core is not
+locked and does not own the kernel spinlock. The IPI therefore costs one
 interrupt entry plus one scheduling decision, not a separate mechanism.
 
 The kernel sends an IPI in exactly two situations (section 6.3): a wake-up
@@ -1180,17 +1202,22 @@ core is preempted by its own tick.
 
 # 10. Time on multiple cores
 
-Time is deliberately centralised on CPU 0.
+Time is deliberately centralised on one tick source: CPU 0 on the ARM ports
+and on Linux, the single process-wide timer on the other host systems.
 
 - Each core has its own private timer (ARM generic timer PPI on AArch32/
-  AArch64, SysTick on Cortex-M, a per-thread POSIX timer on the host). Each
-  timer fires at the tick rate and drives that core's preemption.
-- **Only CPU 0 calls `os_systick_handler()`.** That function increments
-  `sysclock` and `hrclock`'s tick-driven count, walks the clock timestamp
-  lists, and fires timers. If every core incremented the clock, time would
-  run N times too fast.
-- The other cores still take their timer interrupt and still reschedule.
-  Their tick is a preemption point, not a clock update.
+  AArch64, SysTick on Cortex-M, a per-thread POSIX timer on Linux, one
+  process-wide timer on the other hosts). Each timer fires at the tick rate
+  and drives that core's preemption.
+- **On the ARM ports and on Linux, only CPU 0 calls `os_systick_handler()`.**
+  That function increments `sysclock` and `hrclock`'s tick-driven count,
+  walks the clock timestamp lists, and fires timers. If every core
+  incremented the clock, time would run N times too fast. On a non-Linux
+  host the process-wide timer delivers one tick, so its handler calls the
+  function once regardless of which host thread receives the signal.
+- On the ARM ports and Linux, the other cores still take their timer
+  interrupt and still reschedule. Their tick is a preemption point, not a
+  clock update.
 
 `sysclock` is therefore a single global 1 ms counter, advanced under the
 kernel lock. `clock::now()` and `clock::steady_now()` read it under an
@@ -1198,9 +1225,11 @@ interrupts critical section.
 
 `hrclock` is the high-resolution clock. On AArch32/AArch64 it reads the
 system counter (`CNTPCT`) and subtracts `timer_arm::hr_base()`, the counter
-value when CPU 0 started its tick. On Cortex-M there is no free-running
-system counter, so the port reports `has_hardware_counter() == false` and the
-kernel synthesises the value from `steady_count_ + cycles_since_tick()`.
+value when CPU 0 started its tick. The SSE-200/Cortex-M33 port has no
+free-running counter, so it reports `has_hardware_counter() == false` and the
+kernel synthesises the value from `steady_count_ + cycles_since_tick()`. The
+RP2040 and RP2350 SMP ports do have a free-running timer (the 64-bit
+microsecond counter), so they report true and read it directly.
 
 The AArch timer re-arm is **absolute**, not "one period from now": it adds
 one period to the previous compare value. That avoids accumulating interrupt
@@ -1212,9 +1241,10 @@ tick-driven clock it is compared with. This matters on boards where a
 semihosting console trap stops the cores: the clock would otherwise drift by
 seconds.
 
-Timer callbacks (the `timer` class) run from CPU 0's tick, in interrupt
-context. They are not threads. The callback is invoked outside the clock
-list's lock, but its state check and re-arm take the same
+Timer callbacks (the `timer` class) run from the tick (CPU 0's on the ARM
+ports and Linux), in interrupt or signal context. They are not threads. The
+callback is invoked outside the clock list's lock, but its state check and
+re-arm take the same
 `interrupts::critical_section` that `timer::stop()` and the destructor take.
 That is why `internal_callback()` re-checks the state and re-arms under the
 lock rather than touching the object after it.
@@ -1321,9 +1351,10 @@ Specific notes:
 ## 11.4 Memory and libc
 
 The heap, `malloc`, `operator new/new[]`, `atexit`, and the memory resources
-all take `scheduler::kernel_lockable` around their shared state. On AArch64
-this is the dedicated kernel section; on the other ports it is the scheduler
-lock. That is what makes allocation safe when several cores allocate at once.
+all take the kernel's critical section around their shared state; the typed
+allocators wrap it as `scheduler::kernel_lockable`. On AArch64 this is the
+dedicated kernel section; on the other ports it is the scheduler lock. That
+is what makes allocation safe when several cores allocate at once.
 
 The kernel's default memory resources and the C++ `pmr` resources are
 process-wide, not per-CPU. Do not assume a per-core heap.
@@ -1396,8 +1427,8 @@ what "a thread is not a CPU" means in an SMP kernel.
 
 The SMP-specific parts are:
 
-**Create.** `thread::create` builds the port context, links the ready node,
-and calls `resume()`. If the scheduler has not started, it also installs the
+**Create.** The thread constructor builds the port context, links the ready
+node, and calls `resume()`. If the scheduler has not started, it also installs the
 new thread as `current_thread_[port_cpu_id()]`; `scheduler::start()` replaces
 that with the boot fake thread, so the temporary assignment is harmless. The
 `th_cpu_affinity` attribute is copied into `cpu_affinity_`.
@@ -1465,7 +1496,7 @@ is enough, and it avoids two cores racing to destroy the same thread.
 | Core id | `MPIDR` via CP15 | `MPIDR_EL1` | SIO `CPUID` / SSE-200 CPUID | `thread_local _this_cpu` |
 | IRQ mask | `cpsid i` / `cpsie i` | `msr daifset/daifclr, #2` | `cpsid i` / PRIMASK | block tick/IPI signals |
 | Kernel lock | `LDREX/STREX` word | `LDAXR/STLXR` word | SIO hardware spinlock / `LDREX/STREX` | `__atomic_exchange_n` |
-| Application scheduler lock | = kernel lock (IRQ mask + spinlock) | per-core flag, IRQs on, no spinlock | = kernel lock (IRQ mask + spinlock) | = kernel lock (signal mask + spinlock) |
+| Application scheduler lock | = kernel lock (IRQ mask + spinlock) | per-core flag; IRQs on except the flag update; no spinlock | = kernel lock (IRQ mask + spinlock) | = kernel lock (signal mask + spinlock) |
 | Dedicated kernel lock | no (`OS_HAS_PORT_KERNEL_LOCK` absent) | yes | no | no |
 | IPI | mailbox 0 (BCM) / SGI (GIC) | mailbox 0 (BCM) / SGI (GIC) | SIO FIFO / MHU | `pthread_kill` |
 | Switch | IRQ or cooperative asm | IRQ or cooperative asm | PendSV on MSP | `swapcontext` |
@@ -1489,8 +1520,9 @@ differently. The scheduler above the contract is identical.
    the banner, and the semihosting trap. Do not copy another board's numbers.
 2. **Supply the width-dependent header**
    `include/cmsis-plus/rtos/port/os-c-decls.h`: clock/stack/IRQ types, the
-   `smp_klock_t`/`smp_tlock_t` structures, `SMP_NO_OWNER`, and the
-   `OS_USE_SMP_SCHEDULER` selection.
+   `smp_klock_t` structure (plus `smp_tlock_t` if your port uses the reserved
+   timer leaf lock), `SMP_NO_OWNER`, and the `OS_USE_SMP_SCHEDULER`
+   selection.
 3. **Supply the inline operations** in `os-inlines.h`: `port_cpu_id`,
    `interrupts::critical_section::enter/exit`,
    `scheduler::lock/unlock/locked`, `_smp_klock_raw_acquire/release`,
@@ -1498,12 +1530,13 @@ differently. The scheduler above the contract is identical.
 4. **Supply the port's `src/rtos/os-core.cpp`**: `port::scheduler::start`,
    `locked`, `reschedule`, `switch_stacks`, `context::create`, and
    `port_smp_secondary_start`.
-5. **Define the lock storage** (`_smp_klock`, `_smp_tlock`,
-   `_port_ctx_pending[]`, `lock_state[]`, and `kernel_lock_state[]` if used)
-   in a board file such as `port_sys.cpp`.
-6. **Implement the switch** in assembly or with `setjmp`/`ucontext`: save the
-   full register file, return the incoming stack pointer, and implement the
-   deferred publish where the architecture needs it.
+5. **Define the lock storage** (`_smp_klock`, `_port_ctx_pending[]`,
+   `lock_state[]`, and, where your port uses them, `_smp_tlock` and
+   `kernel_lock_state[]`) in a board file such as `port_sys.cpp`.
+6. **Implement the switch** in assembly or with a host `ucontext` /
+   `swapcontext`: save the full register file, return the incoming stack
+   pointer, and implement the deferred publish where the architecture needs
+   it.
 7. **Implement the IPI** (`port_smp_ipi`) and its ISR.
 8. **Implement the core release** (`smp::start_secondary_cores`) and the
    per-core timer/IRQ bring-up (`port_sys_init`).
@@ -1541,18 +1574,24 @@ If those three are right, the rest is board plumbing.
 | `smp_test2` | Lock coherency: one worker per core, a shared counter under a mutex, final count == `OS_NCPU * ITER` |
 | `smp_test3` | Cross-core message queue, blocking send/receive, a producer and a consumer on different cores |
 | `smp_test4` | No-affinity work distribution: 8 CPU-bound workers, per-worker histogram over cores; proves cores share runnable work |
-| `smp-num-test` | Numeric workload across cores, bounded run time |
-| `smp-pipeline-test` | Multi-stage pipeline across cores, queues and back-pressure |
-| `smp-pro-cons-test` | Producer/consumer with counting semaphores and queues |
+| `smp-num-test` | Five priority-ordered threads (UART, LED, SD text, FP compute, SD reader) sharing one file under a mutex, with a counting semaphore pacing the passes |
+| `smp-pipeline-test` | 13-thread pipeline: producers, compute workers, SD writers, auditor, LED pacer and telemetry, with queues, back-pressure and yields |
+| `smp-pro-cons-test` | 12-thread producer/consumer exercising threads, memory pools, queues, counting/binary semaphores, mutexes, condition variables, event flags, timers and the clock |
 | `smp-mat-test`, `smp-mat-sdcard-test` | Matrix workload, SD/FatFs from several cores |
-| `smp-list-storage-test`, `smp-shapes-test` | Object/list and shape workloads; stress the allocator and the ready list |
+| `smp-list-storage-test` | One intrusive list shared by all cores, with nodes on a thread stack, in `.data` and on the heap; checks the three regions do not overlap |
+| `smp-shapes-test` | Polymorphic intrusive list of heap objects shared by all cores; virtual destructors and a base-class magic word detect use-after-free |
 | `mutex-stress`, `rtos-apis`, `cmsis-os-validator` | API conformance and stress, including SMP thread control |
 | `clock-test` | Ticks, high-resolution clock, sleep accuracy across cores |
 
-The same shared test sources are compiled by every port that can run them.
-The test must not name an instruction or a register; what it needs from the
-machine it takes through the port headers (`port_cpu_id`, `port::scheduler::
-wait_for_interrupt`, `timer_arm::get_count`, `PORT_BANNER_*`).
+The names above are the AArch spelling; the Cortex-M port uses hyphens
+(`smp-test2`) and has extra USB tests. The AArch32 and AArch64 test trees are
+kept in step: several files are byte-identical, and the others differ only
+where the word size or the board requires it. The Cortex-M tests repeat the
+same scenarios on that port. A test must not name an instruction or a
+register; what it needs from the
+machine it takes through the port headers (`port_cpu_id`,
+`port::scheduler::wait_for_interrupt`, `PORT_BANNER_*`, and
+`timer_arm::get_count` on the AArch ports).
 
 ## 15.2 Running them
 
@@ -1642,11 +1681,12 @@ No design is free. These are the deliberate limits of this one.
    holder having interrupts masked, so the holder finishes the section. A
    long section still stalls every other core that needs the lock. Keep
    sections short and never put I/O in them.
-10. **Only CPU 0 advances time.** If CPU 0 is stopped (debugger, a very long
-    semihosting trap), the system clock stops even though the other cores
-    keep executing. The timer catch-up moves `hr_base` to compensate, but
-    elapsed wall time is not recoverable in real time.
-11. **The timer leaf lock is reserved, not used.** `_smp_tlock` and
+10. **On the ARM ports and Linux, only CPU 0 advances time.** If that tick
+    source is stopped (debugger, a very long semihosting trap), the system
+    clock stops even though the other cores keep executing. The timer
+    catch-up moves `hr_base` to compensate, but elapsed wall time is not
+    recoverable in real time.
+11. **The timer leaf lock is reserved, not used (AArch ports).** `_smp_tlock` and
     `port_tmr_lock()` are part of the port contract but have no kernel caller
     in this tree. Do not assume the timer queue is protected by a separate
     lock; it is protected by the interrupts/kernel section.
@@ -1673,7 +1713,7 @@ No design is free. These are the deliberate limits of this one.
 | C API | `src/rtos/os-c-wrapper.cpp` |
 | Shared port declarations | `port/smp-common/cmsis-plus/rtos/port/os-decls.h` |
 | AArch32 port | `micro-os-plus-iii-aarch32/include/cmsis-plus/rtos/port/*`, `src/rtos/os-core.cpp`, `src/handlers.cpp`, `src/context_switch.cpp` |
-| AArch64 port | `micro-os-plus-iii-aarch64/include/cmsis-plus/rtos/port/*`, `src/rtos/os-core.cpp`, `boards/rpi4b/src/startup.S` |
+| AArch64 port | `micro-os-plus-iii-aarch64/include/cmsis-plus/rtos/port/*`, `src/rtos/os-core.cpp`, `test/boards/rpi4b/src/startup.S` |
 | Cortex-M port | `micro-os-plus-iii-cortexm/include-*`, `src/rtos/os-core-*.cpp` |
 | POSIX host port | `micro-os-plus-iii-posix-arch/src/rtos/os-core.cpp`, `src/host_cpu.cpp` |
 | Board facts and contract | `test/boards/<board>/board.cmake`, `test_smpl/src/board-contract.cpp` |
@@ -1731,7 +1771,7 @@ A quick, plain-language reference for the situations that come up most often.
 | A thread exits | It joins the terminated list and switches away. The idle thread later frees its stack, marks it destroyed, and wakes a joiner. |
 | A thread is killed while running on another core | The killer marks it suspended under the kernel lock, sends an IPI to that core, and waits until the thread is off every core and its context is saved. |
 | A core has nothing to run | It runs its idle thread, which waits for an interrupt (`wfi` on ARM, `sigsuspend` on POSIX) and then checks the ready list again. |
-| A secondary core is released | It enters `port_smp_secondary_start`, sets up its own timer and IPI, installs a fake current thread, and reschedules into its idle or first real thread. |
+| A secondary core is released | It enters the port's secondary entry (`port_smp_secondary_start` on AArch/Cortex-M, `secondary_cpu_body` on POSIX), sets up its own timer and IPI, installs a fake current thread, and reschedules into its idle or first real thread. |
 | A secondary core never prints anything | Check the release handshake, the cache clean before the release, the idle-thread registration, `port_sys_init()`, and `_port_core_alive[core]`. |
 | A high-priority thread is made ready | On the current core it preempts immediately. On another core it waits for that core's tick, unless an IPI is sent. |
 | A thread takes `scheduler::critical_section` | This core stops switching threads. On AArch64 other cores keep running; on AArch32, Cortex-M and POSIX the same section also holds the kernel spinlock and blocks them. |
@@ -1766,7 +1806,7 @@ A quick, plain-language reference for the situations that come up most often.
 | `join()` never returns | The reaper never ran because CPU 0 never idled, or the target is still current on a core | `os_rtos_idle_actions()`, `current_thread_[c]`; see 12 |
 | A high-priority thread runs late | Remote preemption is tick-bounded; no IPI was sent | 6.3 and 9 |
 | A secondary core never prints | Release handshake failed, cache not cleaned, idle thread not registered | 8.2 and 8.3 |
-| `no ready thread and no idle thread on Core N` | `idleN` was not created or not stored in `os_idle_thread_core[]` before release | 6.2 and 8.1 |
+| `no ready thread and no idle thread` (AArch adds `on Core N`) | `idleN` was not created or not stored in `os_idle_thread_core[]` before release | 6.2 and 8.1 |
 | The clock stops or drifts | CPU 0 stalled; or skipped ticks were not accounted for in the high-resolution origin | 10 |
 | A thread never runs at all | Affinity mask is zero or names a core that was never released | 6.2 and 16 |
 | An IPI seems to be lost | The receiver's IPI source is disabled, the wrong SGI/mailbox is used, or interrupts stayed masked too long | 9 and the board's `port_sys.cpp` |
@@ -1793,7 +1833,7 @@ A quick, plain-language reference for the situations that come up most often.
 | `scheduler::critical_section` | This core's thread switches | Per-core on AArch64; also the kernel lock on the other ports |
 | `scheduler::kernel_critical_section` | Heap, `new`, `atexit`, object internals | IRQ mask + kernel spinlock, plus a per-core flag on AArch64 |
 
-## Boot a secondary in six steps
+## Boot an AArch secondary in six steps
 
 1. Core 0 creates and registers `idleN` in `os_idle_thread_core[N]`.
 2. Core 0 writes the entry address to the board's release mechanism.
@@ -1802,6 +1842,9 @@ A quick, plain-language reference for the situations that come up most often.
 5. It installs a fake current thread and calls `reschedule()`.
 6. It runs its idle thread or the first ready thread, and sets
    `_port_core_alive[N]` on its first tick.
+
+The Cortex-M ports launch through the bootrom FIFO or the MHU; the POSIX port
+uses `pthread_create`. The order of steps 1, 3, 5 and 6 is the same.
 
 ## Thread states
 
@@ -1819,14 +1862,17 @@ default.
 ## Numbers to remember
 
 - `OS_NCPU`: the number of cores, fixed at build time.
-- 1 ms: the default tick, and the worst-case remote preemption delay.
+- 1 ms: the default tick, and the worst-case remote preemption delay on the
+  ARM ports and Linux.
 - `0`: the value of a claimed `stack_ptr`; never resume a thread with it.
 - `SMP_NO_OWNER`: the value of `_smp_klock.owner` when the lock is free.
 
 # 22. Read the source in this order
 
 If you want to see the implementation, these six functions tell most of the
-story. Read them in this order; each one is short.
+story. Read them in this order; each one is short. The paths below are the
+AArch ones; the Cortex-M and POSIX ports have the same pieces under their own
+file names.
 
 1. **`scheduler::internal_switch_threads()`** in `src/rtos/os-core.cpp`.
    This is the decision: re-link the outgoing thread if it is still runnable,

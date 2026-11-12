@@ -79,7 +79,7 @@ xpm install
 **Tests:** `smp_test0` … `smp_test4`, `smp_mem_test`, `smp_mem_inter_test`, `smp-mat-test`,
 `smp-mat-sdcard-test`, `smp-num-test`, `smp-pipeline-test`, `smp-pro-cons-test`,
 `sd_test`, `cmsis-os-validator`, `mutex-stress`, `rtos-apis`, `smp-list-storage-test`,
-`smp-shapes-test`, `clock-test`.
+`smp-shapes-test`, `clock-test`, `eth-net`, `eth-tcp-server`.
 
 The last two are the C++ versions of tests first written for the Zig port, check for check:
 `smp-list-storage-test` is a generic intrusive list with its nodes on thread stacks, in `.data` and
@@ -99,6 +99,23 @@ origin (`timer_arm::hr_base()`; it was the raw counter since power-on, while its
 from the tick's start), and the counter's frequency calibrated once instead of by every core.
 On the board: 5000 ticks = 5 000 000 µs, the 100 ms sleep 101.0 ms on both cores (11 s). The
 same test exists for the Pico 2 and for the Zero 2 W and Pi 3 B of both ports.
+
+`eth-net` and `eth-tcp-server` are the Ethernet tests (added 2026-11-12), the wired counterparts
+of the Mango Pi MQ-Pro `wifi-net` tests. They bring their network stack with them: a polled
+driver for the BCM2711's GENET v5 controller and its BCM54213PE PHY, lwIP 2.2.1 without an OS
+layer, and the glue between them, under `test/boards/rpi4b/net/`; lwIP itself is in
+`test/third_party/lwip/`. One thread owns the controller and lwIP and polls every 2 ms; a second
+thread owns the SD card, so the link stays serviced while a file is written. Both need the board
+on a network (a cable to a router with DHCP, or a static address, §5a); their `-qemu` images
+only report `RESULT: SKIP`. The driver, the threads and the options are described in
+`micro-os-plus-iii-aarch64/test/boards/rpi4b/net/README.md`.
+
+- `eth-net`: controller and PHY, link, DHCP, four ICMP echoes to the gateway, and the run's log
+  written to `tests/ETHNET.LOG` on the SD card and read back.
+- `eth-tcp-server`: the same bring-up, then a TCP echo server on port 7. What a client sends is
+  echoed, kept, and written to `tests/ETHRX.BIN` on the SD card and read back; the board prints
+  the size and the CRC-32 of what it received. It needs a client: `eth-tcp-host.py`, next to the
+  test.
 
 ```sh
 cd "$W/micro-os-plus-iii/tests"
@@ -155,6 +172,46 @@ xpm run test-$T-qemu --config $C
 |---|---|
 | all QEMU tests (does not build) | `xpm run test --config $C` (= `ctest -V -LE hwd`) |
 | all board tests, back to back (**not verified**, see §8) | `UOS_HW_ADAPTER_KHZ=15000 xpm run test-hwd --config $C` |
+
+## 5a. The Ethernet tests
+
+`eth-net` runs like any other board test, with the Ethernet cable plugged in:
+
+```sh
+UOS_HW_ADAPTER_KHZ=15000 xpm run test-eth-net-hwd --config $C
+```
+
+`eth-tcp-server` waits 60 s for a client after it prints
+`[TEST] TCP server ready at <address>:7` on the UART. Start it, then run the client from a second
+terminal with that address:
+
+```sh
+UOS_HW_ADAPTER_KHZ=15000 xpm run test-eth-tcp-server-hwd --config $C
+
+# second terminal, while the test waits
+"$W/micro-os-plus-iii-aarch64/test/rpi4b/eth-tcp-server/eth-tcp-host.py" 192.168.1.191 --size 1048576
+```
+
+The client sends a pattern, checks that every byte comes back, and prints the size and CRC-32
+it sent; the board's `received <n> bytes, CRC-32 <crc>` line must show the same two numbers.
+With `--serial /dev/ttyACM1` instead of an address the client reads the address and the board's
+CRC from the console itself; use that only when no terminal is open on the port.
+
+Options, given to CMake at configure time (`cmake -S . -B build/$C -D NAME=value`):
+
+| Option | Default | Meaning |
+|---|---|---|
+| `ETH_TEST_STATIC_IP` | empty (DHCP) | `a.b.c.d/len`: use this address instead of DHCP |
+| `ETH_TEST_GATEWAY` | from DHCP | the gateway `eth-net` pings; required with a static address |
+| `ETH_TEST_PEER` | empty | a second host for `eth-net` to ping |
+| `ETH_TCP_WAIT_S` | `60` | seconds `eth-tcp-server` waits for a client |
+
+When a test fails before the network is up, its `RESULT: FAIL (...)` line says where it stopped:
+no controller or PHY, no link (with the PHY's status registers for the gigabit attempt and for
+the 10/100 retry that follows after 7 s), or no DHCP lease (with the frame counters). Without a
+link the driver also sends one frame to itself through the MAC and through the PHY and prints
+`loopback self-test: MAC ok, PHY ok` on the UART, which separates a controller fault from a
+cable fault.
 
 ## 6. Board settings
 
@@ -252,6 +309,21 @@ The `sh` blocks of this file were extracted unchanged and run as one script with
 | §5: `ctest … -R aarch64-rpi4b-smp_test2-hwd`, 15 MHz | ✅ `RESULT: PASS`, 14 s |
 
 Golden workspace: `smp_mem_inter_test-hwd` at 15 MHz passed in 525 s.
+
+### Ethernet tests (2026-11-12, this workspace, debug configuration)
+
+Built into the existing `build/aarch64-rpi4b-cmake-gcc-debug` tree (`cmake --build` of the four
+`eth-*` targets) and run with `ctest -R`, the board on a home router with DHCP.
+
+| Case | Result |
+|---|---|
+| `aarch64-rpi4b-eth-net-hwd` | ✅ `RESULT: PASS (link, address, gateway ping, log on the SD card)`, 12 s |
+| `aarch64-rpi4b-eth-tcp-server-hwd` | ✅ `RESULT: PASS (client served, stream on the SD card)`, 14 s; 1 MiB from `eth-tcp-host.py`, echo identical, about 200 Mbit/s each way |
+| `aarch64-rpi4b-eth-net-qemu`, `aarch64-rpi4b-eth-tcp-server-qemu` | ✅ `RESULT: SKIP`, passed |
+| loopback self-test (cable not linked) | ✅ `MAC ok, PHY ok` |
+
+Not verified: the release configuration, a static address, the `xpm run test-eth-*` actions
+(the cases were run with `ctest` directly), and the client's `--serial` mode.
 
 ### What was not verified
 

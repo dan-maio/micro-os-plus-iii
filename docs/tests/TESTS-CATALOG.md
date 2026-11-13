@@ -196,21 +196,27 @@ and `-hwd`, except as noted.
 **Exception**: `usb_test` has **no `-hwd` case on the Pi 3 B**, only `-qemu`. The
 Pi 3 B's USB ports sit behind the LAN9514 hub, so the DWC2 can only be a host.
 
-Case counts: Zero 2 W 32 (16 × 2), Pi 3 B 31; the AArch64 Zero 2 W has 4 more
-(§5.1).
+Case counts: the Zero 2 W 36 (18 × 2) on both ports, Pi 3 B 31; the two Wi-Fi
+tests are Zero 2 W only (§5.1).
 
-### 5.1 AArch64 Zero 2 W only — Wi-Fi
+### 5.1 Zero 2 W only — Wi-Fi (AArch32 and AArch64)
 
-Two more test directories exist in `micro-os-plus-iii-aarch64/test/rpi-zero-2w/`
-alone (added 2026-11-13). They bring their stack with them, under
-`test/boards/rpi-zero-2w/wifi/`: an SDIO host on the Arasan controller, a driver
-for the board's CYW43436 Wi-Fi chip with its firmware, and lwIP 2.2.1 without an
-OS layer (`test/third_party/lwip/`). The radio owns the Arasan controller, so
-these two tests reach the SD card through the BCM2837's other controller
+Two more test directories exist in both
+`micro-os-plus-iii-aarch32/test/rpi-zero-2w/` and
+`micro-os-plus-iii-aarch64/test/rpi-zero-2w/` (added 2026-11-13). They bring
+their stack with them, under each port's `test/boards/rpi-zero-2w/wifi/`: an
+SDIO host on the Arasan controller, a driver for the board's CYW43436 Wi-Fi chip
+with its firmware, and lwIP 2.2.1 without an OS layer
+(`test/third_party/lwip/`). The radio owns the Arasan controller, so these two
+tests reach the SD card through the BCM2837's other controller
 (`SD_BACKEND_SDHOST`, `drivers/src/sd_sdhost.cpp`); the sixteen tests above are
-unchanged. One thread owns the radio and lwIP, a second one the SD card. The
-driver, the options and what was verified are in
-`micro-os-plus-iii-aarch64/test/boards/rpi-zero-2w/wifi/README.md`.
+unchanged. One thread owns the radio and lwIP, a second one the SD card.
+
+The AArch32 copies are the AArch64 sources, with the platform services taking
+time and the counter from the AArch32 port (`timer_arm`, CP15) because CNTFRQ
+lies on this board (19.2 MHz reported, about 1 MHz actual). The driver, the
+options and what was verified are in each port's
+`test/boards/rpi-zero-2w/wifi/README.md`.
 
 | Test | What it does | Mode |
 |---|---|---|
@@ -220,8 +226,13 @@ driver, the options and what was verified are in
 Both need the board, an access point and, at configure time,
 `-D WIFI_TEST_SSID=... -D WIFI_TEST_PASS=...`; their `-qemu` cases only report
 `RESULT: SKIP`. Verified on the board on 2026-11-13 with a CMSIS-DAP probe
-(`PROBE=cmsis-dap`): `wifi-net` PASS, `wifi-tcp-server` PASS with 1 MiB echoed
-and saved.
+(`PROBE=cmsis-dap`):
+
+- AArch64: `wifi-net` PASS; `wifi-tcp-server` PASS with 1 MiB echoed and saved.
+- AArch32: `wifi-net` PASS (joined, DHCP lease, four of four gateway pings,
+  `tests/WIFINET.LOG` verified); `wifi-tcp-server` PASS with 256 KiB echoed and
+  saved, CRC-32 `ff1d2b6f` equal on both sides, 5.7 Mbit/s each way
+  (`tests/WIFIRX.BIN` and `WIFITCP.LOG` verified).
 
 The Raspberry Pi 4 B has the wired counterparts, `eth-net` and `eth-tcp-server`
 (`docs/tests/RPI4B-TESTS-HOWTO.md`, §5a).

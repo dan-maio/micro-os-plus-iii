@@ -11,6 +11,11 @@
 #                             include/ and one folder per board-only test>)
 #   set (UOS_TESTS_SOURCES  <the portable tests this board runs, from
 #                             tests/sources/<test>/>)
+#   set (UOS_TESTS_PORTABLE <those of them that are os_main() only: they get
+#                             the platform's start-up, src/platform-support.cpp,
+#                             and the common end, portable-test-end.cpp>)
+#   set (UOS_TESTS_STARTUP_LIBS <what the platform's start-up needs, e.g. the
+#                             kernel's C-library groups on AArch32>)
 #   add_subdirectory ("${CMAKE_SOURCE_DIR}/board-tests" "port-tests/test")
 #
 # It hands back UOS_TESTS_APPS, the tests it built, for the platform to
@@ -109,6 +114,18 @@ if (EXISTS "${_test_dir}/tests.cmake")
   include ("${_test_dir}/tests.cmake")
 endif ()
 
+# The start-up of a portable test: the platform's (board bring-up, the
+# secondary cores, then os_main) and the common end (the RESULT line and the
+# end of the run), wrapping os_main.
+if (UOS_TESTS_PORTABLE AND NOT TARGET ${PLATFORM_NAME}-test-startup)
+  add_library (${PLATFORM_NAME}-test-startup INTERFACE)
+  target_sources (${PLATFORM_NAME}-test-startup INTERFACE
+    "${CMAKE_SOURCE_DIR}/platforms/${PLATFORM_NAME}/src/platform-support.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/portable-test-end.cpp")
+  target_link_options (${PLATFORM_NAME}-test-startup INTERFACE "-Wl,--wrap=os_main")
+  target_link_libraries (${PLATFORM_NAME}-test-startup INTERFACE ${UOS_TESTS_STARTUP_LIBS})
+endif ()
+
 # The support the board's tests share: one copy per board, not per test.
 file (GLOB _test_support CONFIGURE_DEPENDS "${_test_dir}/src/*.cpp")
 set (_test_includes "${_test_dir}/include")
@@ -176,6 +193,12 @@ foreach (_dir IN LISTS _test_dirs)
   endif ()
   if ("${_app}" IN_LIST BOARD_TEST_NEED_DEVICES)
     list (APPEND _libs ${UOS_BOARD_DEVICES})
+  endif ()
+  if ("${_app}" IN_LIST UOS_TESTS_PORTABLE)
+    if (NOT "${_app}" IN_LIST UOS_TESTS_SOURCES)
+      message (FATAL_ERROR "${_app} is in UOS_TESTS_PORTABLE but not in UOS_TESTS_SOURCES.")
+    endif ()
+    list (APPEND _libs ${PLATFORM_NAME}-test-startup)
   endif ()
   # Extra libraries (a harness suite's test::<suite>, a board's driver set).
   if (UOS_TESTS_PORT STREQUAL "posix")

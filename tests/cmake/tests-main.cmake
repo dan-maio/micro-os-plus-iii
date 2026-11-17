@@ -46,31 +46,25 @@ include ("platforms/${PLATFORM_NAME}/cmake/definitions.cmake")
 # Set `xpack_dependencies_folders` with the platform specific dependencies.
 include ("platforms/${PLATFORM_NAME}/cmake/dependencies-folders.cmake")
 
-# TEMPORARY (until the ports are xpm dependencies, plugged in with `xpm link`):
-# an architecture port listed as build/<config>/xpacks/@micro-os-plus/<port>
-# is taken from its working copy in this workspace, next to the kernel, unless
-# that entry already leads there. (An `xpm install` may have put the released
-# single-core package there, which is not the port under test.)
-# UOS_<PORT>_DIR names the folder used; the platforms of the ports read it.
-get_filename_component (_uos_workspace "${CMAKE_SOURCE_DIR}/../.." REALPATH)
-set (_uos_deps "")
+# UNTIL THE BOARD FACTS MOVE INTO THE PLATFORMS: the platforms of the ports
+# read UOS_<PORT>_DIR, the port's real folder behind its link in
+# build/<config>/xpacks/@micro-os-plus/ (`xpm run link-deps --config <config>`).
+# The real path, so that the board scripts find the kernel next to the port.
 foreach (_dep IN LISTS xpack_dependencies_folders)
   string (REGEX MATCH "/xpacks/@micro-os-plus/(micro-os-plus-iii-[a-z0-9-]+)$" _m "${_dep}")
   if (_m)
     set (_port "${CMAKE_MATCH_1}")
-    get_filename_component (_real "${_dep}" REALPATH)
-    if (NOT _real STREQUAL "${_uos_workspace}/${_port}")
-      set (_dep "${_uos_workspace}/${_port}")
+    if (NOT EXISTS "${_dep}/CMakeLists.txt")
+      message (FATAL_ERROR "${_port} is not linked into this build folder.\n"
+        "Run: xpm run link-deps --config <configuration>")
     endif ()
     string (REPLACE "micro-os-plus-iii-" "" _var "${_port}")
     string (TOUPPER "${_var}" _var)
     string (REPLACE "-" "_" _var "${_var}")
-    set (UOS_${_var}_DIR "${_dep}")
-    message (STATUS "µOS++ III ${_port}: ${_dep}")
+    get_filename_component (UOS_${_var}_DIR "${_dep}" REALPATH)
+    message (STATUS "µOS++ III ${_port}: ${UOS_${_var}_DIR}")
   endif ()
-  list (APPEND _uos_deps "${_dep}")
 endforeach ()
-set (xpack_dependencies_folders "${_uos_deps}")
 
 # Iterate the platform dependencies and `add_subdirectory()`.
 xpack_add_dependencies_subdirectories (

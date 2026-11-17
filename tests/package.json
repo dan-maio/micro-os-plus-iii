@@ -576,8 +576,7 @@
             "xpm install --config {{ configuration.name }}"
           ],
           "link-deps": [
-            "xpm link @micro-os-plus/micro-os-plus-iii-posix-arch --config {{ configuration.name }}",
-            "xpm link @xpack-3rd-party/libucontext --config {{ configuration.name }}"
+            "xpm link @micro-os-plus/micro-os-plus-iii-posix-arch --config {{ configuration.name }}"
           ]
         }
       },
@@ -588,19 +587,13 @@
             "xpm install --config {{ configuration.name }}"
           ],
           "link-deps": [
-            "xpm link @micro-os-plus/micro-os-plus-iii-cortexm --config {{ configuration.name }}",
-            "xpm link @xpacks/arm-cmsis --config {{ configuration.name }}"
+            "xpm link @micro-os-plus/micro-os-plus-iii-cortexm --config {{ configuration.name }}"
           ]
         }
       },
       "native-dependencies": {
         "hidden": true,
         "devDependencies": {
-          "@micro-os-plus/posix-arch": {
-            "specifier": "github:micro-os-plus/micro-os-plus-iii-posix-arch#v1.0.1",
-            "local": "link",
-            "platforms": "all"
-          },
           "@xpack-3rd-party/libucontext": {
             "specifier": "github:xpack-3rd-party/libucontext-xpack#v1.2.0-5",
             "local": "link",
@@ -610,13 +603,7 @@
       },
       "cortexm-dependencies": {
         "hidden": true,
-        "devDependencies": {
-          "@micro-os-plus/micro-os-plus-iii-cortexm": {
-            "specifier": "github:micro-os-plus/micro-os-plus-iii-cortexm#v1.1.0",
-            "local": "link",
-            "platforms": "all"
-          }
-        }
+        "devDependencies": {}
       },
       "arm-cmsis-dependencies": {
         "hidden": true,
@@ -768,8 +755,7 @@
         "hidden": true,
         "actions": {
           "install": [
-            "xpm install --config {{ configuration.name }}",
-            "xpm link @micro-os-plus/micro-os-plus-iii-aarch32 --config {{ configuration.name }}"
+            "xpm install --config {{ configuration.name }}"
           ],
           "link-deps": [
             "xpm link @micro-os-plus/micro-os-plus-iii-aarch32 --config {{ configuration.name }}"
@@ -796,8 +782,7 @@
         "hidden": true,
         "actions": {
           "install": [
-            "xpm install --config {{ configuration.name }}",
-            "xpm link @micro-os-plus/micro-os-plus-iii-aarch64 --config {{ configuration.name }}"
+            "xpm install --config {{ configuration.name }}"
           ],
           "link-deps": [
             "xpm link @micro-os-plus/micro-os-plus-iii-aarch64 --config {{ configuration.name }}"

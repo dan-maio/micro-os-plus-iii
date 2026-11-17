@@ -14,6 +14,7 @@ message (VERBOSE "Processing 'tests/platforms/${PLATFORM_NAME}'...")
 
 # -----------------------------------------------------------------------------
 include ("cmake/platform-library.cmake")
+include ("${CMAKE_SOURCE_DIR}/cmake/uos-tests-run.cmake")
 
 # The port publishes most board facts as CACHE INTERNAL, but not
 # UOS_BOARD_DEVICES; read the board declaration so the builder sees it.
@@ -26,7 +27,6 @@ add_subdirectory ("${UOS_AARCH64_DIR}/test" "port-tests/test")
 set (_port_bin "${CMAKE_CURRENT_BINARY_DIR}/port-tests/test")
 set (_port_test_dir "${UOS_AARCH64_DIR}/test/rpi-zero-2w")
 set (_board_hw "${UOS_AARCH64_DIR}/test/boards/${BOARD}/hw.sh")
-set (_runner "${CMAKE_SOURCE_DIR}/../test_smpl")
 
 # -----------------------------------------------------------------------------
 # The QEMU binary and machine arguments: raspi3b, image handed to -kernel.
@@ -56,14 +56,11 @@ foreach (_dir IN LISTS _test_dirs)
     continue ()
   endif ()
 
-  add_test (
-    NAME "${PLATFORM_NAME}-${_app}-qemu"
-    COMMAND
-      bash "${_runner}/run-qemu.sh" "${_port_bin}" "${_qemu}" -M raspi3b -smp 4
-  )
-  set_tests_properties (
-    "${PLATFORM_NAME}-${_app}-qemu"
-    PROPERTIES ENVIRONMENT "UOS_QEMU_ONLY=${_app};UOS_TEST_SRC_DIR=${_port_test_dir}" LABELS "qemu" TIMEOUT 2400
+  uos_tests_add_qemu (
+    NAME "${PLATFORM_NAME}-${_app}-qemu" APP "${_app}"
+    IMAGE "${_port_bin}/${_app}-qemu.bin"
+    QEMU "${_qemu}" MACHINE -M raspi3b -smp 4
+    TEST_SOURCE_DIR "${_port_test_dir}"
   )
 
   add_test (

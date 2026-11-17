@@ -8,15 +8,16 @@
 # targets it produced, one CTest case per (test, variant). Every test the port
 # has appears here, and a test added to the port appears here with no edit.
 #
-# The run side is the shared runner (test_smpl/run-qemu.sh, run-hw.sh), the
-# same pair the port's own qemu.sh/hw.sh call. The names carry the variant:
-# `<platform>-<app>-qemu` and `<platform>-<app>-hwd`.
+# CTest runs QEMU itself (tests/cmake/uos-tests-run.cmake); the hwd cases
+# still go through the board's hw.sh (run-hw.sh) until step 7. The names carry
+# the variant: `<platform>-<app>-qemu` and `<platform>-<app>-hwd`.
 # -----------------------------------------------------------------------------
 
 message (VERBOSE "Processing 'tests/platforms/${PLATFORM_NAME}'...")
 
 # -----------------------------------------------------------------------------
 include ("cmake/platform-library.cmake")
+include ("${CMAKE_SOURCE_DIR}/cmake/uos-tests-run.cmake")
 
 # -----------------------------------------------------------------------------
 # The port publishes most board facts as CACHE INTERNAL, but not
@@ -34,7 +35,6 @@ set (_port_bin "${CMAKE_CURRENT_BINARY_DIR}/port-tests/test")
 set (_port_test_dir "${UOS_AARCH32_DIR}/test/rpi-zero-2w")
 set (_board_hw "${UOS_AARCH32_DIR}/test/boards/${BOARD}/hw.sh")
 set (_shim_img "${_port_bin}/shim8.img")
-set (_runner "${CMAKE_SOURCE_DIR}/../test_smpl")
 
 # -----------------------------------------------------------------------------
 # The QEMU binary and machine arguments: raspi3b + the shim, image at 0x10000.
@@ -67,18 +67,12 @@ foreach (_dir IN LISTS _test_dirs)
   endif ()
 
   # --- qemu --------------------------------------------------------------
-  add_test (
-    NAME "${PLATFORM_NAME}-${_app}-qemu"
-    COMMAND
-      bash "${_runner}/run-qemu.sh" "${_port_bin}" "${_qemu}" -M raspi3b
-      -smp 4
-  )
-  set_tests_properties (
-    "${PLATFORM_NAME}-${_app}-qemu"
-    PROPERTIES
-      ENVIRONMENT
-      "UOS_QEMU_SHIM=${_shim_img};UOS_QEMU_LOAD_ADDR=0x10000;UOS_QEMU_ONLY=${_app};UOS_TEST_SRC_DIR=${_port_test_dir}"
-      LABELS "qemu" TIMEOUT 2400
+  uos_tests_add_qemu (
+    NAME "${PLATFORM_NAME}-${_app}-qemu" APP "${_app}"
+    IMAGE "${_port_bin}/${_app}-qemu.bin"
+    QEMU "${_qemu}" MACHINE -M raspi3b -smp 4
+    SHIM "${_shim_img}" LOAD_ADDRESS 0x10000
+    TEST_SOURCE_DIR "${_port_test_dir}"
   )
 
   # --- hwd ---------------------------------------------------------------

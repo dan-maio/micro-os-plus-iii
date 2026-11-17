@@ -1,175 +1,172 @@
 /*
- * smp_test3 -- µOS++ message_queue producer/consumer.
+ * This file is part of the µOS++ project (https://micro-os-plus.github.io/).
+ * Copyright (c) 2026 Liviu Ionescu. All rights reserved.
  *
- * A producer on core 0 sends numbers through a message queue to a consumer
- * on core 1, which classifies them (prime/composite) and toggles the LED; a
- * logger on core 2 prints the counts. At the end the threads are stopped
- * (g_running) before the result is printed.
+ * Permission to use, copy, modify, and/or distribute this software for any
+ * purpose is hereby granted, under the terms of the MIT license.
  *
- * One copy for every board: it was a copy per board in the architecture
- * ports (test/<board>/), merged in step 6b of the upstream alignment. The
- * board supplies the console (uart.hpp), the LED, the secondary-core start
- * (smp.hpp) and the banner (PORT_BANNER_*); the platform builds and runs it.
+ * If a copy of the license was not distributed with this file, it can be
+ * obtained from https://opensource.org/licenses/mit.
  */
 
-#include <atomic>
+/*
+ * smp_test3 -- µOS++ message_queue producer/consumer across cores.
+ *
+ * A producer on core 0 sends numbers through a message queue to a consumer
+ * on core 1, which classifies them (prime/composite); a logger on core 2
+ * prints the counts once per second. The run passes if numbers were consumed
+ * and each thread ran on the core it was pinned to. The core numbers wrap
+ * modulo OS_NCPU.
+
+ * A portable test: os_main() only, the µOS++ interfaces only. The platform
+ * brings the board and the secondary cores up before os_main() and prints the
+ * RESULT line from its return value (board-tests/portable-test-end.cpp).
+ */
+
 #include <cmsis-plus/rtos/os.h>
-#include <cmsis-plus/diag/trace.h>
-#include <uart.hpp>
-#include <led.hpp>
-#include <exception_handler.hpp>
-#include <smp.hpp>
-#include <hw_result.hpp>
 
-// Secondary-core idle stacks, the idle body and smp_install_boot_threads()
-// are identical in every SMP test; see this board's src/test-smp-boot.cpp.
-#include <test-smp-boot.hpp>
+#include <atomic>
+#include <cstdint>
+#include <cstdio>
 
-extern "C" unsigned port_cpu_id(void);
+// The port's "which CPU am I on", as the kernel itself uses it.
+extern "C" unsigned port_cpu_id (void);
+
 using namespace os::rtos;
 
-static message_queue g_mq { "mq", 8, sizeof(void*) };  /* AArch64: slot >= sizeof(void*) */
-static mutex g_print { "print" };   // serialize UART across cores
-static std::atomic<std::uint32_t> g_produced{0}, g_consumed{0}, g_primes{0};
-static std::atomic<unsigned> g_beats{0};
-static std::atomic<bool> g_running{true};
+// A slot of at least sizeof(void*): AArch64 needs it.
+static message_queue g_mq{ "mq", 8, sizeof (void*) };
+static mutex g_print{ "print" }; // stdout is one stream for all cores
+static std::atomic<std::uint32_t> g_produced{ 0 }, g_consumed{ 0 }, g_primes{ 0 };
+static std::atomic<int> g_prod_core{ -1 }, g_cons_core{ -1 }, g_log_core{ -1 };
+static std::atomic<bool> g_running{ true };
 
-static bool is_prime(std::uint32_t n)
+static constexpr unsigned PROD_CORE = 0;
+static constexpr unsigned CONS_CORE = 1 % OS_NCPU;
+static constexpr unsigned LOG_CORE = 2 % OS_NCPU;
+
+static bool
+is_prime (std::uint32_t n)
 {
-  if (n < 2) return false;
-  for (std::uint32_t i = 2; i * i <= n; ++i) if (n % i == 0) return false;
+  if (n < 2)
+    {
+      return false;
+    }
+  for (std::uint32_t i = 2; i * i <= n; ++i)
+    {
+      if (n % i == 0)
+        {
+          return false;
+        }
+    }
   return true;
 }
 
-static void* producer (void*)
+static void*
+producer (void*)
 {
   std::uint32_t v = 2;
-  while (g_running) { g_mq.send(&v, sizeof(v), 0); ++g_produced; ++v; sysclock.sleep_for(20); }
+  while (g_running)
+    {
+      g_prod_core = static_cast<int> (port_cpu_id ());
+      g_mq.send (&v, sizeof (v), 0);
+      ++g_produced;
+      ++v;
+      sysclock.sleep_for (20);
+    }
   return nullptr;
 }
-static void* consumer (void*)
+
+static void*
+consumer (void*)
 {
-  std::uint32_t v; bool led_state = false;
+  std::uint32_t v;
   while (g_running)
-  {
-    if (g_mq.receive(&v, sizeof(v), nullptr) == result::ok)
     {
-      ++g_consumed;
-      bool p = is_prime(v);
-      if (p) { ++g_primes; led_state = !led_state; led::set(led_state); }
-      g_print.lock();
+      if (g_mq.receive (&v, sizeof (v), nullptr) == result::ok)
+        {
+          g_cons_core = static_cast<int> (port_cpu_id ());
+          ++g_consumed;
+          const bool p = is_prime (v);
+          if (p)
+            {
+              ++g_primes;
+            }
+          g_print.lock ();
+          if (g_running)
+            {
+              std::printf ("[c%u] recv %u %s\n", port_cpu_id (),
+                           static_cast<unsigned> (v),
+                           p ? "PRIME" : "composite");
+            }
+          g_print.unlock ();
+        }
+    }
+  return nullptr;
+}
+
+static void*
+logger (void*)
+{
+  while (g_running)
+    {
+      g_log_core = static_cast<int> (port_cpu_id ());
+      g_print.lock ();
       if (g_running)
-      {
-        uart::uart1 << "[c" << (int)port_cpu_id() << "] recv " << v
-                    << (p ? " PRIME\n" : " composite\n");
-      }
-      g_print.unlock();
+        {
+          std::printf ("[c%u] produced=%u consumed=%u primes=%u t=%u ms\n",
+                       port_cpu_id (), g_produced.load (), g_consumed.load (),
+                       g_primes.load (),
+                       static_cast<unsigned> (sysclock.now ()));
+        }
+      g_print.unlock ();
+      sysclock.sleep_for (1000);
     }
-  }
   return nullptr;
-}
-static void* logger (void*)
-{
-  while (g_running)
-  {
-    g_print.lock();
-    if (g_running)
-    {
-      uart::uart1 << "[c" << (int)port_cpu_id() << "] produced=" << g_produced.load ()
-                  << " consumed=" << g_consumed.load () << " primes=" << g_primes.load ()
-                  << " t=" << (std::uint32_t)sysclock.now() << "ms\n";
-    }
-    g_print.unlock();
-    sysclock.sleep_for(1000);
-  }
-  return nullptr;
-}
-
-extern "C"
-{
-  extern char __heap_start[]; extern char __heap_end[];
-  extern char __fiq_stack_top[]; extern char __irq_stack_top[];
-
-  void os_startup_initialize_hardware_early (void) { }
-  void os_startup_initialize_hardware (void)
-  {
-    uart::uart1.init(); led::init();
-    uart::uart1 << "\n\n+== " PORT_BANNER_SHORT " µOS++ SMP TEST 3 : message_queue producer/consumer ==+\n\n";
-    os_startup_initialize_free_store(__heap_start,
-        static_cast<std::size_t>(__heap_end - __heap_start));
-    exception::init();
-  }
-  [[noreturn]] static void custom_main_trampoline (void) { std::exit (os_main (0, nullptr)); }
-  extern void os_startup_create_thread_idle (void);
-  extern os::rtos::thread* os_main_thread;
-
-  int main (int, char*[])
-  {
-#if defined(OS_HAS_INTERRUPTS_STACK)
-    os::rtos::interrupts::stack ()->set (
-        reinterpret_cast<os::rtos::thread::stack::element_t*>(__fiq_stack_top),
-        __irq_stack_top - __fiq_stack_top);
-    os::rtos::interrupts::stack ()->initialize ();
-#endif
-    scheduler::initialize ();
-    static thread::stack::element_t main_stack[8192];
-    thread::attributes attr = thread::initializer;
-    attr.th_stack_address = main_stack; attr.th_stack_size_bytes = sizeof(main_stack);
-    static thread main_thread { "main",
-        reinterpret_cast<thread::func_t> (custom_main_trampoline), nullptr, attr };
-    os_main_thread = &main_thread;
-    os_startup_create_thread_idle ();
-    scheduler::start ();
-    return 0;
-  }
 }
 
 static thread::stack::element_t s_prod[4096], s_cons[4096], s_log[4096];
 
-int os_main (int, char*[])
+int
+os_main (int, char*[])
 {
-  using uart::uart1;
-  // Unmask IRQs before the scheduler starts. Portable across every
-  // port: the architecture supplies the instruction, not the test.
-  (void)os::rtos::interrupts::uncritical_section::enter ();
-  smp_install_boot_threads();
-  smp::start_secondary_cores();
-  const int waited = test_wait_secondaries (3000);
-  uart1 << "join: " << test_join_summary () << " (" << waited << "ms)\n";
+  std::printf ("smp_test3: message_queue producer/consumer on %u cores\n",
+               static_cast<unsigned> (OS_NCPU));
 
   thread::attributes a = thread::initializer;
-  a.th_stack_address = s_prod; a.th_stack_size_bytes = sizeof(s_prod);
-  static thread t_prod { "producer", producer, nullptr, a };
-  a.th_stack_address = s_cons; a.th_stack_size_bytes = sizeof(s_cons);
-  static thread t_cons { "consumer", consumer, nullptr, a };
-  a.th_stack_address = s_log; a.th_stack_size_bytes = sizeof(s_log);
-  static thread t_log { "logger", logger, nullptr, a };
-  t_prod.cpu_affinity(1u << 0);
-  t_cons.cpu_affinity(1u << 1);
-  t_log.cpu_affinity(1u << 2);
+  a.th_stack_address = s_prod;
+  a.th_stack_size_bytes = sizeof (s_prod);
+  static thread t_prod{ "producer", producer, nullptr, a };
+  a.th_stack_address = s_cons;
+  a.th_stack_size_bytes = sizeof (s_cons);
+  static thread t_cons{ "consumer", consumer, nullptr, a };
+  a.th_stack_address = s_log;
+  a.th_stack_size_bytes = sizeof (s_log);
+  static thread t_log{ "logger", logger, nullptr, a };
+  t_prod.cpu_affinity (1u << PROD_CORE);
+  t_cons.cpu_affinity (1u << CONS_CORE);
+  t_log.cpu_affinity (1u << LOG_CORE);
 
-  // Give the producer/consumer demo exactly 10 one-second beats, then run the
-  // self-check and end through a semihosted exit() (SEMIHOST builds). The idle
-  // fallback is only reached on a plain SEMIHOST=0 / SD-boot image.
-  for (unsigned b = 1; b <= 10; ++b)
+  for (unsigned b = 0; b < 10; ++b)
     {
-      sysclock.sleep_for(1000);
-      g_beats = b;
+      sysclock.sleep_for (1000);
     }
-  const bool ok = (test_secondaries_joined () && g_consumed > 0);
+
+  const bool ok = (g_consumed > 0)
+                  && (g_prod_core == static_cast<int> (PROD_CORE))
+                  && (g_cons_core == static_cast<int> (CONS_CORE))
+                  && (g_log_core == static_cast<int> (LOG_CORE));
+
+  // Stop the threads before the verdict, and give them time to leave.
   g_running = false;
-  sysclock.sleep_for(50);
-  // Under the print mutex: single puts() = single SYS_WRITE0.
-  g_print.lock();
-  uart1.puts (ok ? "\nRESULT: PASS\n" : "\nRESULT: FAIL\n");
-  g_print.unlock();
-  if (ok)
-    {
-      hw_result::ok ();
-    }
-  else
-    {
-      hw_result::fail ();
-    }
-  for (;;) sysclock.sleep_for(1000);
+  sysclock.sleep_for (50);
+
+  g_print.lock ();
+  std::printf ("produced=%u consumed=%u primes=%u; producer on c%d (want "
+               "c%u), consumer on c%d (want c%u), logger on c%d (want c%u)\n",
+               g_produced.load (), g_consumed.load (), g_primes.load (),
+               g_prod_core.load (), PROD_CORE, g_cons_core.load (), CONS_CORE,
+               g_log_core.load (), LOG_CORE);
+  g_print.unlock ();
+  return ok ? 0 : 1;
 }

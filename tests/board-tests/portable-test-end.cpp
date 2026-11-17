@@ -27,6 +27,8 @@
 
 #include <cmsis-plus/rtos/os.h>
 
+#include <cstdio>
+
 #include <uart.hpp>
 #include <hw_result.hpp>
 
@@ -40,6 +42,10 @@ extern "C" int
 __wrap_os_main (int argc, char* argv[])
 {
   const int code = __real_os_main (argc, argv);
+
+  // The test printed through the C library (printf); its buffered output
+  // must reach the console before the run ends.
+  std::fflush (nullptr);
 
   // A single puts() is a single semihosted write: the line cannot be
   // interleaved with another core's output.

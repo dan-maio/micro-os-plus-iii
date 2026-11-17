@@ -131,12 +131,12 @@ set (UOS_BOARD_FATFS_CPP_SOURCES
 set (UOS_BOARD_FATFS_CPP_DISKIO
      "${UOS_AARCH32_ROOT}/test/boards/luckfox-lyra/fatfs-cpp/diskio_sdmmc.cpp")
 
-# The SoC folder (in a device package) whose include/ and src/ the board
-# target compiles. BCM2837,
-# not RK3506: the AArch32 port compiled soc/bcm2837/ for every board, and
-# step 4 changes no build. The RK3506 code is in micro-os-plus::devices-rk3506.
-# To be put right when the SoC code moves to its device package (step 5).
-set (UOS_BOARD_SOC_DIR "${UOS_DEVICES_BCM283X_ROOT}/soc/bcm2837")
+# No SoC folder: the board compiles no SoC code of its own. The RK3506 code it
+# needs is the board's own (include/rk3506.hpp: registers, the SRAM mailbox)
+# and micro-os-plus-iii-devices-rk3506 (the SD host, micro-os-plus::devices-rk3506,
+# for the tests that use the card). Until step 5b the AArch32 port compiled
+# the BCM2837 SoC folder here too, unused.
+set (UOS_BOARD_SOC_DIR "")
 
 # The port's test folder for this board (test/<BOARD>/), read by its builder.
 set (BOARD "luckfox-lyra")

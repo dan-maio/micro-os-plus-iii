@@ -20,20 +20,15 @@
  * ports (test/<board>/), merged in step 6b of the upstream alignment. The
  * threads are pinned to cores modulo OS_NCPU, so a board with fewer cores
  * runs the same set.
+ *
+ * A portable test: os_main() only, the µOS++ interfaces only (and the
+ * storage drivers of the device packages). The platform brings the board and
+ * the secondary cores up before os_main() and prints the RESULT line from its
+ * return value (board-tests/portable-test-end.cpp).
  */
-
 
 #include <cmsis-plus/rtos/os.h>
 #include <cmsis-plus/diag/trace.h>
-#include <uart.hpp>
-
-#ifndef LED_PIN
-#define LED_PIN 16
-#endif
-#include <led.hpp>
-#include <exception_handler.hpp>
-#include <smp.hpp>
-#include <hw_result.hpp>
 
 #include <cstdarg>
 #include <cstdint>
@@ -41,16 +36,66 @@
 #include <cstring>
 #include <atomic>
 
-// Secondary-core idle stacks, the idle body and smp_install_boot_threads()
-// are identical in every SMP test; see this board's src/test-smp-boot.cpp.
-#include <test-smp-boot.hpp>
 
-// console() / console_uart() serialise output across cores; every test
-// carried its own copy. See this board's include/test-console.hpp.
-#include <test-console.hpp>
 
 extern "C" unsigned port_cpu_id (void);
 using namespace os::rtos;
+
+// Console output: one line per call, serialised across cores (stdout is one
+// stream). It reaches the board's console through the C library -- the UART,
+// mirrored to semihosting where the board does so. console_uart() was the
+// board's UART-only variant for the high-volume lines; here both are one.
+static mutex&
+console_mutex (void)
+{
+  static mutex m{ "console" };
+  return m;
+}
+
+static void
+console (const char* fmt, ...) __attribute__ ((format (printf, 1, 2)));
+
+static void
+console (const char* fmt, ...)
+{
+  char b[256];
+  std::va_list ap;
+  va_start (ap, fmt);
+  std::vsnprintf (b, sizeof (b), fmt, ap);
+  va_end (ap);
+  console_mutex ().lock ();
+  std::fputs (b, stdout);
+  console_mutex ().unlock ();
+}
+
+#define console_uart console
+
+// This core's index, clamped to the counters' size.
+static inline unsigned
+cpu_slot (void)
+{
+  const unsigned id = port_cpu_id ();
+  return (id < OS_NCPU) ? id : 0u;
+}
+
+// One per-core tally line, "<label> : c0=.. c1=..", for every core.
+static void
+report_per_core (const char* label, const std::uint32_t* counts)
+{
+  char b[32 * OS_NCPU + 64];
+  int n = std::snprintf (b, sizeof (b), "  %s : ", label);
+  for (unsigned c = 0; c < OS_NCPU && n > 0 && n < static_cast<int> (sizeof (b)); ++c)
+    {
+      const int w = std::snprintf (b + n, sizeof (b) - static_cast<unsigned> (n),
+                                   "c%u=%u ", c, static_cast<unsigned> (counts[c]));
+      if (w <= 0)
+        {
+          break;
+        }
+      n += w;
+    }
+  console ("%s\n", b);
+}
 
 namespace
 {
@@ -58,15 +103,6 @@ namespace
 #ifndef RUN_MS
 #define RUN_MS 4000
 #endif
-
-// LED helper
-inline void
-led_toggle () noexcept
-{
-  static bool s_state = false;
-  s_state = !s_state;
-  led::set (s_state);
-}
 
 // ---------------------------------------------------------------------------
 // Packet structure exchanged via memory_pool & message_queue
@@ -156,7 +192,6 @@ heartbeat_timer_cb (timer::func_args_t)
 {
   g_timer_ticks.fetch_add (1, std::memory_order_relaxed);
   g_events.raise (FLAG_TIMER_TICK);
-  led_toggle ();
 }
 
 static timer g_heartbeat_timer {
@@ -449,19 +484,12 @@ int
 os_main (int, char*[])
 {
   console ("\n+=============================================================+\n");
-  console ("|  " PORT_BANNER_SHORT " µOS++ SMP PRODUCER-CONSUMER KERNEL OBJECT TEST |\n");
-  console ("|  " PORT_BANNER_CPU " — ALL Kernel Objects Demo |\n");
+  console ("|  µOS++ SMP PRODUCER-CONSUMER KERNEL OBJECT TEST              |\n");
+  console ("|  %u cores -- ALL Kernel Objects Demo                          |\n",
+           static_cast<unsigned> (OS_NCPU));
   console ("+=============================================================+\n\n");
 
-  // 1. Initialize secondary boot threads & release secondary cores
-  // Unmask IRQs before the scheduler starts. Portable across every
-  // port: the architecture supplies the instruction, not the test.
-  (void)os::rtos::interrupts::uncritical_section::enter ();
-  smp_install_boot_threads ();
-  smp::start_secondary_cores ();
-
-  const int waited = test_wait_secondaries (3000);
-  console ("Secondary cores joined: %s (%d ms)\n", test_join_summary (), waited);
+  // 1. The secondary cores were released by the platform, before os_main().
 
   // 2. Start Software Timer (Heartbeat)
   console ("Starting periodic software timer (200 ms)...\n");
@@ -569,7 +597,8 @@ os_main (int, char*[])
   };
   s_telem_thread.cpu_affinity (1u << 0);
 
-  console ("12 concurrent threads started across " TEST_NCPU_STR " cores!\n");
+  console ("12 concurrent threads started across %u cores!\n",
+           static_cast<unsigned> (OS_NCPU));
   console ("Running pipeline for %u ms ...\n\n", static_cast<unsigned> (RUN_MS));
 
   // Run test window
@@ -655,84 +684,6 @@ os_main (int, char*[])
                  && (susp > 0) && (resm > 0)
                  && all_cores_active;
 
-  console ("RESULT: %s\n", pass ? "PASS" : "FAIL");
-
-  // On SEMIHOST builds this ends the run with the exit status; elsewhere on
-  // the boards hw_result compiles to nothing and the image falls through to
-  // the idle blink below. On the host it is the process's exit status.
-  if (pass)
-    {
-      hw_result::ok ();
-    }
-  else
-    {
-      hw_result::fail ();
-    }
-
-  // Standalone SD-boot mode: blink LED cadence and idle safely
-  for (;;)
-    {
-      led_toggle ();
-      sysclock.sleep_for (500);
-    }
-
-  return 0;
-}
-
-// ----------------------------------------------------------------------------
-// Startup Trampolines
-// ----------------------------------------------------------------------------
-extern "C"
-{
-  extern char __heap_start[];
-  extern char __heap_end[];
-  extern char __fiq_stack_top[];
-  extern char __irq_stack_top[];
-
-  void os_startup_initialize_hardware_early (void) { }
-
-  void
-  os_startup_initialize_hardware (void)
-  {
-    uart::uart1.init ();
-    led::init ();
-    os_startup_initialize_free_store (
-        __heap_start, static_cast<std::size_t> (__heap_end - __heap_start));
-    exception::init ();
-  }
-
-  [[noreturn]] static void
-  custom_main_trampoline (void)
-  {
-    std::exit (os_main (0, nullptr));
-  }
-
-  extern void os_startup_create_thread_idle (void);
-  extern os::rtos::thread* os_main_thread;
-
-  int
-  main (int, char*[])
-  {
-#if defined(OS_HAS_INTERRUPTS_STACK)
-    os::rtos::interrupts::stack ()->set (
-        reinterpret_cast<os::rtos::thread::stack::element_t*> (__fiq_stack_top),
-        __irq_stack_top - __fiq_stack_top);
-    os::rtos::interrupts::stack ()->initialize ();
-#endif
-    scheduler::initialize ();
-
-    static thread::stack::element_t main_stack[8192];
-    thread::attributes attr = thread::initializer;
-    attr.th_stack_address = main_stack;
-    attr.th_stack_size_bytes = sizeof (main_stack);
-    static thread main_thread {
-      "main", reinterpret_cast<thread::func_t> (custom_main_trampoline),
-      nullptr, attr
-    };
-    os_main_thread = &main_thread;
-
-    os_startup_create_thread_idle ();
-    scheduler::start ();
-    return 0;
-  }
+  console ("verdict: %s\n", pass ? "pass" : "fail");
+  return pass ? 0 : 1;
 }

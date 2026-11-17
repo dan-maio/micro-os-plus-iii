@@ -1,13 +1,13 @@
 /*
- * smp-num-test -- µOS++ multi-thread I/O demo (" PORT_BANNER_ISA ").
+ * smp-num-test -- µOS++ multi-thread I/O demo.
  *
  * Five concurrent worker threads with EXPLICIT priorities (highest first):
  *
  *   1. uart-writer      (prio high)          : console tick every 0.5 s
- *   2. led-blinker      (prio above_normal)  : the user LED, 5 blinks per
+ *   2. led-blinker      (prio above_normal)  : the pacer: 5 "blinks" per
  *                                              pass, 0.3 s on / 0.3 s off,
  *                                              printing "led on"/"led off" on
- *                                              every edge
+ *                                              every edge (no LED is driven)
  *   3. sd-text-writer   (prio normal)        : 20 lines of ~100 chars appended
  *                                              to num.txt on the SD card
  *   4. fp-compute       (prio below_normal)  : 20 sin/cos/log results appended
@@ -26,19 +26,17 @@
  *     root.
  *
  * One copy for every board: it was a copy per board in the architecture
- * ports (test/<board>/), merged in step 6b of the upstream alignment. The
- * board supplies the console, the LED, the SD card driver, the core start-up
- * and the banner; the number of cores is OS_NCPU.
+ * ports (test/<board>/), merged in step 6b of the upstream alignment; the
+ * number of cores is OS_NCPU.
+ *
+ * A portable test: os_main() only, the µOS++ interfaces only (and the
+ * storage drivers of the device packages). The platform brings the board and
+ * the secondary cores up before os_main() and prints the RESULT line from its
+ * return value (board-tests/portable-test-end.cpp).
  */
 
 #include <cmsis-plus/rtos/os.h>
 #include <cmsis-plus/diag/trace.h>
-#include <uart.hpp>
-// The LED (and, where it has one, its GPIO: LED_PIN) is the board's.
-#include <led.hpp>
-#include <exception_handler.hpp>
-#include <smp.hpp>
-#include <hw_result.hpp>
 #include <sd.hpp>
 #if defined(HW_BUILD)
 #include <fatfs_hw.hpp>
@@ -53,16 +51,39 @@
 #include <cstdio>
 #include <cstring>
 
-// Secondary-core idle stacks, the idle body and smp_install_boot_threads()
-// are identical in every SMP test; see this board's src/test-smp-boot.cpp.
-#include <test-smp-boot.hpp>
 
-// console() / console_uart() serialise output across cores; every test
-// carried its own copy. See this board's include/test-console.hpp.
-#include <test-console.hpp>
 
 extern "C" unsigned port_cpu_id (void);
 using namespace os::rtos;
+
+// Console output: one line per call, serialised across cores (stdout is one
+// stream). It reaches the board's console through the C library -- the UART,
+// mirrored to semihosting where the board does so. console_uart() was the
+// board's UART-only variant for the high-volume lines; here both are one.
+static mutex&
+console_mutex (void)
+{
+  static mutex m{ "console" };
+  return m;
+}
+
+static void
+console (const char* fmt, ...) __attribute__ ((format (printf, 1, 2)));
+
+static void
+console (const char* fmt, ...)
+{
+  char b[256];
+  std::va_list ap;
+  va_start (ap, fmt);
+  std::vsnprintf (b, sizeof (b), fmt, ap);
+  va_end (ap);
+  console_mutex ().lock ();
+  std::fputs (b, stdout);
+  console_mutex ().unlock ();
+}
+
+#define console_uart console
 
 namespace
 {
@@ -221,18 +242,14 @@ sd_remove_num ()
   console ("  removed previous num.txt (if any)\n");
 }
 
-void
+bool
 sd_prepare ()
 {
   console ("Initialising SD card...\n");
   if (!g_card.init ())
     {
       console ("  SD init FAILED: %s\n", g_card.last_error ());
-      hw_result::fail ();
-      for (;;)
-        {
-          sysclock.sleep_for (1000);
-        }
+      return false;
     }
   console ("  SD card ready: %u sectors (~%u MiB)\n", g_card.sector_count (),
            static_cast<unsigned> (g_card.capacity_bytes () >> 20));
@@ -242,20 +259,12 @@ sd_prepare ()
   if (!fatfshw::mount_volume ())
     {
       console ("  FAT32 mount failed: %s\n", fatfshw::last_error ());
-      hw_result::fail ();
-      for (;;)
-        {
-          sysclock.sleep_for (1000);
-        }
+      return false;
     }
   if (!fatfshw::ensure_tests_dir ())
     {
       console ("  mkdir tests failed: %s\n", fatfshw::last_error ());
-      hw_result::fail ();
-      for (;;)
-        {
-          sysclock.sleep_for (1000);
-        }
+      return false;
     }
   console ("  FAT32 /tests ready (boot files untouched).\n");
 #else
@@ -263,14 +272,11 @@ sd_prepare ()
   if (r != flatfs::FlatFs::Result::ok)
     {
       console ("  flatfs format failed: %s\n", flatfs::FlatFs::result_str (r));
-      hw_result::fail ();
-      for (;;)
-        {
-          sysclock.sleep_for (1000);
-        }
+      return false;
     }
   console ("  flatfs volume formatted.\n");
 #endif
+  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -304,10 +310,8 @@ led_thread (void*)
     {
       for (unsigned i = 0; i < kLedBlinks; ++i)
         {
-          led::on ();
           console ("[c%u] led on\n", (unsigned)port_cpu_id ());
           sysclock.sleep_for (300);
-          led::off ();
           console ("[c%u] led off\n", (unsigned)port_cpu_id ());
           sysclock.sleep_for (300);
         }
@@ -512,7 +516,7 @@ reader_thread (void*)
             }
           std::memcpy (tmp, g_read_buf + off, n);
           tmp[n] = '\0';
-          uart::uart1.puts_uart (tmp);
+          std::fputs (tmp, stdout);
           this_thread::yield ();
         }
       last_len = len;
@@ -537,44 +541,13 @@ static thread::stack::element_t reader_stk[8192];
 int
 os_main (int, char*[])
 {
-  console ("\n+== " PORT_BANNER_SHORT " µOS++ NUM TEST (" PORT_BANNER_ISA ") : uart+LED+SD+FPU ==+\n\n");
-  sd_prepare ();
-  sd_remove_num ();
-
-  // Unmask IRQs before the scheduler starts. Portable across every
-  // port: the architecture supplies the instruction, not the test.
-  (void)os::rtos::interrupts::uncritical_section::enter ();
-  smp_install_boot_threads ();
-  smp::start_secondary_cores ();
-  int waited = 0;
-  // Every secondary core reports stage 3 when it has joined the scheduler.
-  auto secondaries_up = [] ()
+  console ("\n+== µOS++ NUM TEST : console + pacer + SD + FPU, %u cores ==+\n\n",
+           static_cast<unsigned> (OS_NCPU));
+  if (!sd_prepare ())
     {
-      for (unsigned c = 1; c < OS_NCPU; ++c)
-        {
-          if (g_core_stage[c] < 3)
-            {
-              return false;
-            }
-        }
-      return true;
-    };
-  while (!secondaries_up () && waited < 3000)
-    {
-      sysclock.sleep_for (50);
-      waited += 50;
+      return 1;
     }
-  {
-    // One console() call per line, so another core cannot print inside it.
-    char line[96];
-    int n = std::snprintf (line, sizeof (line), "join:");
-    for (unsigned c = 1; c < OS_NCPU && n > 0 && n < (int)sizeof (line); ++c)
-      {
-        n += std::snprintf (line + n, sizeof (line) - (unsigned)n, " c%u=%u", c,
-                            (unsigned)g_core_stage[c]);
-      }
-    console ("%s (%d ms)\n", line, waited);
-  }
+  sd_remove_num ();
 
   // Threads, with explicit priorities (high -> low as listed above).
   thread::attributes a = thread::initializer;
@@ -638,7 +611,7 @@ os_main (int, char*[])
               }
             std::memcpy (tmp, g_read_buf + off, n);
             tmp[n] = '\0';
-            uart::uart1.puts_uart (tmp);
+            std::fputs (tmp, stdout);
           }
         console ("---- end num.txt ----\n");
       }
@@ -665,75 +638,5 @@ os_main (int, char*[])
   }
   console ("run %u ms, text=%u calc=%u\n", run_ms, (unsigned)g_text_written,
            (unsigned)g_calc_written);
-  uart::uart1.puts (ok ? "\nRESULT: PASS\n" : "\nRESULT: FAIL\n");
-  if (ok)
-    {
-      hw_result::ok ();
-    }
-  else
-    {
-    hw_result::fail ();
-    }
-  for (;;)
-    {
-      sysclock.sleep_for (10000);
-    }
-}
-
-// ----------------------------------------------------------------------------
-// µOS++ startup scaffolding (same pattern as smp_test0..4)
-// ----------------------------------------------------------------------------
-extern "C"
-{
-  extern char __heap_start[];
-  extern char __heap_end[];
-  extern char __fiq_stack_top[];
-  extern char __irq_stack_top[];
-
-  void os_startup_initialize_hardware_early (void) { }
-
-  void
-  os_startup_initialize_hardware (void)
-  {
-    uart::uart1.init ();
-    led::init ();
-    os_startup_initialize_free_store (
-        __heap_start, static_cast<std::size_t> (__heap_end - __heap_start));
-    exception::init ();
-  }
-
-  [[noreturn]] static void
-  custom_main_trampoline (void)
-  {
-    std::exit (os_main (0, nullptr));
-  }
-
-  extern void os_startup_create_thread_idle (void);
-  extern os::rtos::thread* os_main_thread;
-
-  int
-  main (int, char*[])
-  {
-#if defined(OS_HAS_INTERRUPTS_STACK)
-    os::rtos::interrupts::stack ()->set (
-        reinterpret_cast<os::rtos::thread::stack::element_t*> (__fiq_stack_top),
-        __irq_stack_top - __fiq_stack_top);
-    os::rtos::interrupts::stack ()->initialize ();
-#endif
-    scheduler::initialize ();
-
-    static thread::stack::element_t main_stack[8192];
-    thread::attributes attr = thread::initializer;
-    attr.th_stack_address = main_stack;
-    attr.th_stack_size_bytes = sizeof (main_stack);
-    static thread main_thread {
-      "main", reinterpret_cast<thread::func_t> (custom_main_trampoline),
-      nullptr, attr
-    };
-    os_main_thread = &main_thread;
-
-    os_startup_create_thread_idle ();
-    scheduler::start ();
-    return 0;
-  }
+  return ok ? 0 : 1;
 }

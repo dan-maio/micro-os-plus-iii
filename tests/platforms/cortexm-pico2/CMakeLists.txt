@@ -26,7 +26,11 @@ include ("cmake/platform-library.cmake")
 
 # Build the port's tests by reusing the port's builder. The binary dir ends in
 # `test`, which is what the board's hw.sh expects ($BUILD/test/<app>-hwd).
-add_subdirectory ("${UOS_CORTEXM_DIR}/test" "port-tests/test")
+# The board tests, built by the tests' own builder (board-tests/) from the
+# board's test folder (still in the port until the tests move into tests/).
+set (UOS_TESTS_PORT cortexm)
+set (UOS_TESTS_BOARD_DIR "${UOS_CORTEXM_DIR}/test/${BOARD}")
+add_subdirectory ("${CMAKE_SOURCE_DIR}/board-tests" "port-tests/test")
 
 set (_port_bin "${CMAKE_CURRENT_BINARY_DIR}/port-tests")
 set (_port_test_dir "${UOS_CORTEXM_DIR}/test/${BOARD}")

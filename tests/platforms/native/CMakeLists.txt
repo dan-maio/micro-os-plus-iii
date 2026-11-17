@@ -22,7 +22,11 @@ include ("${CMAKE_SOURCE_DIR}/cmake/uos-tests-run.cmake")
 
 # -----------------------------------------------------------------------------
 # Build every port test by reusing the port's builder (<app>-host).
-add_subdirectory ("${UOS_POSIX_ARCH_DIR}/test" "port-tests")
+# The board tests, built by the tests' own builder (board-tests/) from the
+# board's test folder (still in the port until the tests move into tests/).
+set (UOS_TESTS_PORT posix)
+set (UOS_TESTS_BOARD_DIR "${UOS_POSIX_ARCH_DIR}/test/${BOARD}")
+add_subdirectory ("${CMAKE_SOURCE_DIR}/board-tests" "port-tests")
 
 set (_port_bin "${CMAKE_CURRENT_BINARY_DIR}/port-tests")
 set (_port_test_dir "${UOS_POSIX_ARCH_DIR}/test/${BOARD}")

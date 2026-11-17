@@ -1,0 +1,280 @@
+# -----------------------------------------------------------------------------
+# The board tests' builder, one for every port. It was the ports' own
+# test/CMakeLists.txt (one per port, nearly identical); upstream keeps every
+# test in this tests/ folder, so the builder is here.
+#
+# A platform adds it, after its board facts (cmake/board.cmake) and
+# micro-os-plus::board exist, with:
+#
+#   set (UOS_TESTS_PORT     aarch32 | aarch64 | cortexm | posix)
+#   set (UOS_TESTS_BOARD_DIR <the board's test folder: tests.cmake, src/,
+#                             include/ and one folder per test>)
+#   add_subdirectory ("${CMAKE_SOURCE_DIR}/board-tests" "port-tests/test")
+#
+# Each test folder becomes one image per variant: `qemu` and `hwd` when the
+# board has a QEMU linker script, `hwd` only when it has not, `host` on the
+# POSIX port. The board's tests.cmake turns the knobs below (defines, sources,
+# includes, linker, options, CPU count, libraries, and the qemu replacements).
+# -----------------------------------------------------------------------------
+
+option (UOS_DEBUG_BOOT "Compile the hwd builds with the early-boot markers" OFF)
+
+if (UOS_TESTS_PORT STREQUAL "aarch64")
+  set (SEMI_PRINTS 0 CACHE STRING "hwd builds: mirror all console output to semihosting (0/1)")
+  set_property (CACHE SEMI_PRINTS PROPERTY STRINGS 0 1)
+endif ()
+
+set (_boards_dir "${UOS_BOARD_SRC_DIR}")
+set (_test_dir   "${UOS_TESTS_BOARD_DIR}")
+
+if (NOT IS_DIRECTORY "${_test_dir}")
+  message (FATAL_ERROR "The board's test folder ${_test_dir} does not exist.")
+endif ()
+
+# The port: its library, the tests' common defines, the variants.
+if (UOS_TESTS_PORT STREQUAL "aarch32")
+  set (_port_lib micro-os-plus::aarch32)
+  set (_common_defines TRACE __ARM_EABI__ __ARM_ARCH_7A__ SEMIHOST)
+elseif (UOS_TESTS_PORT STREQUAL "aarch64")
+  set (_port_lib micro-os-plus::aarch64)
+  set (_common_defines TRACE __ARM_EABI__ __ARM_ARCH_8A__ SEMIHOST)
+elseif (UOS_TESTS_PORT STREQUAL "cortexm")
+  set (_port_lib ${UOS_PORT_LIB})
+  set (_common_defines TRACE SEMIHOST)
+elseif (UOS_TESTS_PORT STREQUAL "posix")
+  set (_port_lib micro-os-plus::posix-arch)
+  set (_common_defines TRACE OS_USE_TRACE_POSIX_STDOUT)
+else ()
+  message (FATAL_ERROR "UOS_TESTS_PORT=${UOS_TESTS_PORT}: not a port.")
+endif ()
+
+if (UOS_TESTS_PORT STREQUAL "posix")
+  set (_variants host)
+else ()
+  set (_linker_hwd  "${UOS_BOARD_LINKER_HW}")
+  set (_linker_qemu "${UOS_BOARD_LINKER_QEMU}")
+  if (_linker_qemu)
+    set (_variants qemu hwd)
+  else ()
+    set (_variants hwd)
+  endif ()
+endif ()
+
+# The knobs, with their defaults; the board's tests.cmake overrides them.
+set (BOARD_TEST_NEED_DEVICES "")
+set (BOARD_TEST_SELF_CONTAINED "")
+set (BOARD_TEST_NO_KERNEL "")
+set (BOARD_TEST_HWD_ONLY "")
+function (board_test_defines _app _out)
+  set (${_out} "" PARENT_SCOPE)
+endfunction ()
+function (board_test_sources _app _out)
+  set (${_out} "" PARENT_SCOPE)
+endfunction ()
+function (board_test_includes _app _out)
+  set (${_out} "" PARENT_SCOPE)
+endfunction ()
+function (board_test_linker _app _out)
+  set (${_out} "" PARENT_SCOPE)
+endfunction ()
+function (board_test_options _app _out)
+  set (${_out} "" PARENT_SCOPE)
+endfunction ()
+function (board_test_ncpu _app _out)
+  set (${_out} "${UOS_BOARD_NCPU}" PARENT_SCOPE)
+endfunction ()
+function (board_test_qemu_libs _app _out)
+  set (${_out} "" PARENT_SCOPE)
+endfunction ()
+function (board_test_qemu_sources _app _out)
+  set (${_out} "" PARENT_SCOPE)
+endfunction ()
+function (board_test_qemu_includes _app _out)
+  set (${_out} "" PARENT_SCOPE)
+endfunction ()
+function (board_test_libs _app _out)
+  set (${_out} "" PARENT_SCOPE)
+endfunction ()
+# The POSIX port's name for the same knob.
+function (board_test_libraries _app _out)
+  set (${_out} "" PARENT_SCOPE)
+endfunction ()
+
+if (EXISTS "${_test_dir}/tests.cmake")
+  include ("${_test_dir}/tests.cmake")
+endif ()
+
+# The support the board's tests share: one copy per board, not per test.
+file (GLOB _test_support CONFIGURE_DEPENDS "${_test_dir}/src/*.cpp")
+set (_test_includes "${_test_dir}/include")
+if (UOS_TESTS_PORT STREQUAL "cortexm")
+  # The cross-board helpers of the Cortex-M boards (hw_result.hpp, ...).
+  list (APPEND _test_includes "${UOS_CORTEXM_DIR}/test/boards/shared")
+endif ()
+
+file (GLOB _test_dirs LIST_DIRECTORIES true CONFIGURE_DEPENDS "${_test_dir}/*")
+set (_apps "")
+foreach (_dir IN LISTS _test_dirs)
+  if (NOT IS_DIRECTORY "${_dir}")
+    continue ()
+  endif ()
+  get_filename_component (_app "${_dir}" NAME)
+  if (_app STREQUAL "include" OR _app STREQUAL "src")
+    continue ()
+  endif ()
+  file (GLOB _srcs CONFIGURE_DEPENDS "${_dir}/*.cpp")
+  if (NOT _srcs)
+    continue ()
+  endif ()
+  list (APPEND _apps "${_app}")
+
+  board_test_defines  ("${_app}" _app_defines)
+  board_test_sources  ("${_app}" _app_sources)
+  board_test_includes ("${_app}" _app_includes)
+  board_test_linker   ("${_app}" _app_linker)
+  board_test_options  ("${_app}" _app_options)
+  board_test_ncpu     ("${_app}" _app_ncpu)
+
+  # A test carried over whole defines its own start-up support; adding the
+  # board's shared copy would be a duplicate definition.
+  set (_app_support ${_test_support})
+  if ("${_app}" IN_LIST BOARD_TEST_SELF_CONTAINED)
+    set (_app_support "")
+  endif ()
+
+  # The application's own sources carry its own options, if it has any.
+  if (_app_options)
+    set_source_files_properties (${_srcs} PROPERTIES COMPILE_OPTIONS "${_app_options}")
+  endif ()
+
+  # The port, then the board (its facts and code, micro-os-plus::board).
+  set (_libs ${_port_lib} micro-os-plus::board)
+  set (_no_kernel "")
+  if ("${_app}" IN_LIST BOARD_TEST_NO_KERNEL)
+    if (UOS_TESTS_PORT STREQUAL "cortexm")
+      # No kernel, no port scheduler: the board alone.
+      set (_libs micro-os-plus::board)
+    elseif (UOS_TESTS_PORT STREQUAL "posix")
+      message (FATAL_ERROR "${_app} is listed in BOARD_TEST_NO_KERNEL, but the POSIX port has no bare target.")
+    endif ()
+    set (_no_kernel NO_KERNEL)
+  endif ()
+  if ("${_app}" IN_LIST BOARD_TEST_NEED_DEVICES)
+    list (APPEND _libs ${UOS_BOARD_DEVICES})
+  endif ()
+  # Extra libraries (a harness suite's test::<suite>, a board's driver set).
+  if (UOS_TESTS_PORT STREQUAL "posix")
+    board_test_libraries ("${_app}" _app_libs)
+  else ()
+    board_test_libs ("${_app}" _app_libs)
+  endif ()
+  if (_app_libs)
+    list (APPEND _libs ${_app_libs})
+  endif ()
+
+  # A test listed HWD_ONLY gets the hardware image only.
+  set (_app_variants ${_variants})
+  if ("${_app}" IN_LIST BOARD_TEST_HWD_ONLY)
+    set (_app_variants hwd)
+  endif ()
+
+  foreach (_variant IN LISTS _app_variants)
+    set (_variant_libs ${_libs})
+    set (_variant_ncpu ${_app_ncpu})
+    set (_variant_sources ${_app_sources})
+    set (_variant_includes ${_app_includes})
+    set (_variant_defines "")
+    set (_variant_linker "")
+    if (_variant STREQUAL "hwd")
+      set (_variant_defines HW_BUILD)
+      if (UOS_TESTS_PORT STREQUAL "aarch64")
+        list (APPEND _variant_defines SEMI_PRINTS=${SEMI_PRINTS})
+      endif ()
+      # DEBUG_BOOT is opt-in: every early-boot marker is a semihosting trap.
+      if (UOS_DEBUG_BOOT)
+        list (APPEND _variant_defines DEBUG_BOOT)
+      endif ()
+      set (_variant_linker "${_linker_hwd}")
+      # A test that names its own script takes it (hardware image only).
+      if (_app_linker)
+        set (_variant_linker "${_app_linker}")
+      endif ()
+    elseif (_variant STREQUAL "qemu")
+      set (_variant_defines QEMU_BUILD)
+      set (_variant_linker "${_linker_qemu}")
+      # The emulated image may replace the board entirely (the RP2xxx boards):
+      # the kernel plus a generic device, its own linker script and one CPU.
+      board_test_qemu_libs ("${_app}" _qemu_libs)
+      if (_qemu_libs)
+        set (_variant_libs ${_qemu_libs} ${_app_libs})
+        set (_variant_linker "")
+        set (_variant_ncpu 1)
+      endif ()
+      board_test_qemu_sources ("${_app}" _qemu_sources)
+      if (_qemu_sources)
+        set (_variant_sources ${_qemu_sources})
+      endif ()
+      board_test_qemu_includes ("${_app}" _qemu_includes)
+      list (APPEND _variant_includes ${_qemu_includes})
+    endif ()
+
+    uos_add_app (
+      "${_app}-${_variant}"
+      ${_no_kernel}
+      SOURCES ${_srcs} ${_app_support} ${_variant_sources}
+      NCPU ${_variant_ncpu}
+      LINKER_SCRIPT "${_variant_linker}"
+      DEFINES ${_common_defines} ${_app_defines} ${_variant_defines}
+      # ${_dir}: the application's own folder, -I. for headers beside it.
+      INCLUDES ${_variant_includes} ${_dir} ${_test_includes}
+      LIBRARIES ${_variant_libs}
+      OUTPUT_NAME "${_app}-${_variant}"
+    )
+
+    # hw.sh loads `$BUILD/test/<app>-hwd`, with no extension; leave a symlink
+    # under that name. The `.elf` stays the real file.
+    if (_variant STREQUAL "hwd")
+      add_custom_command (
+        TARGET "${_app}-${_variant}"
+        POST_BUILD
+        COMMAND
+          "${CMAKE_COMMAND}" -E create_symlink
+          "$<TARGET_FILE:${_app}-${_variant}>"
+          "$<TARGET_FILE_DIR:${_app}-${_variant}>/${_app}-${_variant}"
+        VERBATIM
+      )
+    endif ()
+  endforeach ()
+endforeach ()
+
+list (LENGTH _apps _n)
+list (LENGTH _variants _nv)
+math (EXPR _n "${_n} * ${_nv}")
+message (STATUS "µOS++ III ${UOS_TESTS_PORT} board tests: ${_n} targets, board=${BOARD}, from ${_test_dir}")
+
+# The AArch64->AArch32 QEMU boot shim: QEMU's raspi3b starts its Cortex-A53
+# cores in AArch64, so an AArch32 image is loaded at an address and this shim
+# drops to AArch32 and jumps there. Built with the aarch64 toolchain.
+if (UOS_TESTS_PORT STREQUAL "aarch32")
+  file (GLOB _a64_bins "$ENV{HOME}/.local/xPacks/@xpack-dev-tools/aarch64-none-elf-gcc/*/.content/bin")
+  if (_a64_bins AND EXISTS "${_boards_dir}/qemu-raspi3-shim/shim.S")
+    list (SORT _a64_bins COMPARE NATURAL ORDER DESCENDING)
+    list (GET _a64_bins 0 _a64_bin)
+    set (_shim_src "${_boards_dir}/qemu-raspi3-shim")
+    add_custom_command (
+      OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/shim8.img"
+      COMMAND "${_a64_bin}/aarch64-none-elf-gcc" -nostdlib
+              "-Wl,-T,${_shim_src}/shim.ld" "${_shim_src}/shim.S"
+              -o "${CMAKE_CURRENT_BINARY_DIR}/shim.elf"
+      COMMAND "${_a64_bin}/aarch64-none-elf-objcopy" -O binary
+              "${CMAKE_CURRENT_BINARY_DIR}/shim.elf"
+              "${CMAKE_CURRENT_BINARY_DIR}/shim8.img"
+      DEPENDS "${_shim_src}/shim.S" "${_shim_src}/shim.ld"
+      COMMENT "Building the AArch64->AArch32 QEMU boot shim"
+      VERBATIM
+    )
+    add_custom_target (qemu-shim ALL DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/shim8.img")
+  else ()
+    message (STATUS "µOS++ III AArch32: no aarch64 toolchain, QEMU boot shim not built")
+  endif ()
+endif ()

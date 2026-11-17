@@ -31,7 +31,11 @@ include ("${CMAKE_SOURCE_DIR}/cmake/uos-tests-run.cmake")
 
 # -----------------------------------------------------------------------------
 # Build every port test (qemu + hwd) by reusing the port's builder.
-add_subdirectory ("${UOS_AARCH64_DIR}/test" "port-tests/test")
+# The board tests, built by the tests' own builder (board-tests/) from the
+# board's test folder (still in the port until the tests move into tests/).
+set (UOS_TESTS_PORT aarch64)
+set (UOS_TESTS_BOARD_DIR "${UOS_AARCH64_DIR}/test/${BOARD}")
+add_subdirectory ("${CMAKE_SOURCE_DIR}/board-tests" "port-tests/test")
 
 set (_port_bin "${CMAKE_CURRENT_BINARY_DIR}/port-tests/test")
 set (_port_test_dir "${UOS_AARCH64_DIR}/test/rpi4b")

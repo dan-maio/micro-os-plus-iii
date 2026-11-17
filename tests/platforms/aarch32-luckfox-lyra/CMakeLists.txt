@@ -25,7 +25,8 @@ include ("cmake/platform-library.cmake")
 # The board tests, built by the tests' own builder (board-tests/) from the
 # board's test folder (still in the port until the tests move into tests/).
 # The portable tests this board runs (tests/sources/).
-set (UOS_TESTS_SOURCES smp_test0 smp_test1 smp_test2 smp_test3 smp_test4)
+set (UOS_TESTS_SOURCES smp_test0 smp_test1 smp_test2 smp_test3 smp_test4
+     smp-num-test smp-pipeline-test smp-pro-cons-test)
 set (UOS_TESTS_PORT aarch32)
 set (UOS_TESTS_BOARD_DIR "${UOS_AARCH32_DIR}/test/${BOARD}")
 add_subdirectory ("${CMAKE_SOURCE_DIR}/board-tests" "port-tests/test")

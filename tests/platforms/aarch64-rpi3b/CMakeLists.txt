@@ -88,7 +88,7 @@ foreach (_dir IN LISTS _test_dirs)
   )
   set_tests_properties (
     "${PLATFORM_NAME}-${_app}-hwd"
-    PROPERTIES ENVIRONMENT "BUILD=${CMAKE_CURRENT_BINARY_DIR}/port-tests"
+    PROPERTIES ENVIRONMENT "BUILD=${CMAKE_CURRENT_BINARY_DIR}/port-tests;UOS_SMP_DIR=${CMAKE_SOURCE_DIR}/.."
                LABELS "hwd" TIMEOUT 1200
   )
 endforeach ()

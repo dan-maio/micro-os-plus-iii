@@ -52,7 +52,7 @@ foreach (_dir IN LISTS _test_dirs)
   )
   set_tests_properties (
     "${PLATFORM_NAME}-${_app}-hwd"
-    PROPERTIES ENVIRONMENT "BUILD=${_port_bin}" LABELS "hwd" TIMEOUT 1200
+    PROPERTIES ENVIRONMENT "BUILD=${_port_bin};UOS_SMP_DIR=${CMAKE_SOURCE_DIR}/.." LABELS "hwd" TIMEOUT 1200
   )
 endforeach ()
 
@@ -98,7 +98,7 @@ function (add_harness_suite _suite _name)
   )
   set_tests_properties (
     "${PLATFORM_NAME}-${_name}-hwd"
-    PROPERTIES ENVIRONMENT "BUILD=${_port_bin}" LABELS "hwd" TIMEOUT 1200
+    PROPERTIES ENVIRONMENT "BUILD=${_port_bin};UOS_SMP_DIR=${CMAKE_SOURCE_DIR}/.." LABELS "hwd" TIMEOUT 1200
   )
 endfunction ()
 

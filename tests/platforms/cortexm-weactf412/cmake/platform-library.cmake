@@ -12,6 +12,11 @@ message (
   "Including tests/platforms/${PLATFORM_NAME}/cmake/platform-library.cmake..."
 )
 
+# The board: its facts (cmake/board.cmake) and micro-os-plus::board.
+include ("${CMAKE_CURRENT_LIST_DIR}/board.cmake")
+include ("${CMAKE_SOURCE_DIR}/cmake/uos-cortexm-board.cmake")
+uos_cortexm_board_library ()
+
 add_library (platform-cortexm-weactf412-interface INTERFACE EXCLUDE_FROM_ALL)
 
 target_include_directories (platform-cortexm-weactf412-interface INTERFACE "include")
@@ -23,9 +28,11 @@ target_compile_definitions (
 target_link_libraries (
   platform-cortexm-weactf412-interface
   INTERFACE
-    # The Cortex-M port: brings the kernel (micro-os-plus::iii), the board's
-    # flags, and the board's own sources.
-    micro-os-plus::cortexm
+    # The port core the board names, then the board (its flags and its own
+    # sources), then the kernel.
+    ${UOS_PORT_LIB}
+    micro-os-plus::board
+    micro-os-plus::iii
     # The kernel's optional groups the startup and the C library need.
     micro-os-plus::iii-startup
     micro-os-plus::iii-semihosting

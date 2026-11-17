@@ -21,8 +21,8 @@ message (VERBOSE "Processing 'tests/platforms/${PLATFORM_NAME}'...")
 # -----------------------------------------------------------------------------
 include ("cmake/platform-library.cmake")
 
-# Read the board declaration so the port's own builder sees its facts.
-include ("${UOS_CORTEXM_DIR}/test/boards/${BOARD}/board.cmake")
+# The board facts and micro-os-plus::board come from cmake/platform-library.cmake
+# (cmake/board.cmake); the port's builder below reads them.
 
 # Build the port's tests by reusing the port's builder. The binary dir ends in
 # `test`, which is what the board's hw.sh expects ($BUILD/test/<app>-hwd).

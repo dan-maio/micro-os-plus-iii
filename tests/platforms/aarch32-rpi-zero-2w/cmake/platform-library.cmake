@@ -25,11 +25,15 @@ message (
 # -----------------------------------------------------------------------------
 
 # Validate: the port must have published its board facts before this file runs.
+# The board: its facts (cmake/board.cmake) and micro-os-plus::board.
+include ("${CMAKE_CURRENT_LIST_DIR}/board.cmake")
+include ("${CMAKE_SOURCE_DIR}/cmake/uos-aarch-board.cmake")
+uos_aarch_board_library ("${UOS_AARCH32_ROOT}" "${UOS_BOARD_SOC}")
+
 if (NOT DEFINED UOS_BOARD_NCPU OR NOT DEFINED UOS_BOARD_LINKER_QEMU)
   message (
     FATAL_ERROR
-      "The AArch32 port did not publish its board facts (UOS_BOARD_*). "
-      "It must be added by tests-main.cmake before this platform."
+      "cmake/board.cmake did not set the board facts this platform needs (UOS_BOARD_*)."
   )
 endif ()
 
@@ -75,7 +79,7 @@ target_link_options (
 
 target_link_libraries (
   platform-aarch32-rpi-zero-2w-interface
-  INTERFACE micro-os-plus::aarch32
+  INTERFACE micro-os-plus::aarch32 micro-os-plus::board
             # The C library: newlib reentrant syscalls (_write_r, ...) -> the
             # semihosting __posix_* layer. Any test that uses printf needs
             # these, the port tests and the harness suites alike. The plain iii

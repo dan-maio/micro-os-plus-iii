@@ -24,11 +24,15 @@ message (
 # -----------------------------------------------------------------------------
 
 # Validate: the port must have published its board facts before this file runs.
+# The board: its facts (cmake/board.cmake) and micro-os-plus::board.
+include ("${CMAKE_CURRENT_LIST_DIR}/board.cmake")
+include ("${CMAKE_SOURCE_DIR}/cmake/uos-aarch-board.cmake")
+uos_aarch_board_library ("${UOS_AARCH64_ROOT}" "${UOS_BOARD_SOC}")
+
 if (NOT DEFINED UOS_BOARD_NCPU OR NOT DEFINED UOS_BOARD_LINKER_QEMU)
   message (
     FATAL_ERROR
-      "The AArch64 port did not publish its board facts (UOS_BOARD_*). "
-      "It must be added by tests-main.cmake before this platform."
+      "cmake/board.cmake did not set the board facts this platform needs (UOS_BOARD_*)."
   )
 endif ()
 
@@ -71,7 +75,7 @@ target_link_options (
 
 target_link_libraries (
   platform-aarch64-rpi4b-interface
-  INTERFACE micro-os-plus::aarch64
+  INTERFACE micro-os-plus::aarch64 micro-os-plus::board
 )
 
 add_library (micro-os-plus::platform

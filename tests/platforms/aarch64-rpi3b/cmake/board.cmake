@@ -1,0 +1,53 @@
+# The facts of this board, the platform's since step 4 (they were
+# micro-os-plus-iii-aarch64/test/boards/rpi3b/board.cmake). The board's code
+# stays in the port's test/boards/ until the board tests move (step 6); its
+# linker scripts are in ../device/linker-scripts/.
+#
+# -----------------------------------------------------------------------------
+# Raspberry Pi 3 B — BCM2837, 4x Cortex-A53, ARMv8-A.
+#
+# Same silicon and the same sources as rpi-zero-2w, selected by BOARD_RPI3B
+# exactly as the predecessor's `make BOARD=rpi3b` did. That define is the whole
+# difference, and it reaches four places:
+#
+#   include/led.hpp   a DIFFERENT LED driver -- the ACT LED is not a SoC GPIO
+#                     on this board but VideoCore expander GPIO 130, driven
+#                     through the ARM<->VC mailbox property channel
+#                     (tag 0x00038041). 91 lines, against 36 for a plain GPIO.
+#   include/uart.hpp  the banner strings.
+#   include/smp.hpp   PORT_RAM_END, the window a stack pointer is validated
+#                     against -- 1 GB here, 512 MiB on the Zero 2 W.
+#   src/mmu.cpp       the top of the Normal-memory mapping, the same number.
+#
+# plus linker-rpi3b.ld, whose RAM region is that number again. Those last three
+# are ONE fact written three times; they must be changed together.
+
+set (UOS_BOARD_SRC_DIR "${UOS_AARCH64_ROOT}/test/boards/rpi3b/../rpi-zero-2w")
+
+set (UOS_BOARD_FLAGS -mcpu=cortex-a53)
+set (UOS_BOARD_NCPU  4)
+
+# What this board can do. The test matrix asks about capabilities; it never
+# asks which board it is building for.
+set (UOS_BOARD_CAPS  smp sdcard usb-device led)
+
+set (UOS_BOARD_LIBS  micro-os-plus::soc-bcm2837)
+
+# The driver set an application links when it needs the SD card or USB:
+# the BCM2837 SD host and DWC2, which is what these tests always linked.
+set (UOS_BOARD_DEVICES  micro-os-plus::devices)
+
+set (UOS_BOARD_LINKER_HW   "${CMAKE_SOURCE_DIR}/platforms/aarch64-rpi3b/device/linker-scripts/linker-rpi3b.ld")
+set (UOS_BOARD_LINKER_QEMU "${CMAKE_SOURCE_DIR}/platforms/aarch64-rpi3b/device/linker-scripts/linker-rpi3b.ld")
+
+set (UOS_BOARD_DEFINES
+     SOC_BCM2837 BOARD_RPI3B
+     SEMIHOST_TRAP_CHOSEN SEMIHOST_TRAP_HLT
+     OS_SMP_IPI_SGI=0
+     "PORT_GREETING=\"µOS++ Raspberry Pi 3 B (BCM2837, 4x Cortex-A53)\"")
+
+# The SoC folder whose include/ and src/ the board target compiles.
+set (UOS_BOARD_SOC bcm2837)
+
+# The port's test folder for this board (test/<BOARD>/), read by its builder.
+set (BOARD "rpi3b")

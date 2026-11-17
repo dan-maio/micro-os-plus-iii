@@ -19,11 +19,8 @@ message (VERBOSE "Processing 'tests/platforms/${PLATFORM_NAME}'...")
 include ("cmake/platform-library.cmake")
 include ("${CMAKE_SOURCE_DIR}/cmake/uos-tests-run.cmake")
 
-# -----------------------------------------------------------------------------
-# The port publishes most board facts as CACHE INTERNAL, but not
-# UOS_BOARD_DEVICES; read the board declaration so the port's own test builder
-# (add_subdirectory'd below) sees the driver set its tests link.
-include ("${UOS_AARCH32_DIR}/test/boards/${BOARD}/board.cmake")
+# The board facts and micro-os-plus::board come from cmake/platform-library.cmake
+# (cmake/board.cmake); the port's builder below reads them.
 
 # -----------------------------------------------------------------------------
 # Build the port's tests by reusing the port's builder. It emits, per test

@@ -63,6 +63,44 @@ endif ()
 # -----------------------------------------------------------------------------
 
 # Define the platform library.
+# -----------------------------------------------------------------------------
+# The board: the POSIX host, OS_NCPU host threads standing in for cores. Its
+# facts were the port's test/boards/native/board.cmake; the port is now
+# architecture only, and the board is this platform's. The board code (the
+# console, the LED, the secondary-CPU release) is still in the port's
+# test/boards/native/ until the board tests move (step 6).
+#
+# No -mcpu (the host compiler targets the host), no linker script (the host
+# toolchain links with its own) and no QEMU image (the host IS the machine).
+
+set (BOARD "native" CACHE STRING "The port's test folder for this board")
+
+# The one board fact that can honestly be changed from the command line:
+# the "silicon" is a thread count. -DNCPU=1 builds the suite single-core.
+set (NCPU 4 CACHE STRING "Host threads acting as CPUs")
+set (UOS_BOARD_NCPU ${NCPU})
+
+# `sdcard`: the host file back-end below is a block device the SD tests can
+# reach. Not `usb-device`: nothing here can be a USB gadget.
+set (UOS_BOARD_CAPS smp sdcard led)
+set (UOS_BOARD_DEVICES micro-os-plus::devices-hostfile)
+set (UOS_BOARD_SRC_DIR "${UOS_POSIX_ARCH_ROOT}/test/boards/native")
+
+add_library (board-native-interface INTERFACE EXCLUDE_FROM_ALL)
+target_include_directories (board-native-interface INTERFACE
+  "${UOS_BOARD_SRC_DIR}/include"
+)
+file (GLOB _board_sources CONFIGURE_DEPENDS "${UOS_BOARD_SRC_DIR}/src/*.cpp")
+target_sources (board-native-interface INTERFACE ${_board_sources})
+target_compile_definitions (board-native-interface INTERFACE
+  # No CPU count in the text: a test may build at another count than the
+  # board's (mutex-stress builds at 1); port::scheduler::greeting() prints
+  # OS_NCPU, which is per test.
+  "PORT_GREETING=\"µOS++ POSIX synthetic host (host threads as CPUs)\""
+)
+add_library (micro-os-plus::board ALIAS board-native-interface)
+
+# -----------------------------------------------------------------------------
 add_library (platform-native-interface INTERFACE EXCLUDE_FROM_ALL)
 
 target_include_directories (platform-native-interface INTERFACE "include")
@@ -173,7 +211,7 @@ if ("${CMAKE_C_COMPILER_ID}" STREQUAL "Clang")
 endif ()
 
 target_link_libraries (
-  platform-native-interface INTERFACE micro-os-plus::posix-arch
+  platform-native-interface INTERFACE micro-os-plus::posix-arch micro-os-plus::board
 )
 
 if (COMMAND xpack_display_target_lists)

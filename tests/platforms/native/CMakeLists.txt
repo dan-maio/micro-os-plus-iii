@@ -17,12 +17,8 @@ message (VERBOSE "Processing 'tests/platforms/${PLATFORM_NAME}'...")
 include ("cmake/platform-library.cmake")
 include ("${CMAKE_SOURCE_DIR}/cmake/uos-tests-run.cmake")
 
-# The port publishes its board facts; read the board declaration so the port's
-# own builder sees UOS_BOARD_DEVICES and the rest.
-if (NOT DEFINED BOARD)
-  set (BOARD "native" CACHE STRING "Target board (the port's board id)")
-endif ()
-include ("${UOS_POSIX_ARCH_DIR}/test/boards/${BOARD}/board.cmake")
+# The board facts (BOARD, UOS_BOARD_*) and micro-os-plus::board are set in
+# cmake/platform-library.cmake, above; the port's builder reads them.
 
 # -----------------------------------------------------------------------------
 # Build every port test by reusing the port's builder (<app>-host).

@@ -18,6 +18,3 @@ message (
 set (xpack_platform_compile_definition
      "MICRO_OS_PLUS_PLATFORM_CORTEXM_PICO2_PIZERO")
 
-# The port's board this platform targets. Must be set before tests-main.cmake
-# add_subdirectory()s the port.
-set (BOARD "pico2-pizero" CACHE STRING "Target board (the port's board id)" FORCE)

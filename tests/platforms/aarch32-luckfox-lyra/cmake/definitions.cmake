@@ -13,20 +13,6 @@ set (xpack_platform_compile_definition
      "MICRO_OS_PLUS_PLATFORM_AARCH32_LUCKFOX_LYRA")
 
 # -----------------------------------------------------------------------------
-# Select the board in the port.
-#
-# tests-main.cmake includes this file BEFORE it add_subdirectory()s the port,
-# so setting BOARD here is what makes the port read
-# test/boards/luckfox-lyra/board.cmake and publish its facts. The port's own
-# `set (BOARD "rpi-zero-2w" CACHE ...)` does not override an existing cache
-# entry, so this wins.
-#
-# The Lyra is hardware-only: its board.cmake sets no UOS_BOARD_LINKER_QEMU,
-# so the port emits one image per test (`hwd`) and no emulated suite. There is
-# nothing here to select between -- QEMU models none of the RK3506's blocks.
-set (BOARD "luckfox-lyra" CACHE STRING "Target board (the port's board id)" FORCE)
-
-# -----------------------------------------------------------------------------
 # Reproducibility guard.
 #
 # This platform is validated with the pinned xPack arm-none-eabi-gcc 15.2.1.

@@ -32,19 +32,8 @@ set (_board_hw "${UOS_CORTEXM_DIR}/test/boards/${BOARD}/hw.sh")
 
 # -----------------------------------------------------------------------------
 # One CTest case per test. Every one is `hwd`: the board has no `qemu` image.
-file (GLOB _test_dirs LIST_DIRECTORIES true "${_port_test_dir}/*")
-foreach (_dir IN LISTS _test_dirs)
-  if (NOT IS_DIRECTORY "${_dir}")
-    continue ()
-  endif ()
-  get_filename_component (_app "${_dir}" NAME)
-  if (_app STREQUAL "include" OR _app STREQUAL "src")
-    continue ()
-  endif ()
-  file (GLOB _srcs "${_dir}/*.c" "${_dir}/*.cpp")
-  if (NOT _srcs)
-    continue ()
-  endif ()
+# One CTest case per test the builder built (board-tests/: UOS_TESTS_APPS).
+foreach (_app IN LISTS UOS_TESTS_APPS)
 
   add_test (
     NAME "${PLATFORM_NAME}-${_app}-hwd"

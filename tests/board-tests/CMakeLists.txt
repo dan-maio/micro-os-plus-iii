@@ -8,8 +8,13 @@
 #
 #   set (UOS_TESTS_PORT     aarch32 | aarch64 | cortexm | posix)
 #   set (UOS_TESTS_BOARD_DIR <the board's test folder: tests.cmake, src/,
-#                             include/ and one folder per test>)
+#                             include/ and one folder per board-only test>)
+#   set (UOS_TESTS_SOURCES  <the portable tests this board runs, from
+#                             tests/sources/<test>/>)
 #   add_subdirectory ("${CMAKE_SOURCE_DIR}/board-tests" "port-tests/test")
+#
+# It hands back UOS_TESTS_APPS, the tests it built, for the platform to
+# register with CTest.
 #
 # Each test folder becomes one image per variant: `qemu` and `hwd` when the
 # board has a QEMU linker script, `hwd` only when it has not, `host` on the
@@ -113,6 +118,16 @@ if (UOS_TESTS_PORT STREQUAL "cortexm")
 endif ()
 
 file (GLOB _test_dirs LIST_DIRECTORIES true CONFIGURE_DEPENDS "${_test_dir}/*")
+# The portable tests: one copy for every board, in tests/sources/.
+foreach (_t IN LISTS UOS_TESTS_SOURCES)
+  if (IS_DIRECTORY "${_test_dir}/${_t}")
+    message (FATAL_ERROR "${_t} is both a portable test (tests/sources/) and a board test (${_test_dir}).")
+  endif ()
+  if (NOT IS_DIRECTORY "${CMAKE_SOURCE_DIR}/sources/${_t}")
+    message (FATAL_ERROR "UOS_TESTS_SOURCES names ${_t}, but there is no tests/sources/${_t}/.")
+  endif ()
+  list (APPEND _test_dirs "${CMAKE_SOURCE_DIR}/sources/${_t}")
+endforeach ()
 set (_apps "")
 foreach (_dir IN LISTS _test_dirs)
   if (NOT IS_DIRECTORY "${_dir}")
@@ -246,6 +261,9 @@ foreach (_dir IN LISTS _test_dirs)
     endif ()
   endforeach ()
 endforeach ()
+
+# The tests built, for the platform to register.
+set (UOS_TESTS_APPS ${_apps} PARENT_SCOPE)
 
 list (LENGTH _apps _n)
 list (LENGTH _variants _nv)

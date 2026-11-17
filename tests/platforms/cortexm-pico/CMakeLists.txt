@@ -57,19 +57,8 @@ endif ()
 # every test and <app>-qemu only for the ones the board can run emulated (its
 # tests.cmake lists the rest HWD_ONLY), so the qemu case is registered only
 # when the target exists.
-file (GLOB _test_dirs LIST_DIRECTORIES true "${_port_test_dir}/*")
-foreach (_dir IN LISTS _test_dirs)
-  if (NOT IS_DIRECTORY "${_dir}")
-    continue ()
-  endif ()
-  get_filename_component (_app "${_dir}" NAME)
-  if (_app STREQUAL "include" OR _app STREQUAL "src")
-    continue ()
-  endif ()
-  file (GLOB _srcs "${_dir}/*.c" "${_dir}/*.cpp")
-  if (NOT _srcs)
-    continue ()
-  endif ()
+# One CTest case per test the builder built (board-tests/: UOS_TESTS_APPS).
+foreach (_app IN LISTS UOS_TESTS_APPS)
 
   if (TARGET "${_app}-qemu")
     add_test (

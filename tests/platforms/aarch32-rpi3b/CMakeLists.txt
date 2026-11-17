@@ -40,6 +40,8 @@ include ("${CMAKE_SOURCE_DIR}/cmake/uos-tests-run.cmake")
 # plus the AArch64->AArch32 QEMU boot shim (target `qemu-shim`).
 # The board tests, built by the tests' own builder (board-tests/) from the
 # board's test folder (still in the port until the tests move into tests/).
+# The portable tests this board runs (tests/sources/).
+set (UOS_TESTS_SOURCES smp_test0 smp_test1 smp_test2 smp_test3 smp_test4)
 set (UOS_TESTS_PORT aarch32)
 set (UOS_TESTS_BOARD_DIR "${UOS_AARCH32_DIR}/test/${BOARD}")
 add_subdirectory ("${CMAKE_SOURCE_DIR}/board-tests" "port-tests/test")
@@ -65,19 +67,8 @@ endif ()
 # One CTest case per (test, variant). The test list is the port's own: the
 # directories under test/rpi3b/ that hold sources, exactly as the port's
 # builder enumerates them.
-file (GLOB _test_dirs LIST_DIRECTORIES true "${_port_test_dir}/*")
-foreach (_dir IN LISTS _test_dirs)
-  if (NOT IS_DIRECTORY "${_dir}")
-    continue ()
-  endif ()
-  get_filename_component (_app "${_dir}" NAME)
-  if (_app STREQUAL "include" OR _app STREQUAL "src")
-    continue ()
-  endif ()
-  file (GLOB _srcs "${_dir}/*.cpp")
-  if (NOT _srcs)
-    continue ()
-  endif ()
+# One CTest case per test the builder built (board-tests/: UOS_TESTS_APPS).
+foreach (_app IN LISTS UOS_TESTS_APPS)
 
   # --- qemu --------------------------------------------------------------
   uos_tests_add_qemu (

@@ -587,7 +587,9 @@
             "xpm install --config {{ configuration.name }}"
           ],
           "link-deps": [
-            "xpm link @micro-os-plus/micro-os-plus-iii-cortexm --config {{ configuration.name }}"
+            "xpm link @micro-os-plus/micro-os-plus-iii-cortexm --config {{ configuration.name }}",
+            "xpm link @micro-os-plus/micro-os-plus-iii-devices-rp2xxx --config {{ configuration.name }}",
+            "xpm link @micro-os-plus/micro-os-plus-iii-devices-stm32f4 --config {{ configuration.name }}"
           ]
         }
       },
@@ -758,7 +760,10 @@
             "xpm install --config {{ configuration.name }}"
           ],
           "link-deps": [
-            "xpm link @micro-os-plus/micro-os-plus-iii-aarch32 --config {{ configuration.name }}"
+            "xpm link @micro-os-plus/micro-os-plus-iii-aarch32 --config {{ configuration.name }}",
+            "xpm link @micro-os-plus/micro-os-plus-iii-devices-storage --config {{ configuration.name }}",
+            "xpm link @micro-os-plus/micro-os-plus-iii-devices-bcm283x --config {{ configuration.name }}",
+            "xpm link @micro-os-plus/micro-os-plus-iii-devices-rk3506 --config {{ configuration.name }}"
           ]
         }
       },
@@ -785,7 +790,9 @@
             "xpm install --config {{ configuration.name }}"
           ],
           "link-deps": [
-            "xpm link @micro-os-plus/micro-os-plus-iii-aarch64 --config {{ configuration.name }}"
+            "xpm link @micro-os-plus/micro-os-plus-iii-aarch64 --config {{ configuration.name }}",
+            "xpm link @micro-os-plus/micro-os-plus-iii-devices-storage --config {{ configuration.name }}",
+            "xpm link @micro-os-plus/micro-os-plus-iii-devices-bcm283x --config {{ configuration.name }}"
           ]
         }
       },

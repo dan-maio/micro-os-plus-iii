@@ -19,6 +19,9 @@ set (
   "${CMAKE_SOURCE_DIR}/sources/rtos-apis"
   "${CMAKE_SOURCE_DIR}/sources/cmsis-os-validator"
   "${CMAKE_BINARY_DIR}/xpacks/@micro-os-plus/micro-os-plus-iii-aarch32"
+  # The device packages this board's chip needs (xpm link, as the port).
+  "${CMAKE_BINARY_DIR}/xpacks/@micro-os-plus/micro-os-plus-iii-devices-storage"
+  "${CMAKE_BINARY_DIR}/xpacks/@micro-os-plus/micro-os-plus-iii-devices-bcm283x"
   # The CMSIS-OS validator, needed only when cmsis-os-validator is built.
   "${CMAKE_SOURCE_DIR}/xpacks/@xpacks/arm-cmsis-rtos-validator"
   # The Chan FatFs POSIX integration rtos-apis' test-chan-fatfs.cpp needs.

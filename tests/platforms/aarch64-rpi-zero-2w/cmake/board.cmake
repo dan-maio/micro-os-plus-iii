@@ -43,8 +43,9 @@ set (UOS_BOARD_DEFINES
      LED_PIN=${LED_PIN}
      "PORT_GREETING=\"µOS++ Raspberry Pi Zero 2W (BCM2837, 4x Cortex-A53)\"")
 
-# The SoC folder whose include/ and src/ the board target compiles.
-set (UOS_BOARD_SOC bcm2837)
+# The SoC folder (in a device package) whose include/ and src/ the board
+# target compiles.
+set (UOS_BOARD_SOC_DIR "${UOS_DEVICES_BCM283X_ROOT}/soc/bcm2837")
 
 # The port's test folder for this board (test/<BOARD>/), read by its builder.
 set (BOARD "rpi-zero-2w")

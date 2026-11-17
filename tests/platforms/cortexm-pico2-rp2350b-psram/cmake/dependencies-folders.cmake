@@ -18,6 +18,8 @@ set (
   # fp-switch/.
   "${CMAKE_SOURCE_DIR}/sources/fp-switch"
   "${CMAKE_BINARY_DIR}/xpacks/@micro-os-plus/micro-os-plus-iii-cortexm"
+  # The device packages this board's chip needs (xpm link, as the port).
+  "${CMAKE_BINARY_DIR}/xpacks/@micro-os-plus/micro-os-plus-iii-devices-rp2xxx"
   "${CMAKE_SOURCE_DIR}/device-qemu-cortexm"
   "${CMAKE_BINARY_DIR}/xpacks/@xpacks/arm-cmsis"
 )

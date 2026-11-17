@@ -31,7 +31,7 @@ message (
 # The board: its facts (cmake/board.cmake) and micro-os-plus::board.
 include ("${CMAKE_CURRENT_LIST_DIR}/board.cmake")
 include ("${CMAKE_SOURCE_DIR}/cmake/uos-aarch-board.cmake")
-uos_aarch_board_library ("${UOS_AARCH32_ROOT}" "${UOS_BOARD_SOC}")
+uos_aarch_board_library ("${UOS_BOARD_SOC_DIR}")
 
 if (NOT DEFINED UOS_BOARD_NCPU OR NOT DEFINED UOS_BOARD_LINKER_HW)
   message (

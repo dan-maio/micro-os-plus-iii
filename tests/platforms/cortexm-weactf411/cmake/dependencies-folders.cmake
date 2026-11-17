@@ -20,6 +20,8 @@ set (
   "${CMAKE_SOURCE_DIR}/sources/mutex-stress"
   "${CMAKE_SOURCE_DIR}/sources/cmsis-os-validator"
   "${CMAKE_BINARY_DIR}/xpacks/@micro-os-plus/micro-os-plus-iii-cortexm"
+  # The device packages this board's chip needs (xpm link, as the port).
+  "${CMAKE_BINARY_DIR}/xpacks/@micro-os-plus/micro-os-plus-iii-devices-stm32f4"
   # The SOURCE_DIR is the `tests` folder.
   "${CMAKE_SOURCE_DIR}/xpacks/@xpacks/arm-cmsis-rtos-validator"
   "${CMAKE_SOURCE_DIR}/xpacks/@xpacks/chan-fatfs"

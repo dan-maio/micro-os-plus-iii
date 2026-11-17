@@ -29,7 +29,7 @@
 # -----------------------------------------------------------------------------
 
 set (UOS_BOARD_SRC_DIR "${UOS_AARCH64_ROOT}/test/boards/rpi4b")
-set (UOS_BOARD_SOC     bcm2711)
+set (UOS_BOARD_SOC_DIR "${UOS_DEVICES_BCM283X_ROOT}/soc/bcm2711")
 
 # -Os overrides the -O2 that uos-app.cmake gives every bare-metal target
 # (interface options come after the target's own): the image is loaded over

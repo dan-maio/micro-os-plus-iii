@@ -12,4 +12,5 @@ message (
 )
 
 set (xpack_dependencies_folders "${CMAKE_SOURCE_DIR}/sources/mutex-stress"
+  "${CMAKE_BINARY_DIR}/xpacks/@micro-os-plus/micro-os-plus-iii-cortexm"
                                 "${CMAKE_BINARY_DIR}/xpacks/@xpacks/arm-cmsis")

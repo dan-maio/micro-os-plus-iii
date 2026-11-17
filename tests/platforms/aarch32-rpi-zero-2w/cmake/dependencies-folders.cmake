@@ -18,6 +18,7 @@ set (
   "${CMAKE_SOURCE_DIR}/sources/mutex-stress"
   "${CMAKE_SOURCE_DIR}/sources/rtos-apis"
   "${CMAKE_SOURCE_DIR}/sources/cmsis-os-validator"
+  "${CMAKE_BINARY_DIR}/xpacks/@micro-os-plus/micro-os-plus-iii-aarch32"
   # The CMSIS-OS validator, needed only when cmsis-os-validator is built.
   "${CMAKE_SOURCE_DIR}/xpacks/@xpacks/arm-cmsis-rtos-validator"
   # The Chan FatFs POSIX integration rtos-apis' test-chan-fatfs.cpp needs.

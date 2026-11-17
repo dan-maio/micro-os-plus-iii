@@ -17,6 +17,7 @@ set (
   # which the port's board_test_libs() names for test/pico2-rp2350b-psram/
   # fp-switch/.
   "${CMAKE_SOURCE_DIR}/sources/fp-switch"
+  "${CMAKE_BINARY_DIR}/xpacks/@micro-os-plus/micro-os-plus-iii-cortexm"
   "${CMAKE_SOURCE_DIR}/device-qemu-cortexm"
   "${CMAKE_BINARY_DIR}/xpacks/@xpacks/arm-cmsis"
 )

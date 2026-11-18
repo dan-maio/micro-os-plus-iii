@@ -23,6 +23,8 @@ set (
   # The device packages this board's chip needs (xpm link, as the port).
   "${CMAKE_BINARY_DIR}/xpacks/@micro-os-plus/micro-os-plus-iii-devices-storage"
   "${CMAKE_BINARY_DIR}/xpacks/@micro-os-plus/micro-os-plus-iii-devices-rk3506"
+  # The Chan FatFs POSIX I/O integration (the portable storage tests).
+  "${CMAKE_SOURCE_DIR}/xpacks/@xpacks/chan-fatfs"
 )
 
 # -----------------------------------------------------------------------------

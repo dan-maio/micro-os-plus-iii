@@ -37,6 +37,11 @@ set (UOS_BOARD_LIBS  micro-os-plus::soc-bcm2837)
 # the BCM2837 SD host and DWC2, which is what these tests always linked.
 set (UOS_BOARD_DEVICES  micro-os-plus::devices)
 
+# The card as a µOS++ POSIX I/O block device (sd::block_device), with no file
+# system of its own: what the portable storage tests (UOS_TESTS_STORAGE) link,
+# under @xpacks/chan-fatfs.
+set (UOS_BOARD_SD_POSIX  micro-os-plus::devices-sd-posix)
+
 set (UOS_BOARD_LINKER_HW   "${CMAKE_SOURCE_DIR}/platforms/aarch64-rpi3b/device/linker-scripts/linker-rpi3b.ld")
 set (UOS_BOARD_LINKER_QEMU "${CMAKE_SOURCE_DIR}/platforms/aarch64-rpi3b/device/linker-scripts/linker-rpi3b.ld")
 

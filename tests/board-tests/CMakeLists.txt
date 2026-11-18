@@ -16,6 +16,11 @@
 #                             and the common end, portable-test-end.cpp>)
 #   set (UOS_TESTS_STARTUP_LIBS <what the platform's start-up needs, e.g. the
 #                             kernel's C-library groups on AArch32>)
+#   set (UOS_TESTS_STORAGE  <those portable tests that use the SD card: they
+#                             get the card as the posix-io block device
+#                             /dev/sd (the board's UOS_BOARD_SD_POSIX,
+#                             portable-test-storage.cpp) and the
+#                             @xpacks/chan-fatfs file system>)
 #   add_subdirectory ("${CMAKE_SOURCE_DIR}/board-tests" "port-tests/test")
 #
 # It hands back UOS_TESTS_APPS, the tests it built, for the platform to
@@ -126,6 +131,16 @@ if (UOS_TESTS_PORTABLE AND NOT TARGET ${PLATFORM_NAME}-test-startup)
   target_link_libraries (${PLATFORM_NAME}-test-startup INTERFACE ${UOS_TESTS_STARTUP_LIBS})
 endif ()
 
+# The storage of a portable test that uses the SD card: the card as the posix-io
+# block device /dev/sd, and the file system the test mounts on it.
+if (UOS_TESTS_STORAGE AND NOT TARGET ${PLATFORM_NAME}-test-storage)
+  add_library (${PLATFORM_NAME}-test-storage INTERFACE)
+  target_sources (${PLATFORM_NAME}-test-storage INTERFACE
+    "${CMAKE_CURRENT_SOURCE_DIR}/portable-test-storage.cpp")
+  target_link_libraries (${PLATFORM_NAME}-test-storage INTERFACE
+    ${UOS_BOARD_SD_POSIX} xpacks::chan-fatfs)
+endif ()
+
 # The support the board's tests share: one copy per board, not per test.
 file (GLOB _test_support CONFIGURE_DEPENDS "${_test_dir}/src/*.cpp")
 set (_test_includes "${_test_dir}/include")
@@ -199,6 +214,15 @@ foreach (_dir IN LISTS _test_dirs)
       message (FATAL_ERROR "${_app} is in UOS_TESTS_PORTABLE but not in UOS_TESTS_SOURCES.")
     endif ()
     list (APPEND _libs ${PLATFORM_NAME}-test-startup)
+  endif ()
+  if ("${_app}" IN_LIST UOS_TESTS_STORAGE)
+    if (NOT "${_app}" IN_LIST UOS_TESTS_PORTABLE)
+      message (FATAL_ERROR "${_app} is in UOS_TESTS_STORAGE but not in UOS_TESTS_PORTABLE.")
+    endif ()
+    if (NOT UOS_BOARD_SD_POSIX)
+      message (FATAL_ERROR "${_app} uses the SD card, but platforms/${PLATFORM_NAME} sets no UOS_BOARD_SD_POSIX.")
+    endif ()
+    list (APPEND _libs ${PLATFORM_NAME}-test-storage)
   endif ()
   # Extra libraries (a harness suite's test::<suite>, a board's driver set).
   if (UOS_TESTS_PORT STREQUAL "posix")

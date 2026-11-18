@@ -27,6 +27,8 @@ set (
   "${CMAKE_SOURCE_DIR}/sources/mutex-stress"
   "${CMAKE_SOURCE_DIR}/sources/cmsis-os-validator"
   "${CMAKE_BINARY_DIR}/xpacks/@micro-os-plus/micro-os-plus-iii-posix-arch"
+  # The SD card as a posix-io block device (the portable storage tests).
+  "${CMAKE_BINARY_DIR}/xpacks/@micro-os-plus/micro-os-plus-iii-devices-storage"
   # Project dependencies. The BINARY_DIR is the `build/<config>` folder.
   "${CMAKE_BINARY_DIR}/xpacks/@xpack-3rd-party/libucontext"
   # The SOURCE_DIR is the `tests` folder.

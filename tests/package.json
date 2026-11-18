@@ -576,7 +576,8 @@
             "xpm install --config {{ configuration.name }}"
           ],
           "link-deps": [
-            "xpm link @micro-os-plus/micro-os-plus-iii-posix-arch --config {{ configuration.name }}"
+            "xpm link @micro-os-plus/micro-os-plus-iii-posix-arch --config {{ configuration.name }}",
+            "xpm link @micro-os-plus/micro-os-plus-iii-devices-storage --config {{ configuration.name }}"
           ]
         }
       },

@@ -51,6 +51,11 @@ set (UOS_BOARD_LIBS  "")
 # USB: the RK3506 SD host under the same flatfs/FatFs layers the Pi uses.
 set (UOS_BOARD_DEVICES  micro-os-plus::devices-rk3506)
 
+# The card as a µOS++ POSIX I/O block device (sd::block_device), with no file
+# system of its own: what the portable storage tests (UOS_TESTS_STORAGE) link,
+# under @xpacks/chan-fatfs.
+set (UOS_BOARD_SD_POSIX  micro-os-plus::devices-rk3506-sd-posix)
+
 # These Cortex-A7 are real OpenOCD `cortex_a` targets, which expect the
 # classic AArch32 Angel trap, SVC 0x123456. HLT #0xF000 has no encoding on
 # ARMv7-A -- see board-contract.cpp.

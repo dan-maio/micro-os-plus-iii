@@ -13,8 +13,10 @@
 //
 // The storage of a portable test that uses the SD card (UOS_TESTS_STORAGE).
 //
-// The board's card (its device package's SD driver, the host file on the
-// POSIX port) is the µOS++ POSIX I/O block device /dev/sd. Before os_main()
+// The card is a µOS++ POSIX I/O block device, uos_test_storage_card(): the
+// board's (its device package's SD driver, the host file on the POSIX port)
+// as /dev/sd from portable-test-storage-sd.cpp, or the one a test brings
+// with its own driver (board_test_sd_posix OWN). Before os_main()
 // (portable-test-end.cpp calls uos_test_storage_start()), its first FAT
 // partition is mounted at /sd/ with the Chan FatFs file system and /sd/tests/
 // is created, so the test itself uses the posix-io calls on paths only:
@@ -32,18 +34,37 @@
 #include <cmsis-plus/posix-io/file-descriptors-manager.h>
 #include <cmsis-plus/posix-io/file-system.h>
 
-#include <sd-block-device.h>
+#include <uos-test-storage.h>
 
 #include <cerrno>
 #include <cstdint>
 #include <cstdio>
 
+#if !defined(__unix__) && !defined(__APPLE__)
+
+#include <sys/time.h>
+
+// Chan FatFs stamps the files it writes with time() (get_fattime()), which
+// newlib takes from _gettimeofday(). The platforms' start-up defines it; a
+// board test with its own start-up may not, so here is the same clock-less
+// one (the epoch), weak, for those. A bare-metal build only: on a host the C
+// library has the real one.
+extern "C" __attribute__ ((weak)) int
+_gettimeofday (struct timeval* tv, void*)
+{
+  if (tv != nullptr)
+    {
+      tv->tv_sec = 0;
+      tv->tv_usec = 0;
+    }
+  return 0;
+}
+
+#endif
+
 // The partition template is declared `extern` by posix-io; the application
 // instantiates the variant it uses (as rtos-apis' test-posix-io-api.cpp does).
 template class os::posix::block_device_partition_implementable<>;
-
-extern "C" void
-uos_test_storage_start (void);
 
 namespace
 {
@@ -52,20 +73,9 @@ namespace
   // its partition, and the files and folders a test keeps open at once.
   os::posix::file_descriptors_manager descriptors_manager{ 16 };
 
-  // A block device links itself into the registry when constructed; the card
-  // is initialised on the first open (the mount), not here.
-  sd::block_device sd_card{ "sd" };
-
-  // The FAT volume inside the card.
-  os::posix::block_device_partition_implementable<> sd_partition{ "sd1",
-                                                                  sd_card };
-
   // FatFs is built without its own locking: the mutex serialises its users
   // (a test's threads, on any core).
   os::rtos::mutex fs_mutex{ "fat" };
-  os::posix::chan_fatfs_file_system_lockable<os::rtos::mutex> fs{
-    "fat", sd_partition, fs_mutex
-  };
 
   std::uint32_t
   le32 (const std::uint8_t* p)
@@ -99,15 +109,16 @@ namespace
 
   // The first FAT partition of the MBR, or the whole card without one.
   bool
-  locate_fat (std::uint32_t& start, std::uint32_t& count)
+  locate_fat (os::posix::block_device& card, std::uint32_t& start,
+              std::uint32_t& count)
   {
     static std::uint8_t mbr[512];
-    if (sd_card.read_block (mbr, 0, 1) != 1)
+    if (card.read_block (mbr, 0, 1) != 1)
       {
         return false;
       }
     start = 0;
-    count = static_cast<std::uint32_t> (sd_card.blocks ());
+    count = static_cast<std::uint32_t> (card.blocks ());
     if (mbr[510] != 0x55 || mbr[511] != 0xAA)
       {
         return true;
@@ -129,23 +140,32 @@ namespace
 void
 uos_test_storage_start (void)
 {
-  std::printf ("storage: SD card /dev/sd...\n");
-  if (sd_card.open () < 0)
+  os::posix::block_device& card = uos_test_storage_card ();
+  std::printf ("storage: SD card /dev/%s...\n", card.name ());
+  if (card.open () < 0)
     {
       std::printf ("storage: SD init FAILED (errno %d)\n", errno);
       return;
     }
   std::printf ("storage: SD card ready, %u sectors (~%u MiB)\n",
-               static_cast<unsigned> (sd_card.blocks ()),
-               static_cast<unsigned> (sd_card.blocks () / 2048u));
+               static_cast<unsigned> (card.blocks ()),
+               static_cast<unsigned> (card.blocks () / 2048u));
 
   std::uint32_t start = 0;
   std::uint32_t count = 0;
-  if (!locate_fat (start, count))
+  if (!locate_fat (card, start, count))
     {
       std::printf ("storage: reading the partition table FAILED\n");
       return;
     }
+  // The FAT volume inside the card, and the file system on it: built on the
+  // first call, on the card the test was given.
+  static os::posix::block_device_partition_implementable<> sd_partition{
+    "sd1", card
+  };
+  static os::posix::chan_fatfs_file_system_lockable<os::rtos::mutex> fs{
+    "fat", sd_partition, fs_mutex
+  };
   sd_partition.configure (start, count);
   std::printf ("storage: FAT window LBA %u, %u sectors (%u MiB)\n",
                static_cast<unsigned> (start), static_cast<unsigned> (count),

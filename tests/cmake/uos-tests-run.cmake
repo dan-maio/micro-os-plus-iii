@@ -71,17 +71,14 @@ function (uos_tests_add_qemu)
 
   set (_drive)
   set (_fixture)
-  if (_a_APP MATCHES "^(sd_test|smp-mat-sdcard-test|smp-num-test|smp-pipeline-test)$")
+  if (_a_APP MATCHES "^(sd_test|smp-mat-sdcard-test|smp-num-test|smp-pipeline-test|smp-shapes-test)$")
     find_package (Python3 COMPONENTS Interpreter REQUIRED)
     set (_img "${CMAKE_CURRENT_BINARY_DIR}/${_a_NAME}.disk.img")
+    # A boot card's layout (MBR + FAT32); sd_test's with the host-written
+    # seed.bin.
+    set (_make "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/board-tests/sd-image.py" "${_img}")
     if (_a_APP STREQUAL "sd_test")
-      # A boot card's layout (MBR + FAT32), with the host-written seed.bin.
-      set (_make "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/board-tests/sd-image.py" "${_img}" --seed)
-    elseif (_a_APP MATCHES "^(smp-mat-sdcard-test|smp-num-test|smp-pipeline-test)$")
-      # A boot card's layout (MBR + FAT32), empty.
-      set (_make "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/board-tests/sd-image.py" "${_img}")
-    else ()
-      set (_make "${Python3_EXECUTABLE}" -c "open(__import__('sys').argv[1],'wb').truncate(4<<30)" "${_img}")
+      list (APPEND _make --seed)
     endif ()
     set (_fixture "${_a_NAME}-sd")
     add_test (NAME "${_a_NAME}-sd-make" COMMAND ${_make})

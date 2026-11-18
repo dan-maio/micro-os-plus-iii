@@ -116,26 +116,6 @@ set (UOS_BOARD_USB_GADGET_SOURCES
 set (UOS_BOARD_USB_INT_SOURCES
      "${UOS_AARCH32_ROOT}/test/boards/luckfox-lyra/usb/src/usb1_int3.cpp")
 
-# FatFs R0.15a compiled as C++ inside `namespace fatfs`, carried over from
-# smp-old/.../src/sdcard/fatfs_cpp/.
-#
-# This is a SECOND FatFs in the workspace: micro-os-plus-iii-devices/fatfs/ is
-# the same R0.15a as C, and the two are not interchangeable. The C++ one wraps
-# Dir and File in RAII classes and returns `enum class` results, which is the
-# API smp_test5, smp_test7 and smp_test_int4 were written against. The C one
-# is what flatfs and the Pi's sd_test use. Neither can serve the other, and
-# they do not collide: every symbol of this one is inside `namespace fatfs`.
-#
-# DISKIO is separate from SOURCES because smp_test_int4 supplies its own --
-# sd/diskio_sd_irq.cpp, over its own interrupt-driven sdmmc.cpp.
-set (UOS_BOARD_FATFS_CPP_INCLUDE "${UOS_AARCH32_ROOT}/test/boards/luckfox-lyra/fatfs-cpp")
-set (UOS_BOARD_FATFS_CPP_SOURCES
-     "${UOS_AARCH32_ROOT}/test/boards/luckfox-lyra/fatfs-cpp/ff.cpp"
-     "${UOS_AARCH32_ROOT}/test/boards/luckfox-lyra/fatfs-cpp/ffsystem.cpp"
-     "${UOS_AARCH32_ROOT}/test/boards/luckfox-lyra/fatfs-cpp/ffunicode.cpp")
-set (UOS_BOARD_FATFS_CPP_DISKIO
-     "${UOS_AARCH32_ROOT}/test/boards/luckfox-lyra/fatfs-cpp/diskio_sdmmc.cpp")
-
 # No SoC folder: the board compiles no SoC code of its own. The RK3506 code it
 # needs is the board's own (include/rk3506.hpp: registers, the SRAM mailbox)
 # and micro-os-plus-iii-devices-rk3506 (the SD host, micro-os-plus::devices-rk3506,

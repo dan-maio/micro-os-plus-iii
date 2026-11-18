@@ -16,11 +16,15 @@
 #                             and the common end, portable-test-end.cpp>)
 #   set (UOS_TESTS_STARTUP_LIBS <what the platform's start-up needs, e.g. the
 #                             kernel's C-library groups on AArch32>)
-#   set (UOS_TESTS_STORAGE  <those portable tests that use the SD card: they
-#                             get the card as the posix-io block device
-#                             /dev/sd (the board's UOS_BOARD_SD_POSIX,
-#                             portable-test-storage.cpp) and the
-#                             @xpacks/chan-fatfs file system>)
+#   set (UOS_TESTS_STORAGE  <the tests that use the SD card: they get the card
+#                             as the posix-io block device /dev/sd (the
+#                             board's UOS_BOARD_SD_POSIX), the
+#                             @xpacks/chan-fatfs file system, and
+#                             portable-test-storage.cpp, which mounts it at
+#                             /sd/. A portable test gets the mount before
+#                             os_main(); a board test (its tests.cmake adds
+#                             it to the list) calls uos_test_storage_start()
+#                             itself, from uos-test-storage.h>)
 #   add_subdirectory ("${CMAKE_SOURCE_DIR}/board-tests" "port-tests/test")
 #
 # It hands back UOS_TESTS_APPS, the tests it built, for the platform to
@@ -110,6 +114,12 @@ endfunction ()
 function (board_test_libs _app _out)
   set (${_out} "" PARENT_SCOPE)
 endfunction ()
+# The SD driver set of a storage test (UOS_TESTS_STORAGE): the board's, unless
+# the test reaches the card through another controller -- or OWN, when the test
+# drives the card with its own driver and defines uos_test_storage_card().
+function (board_test_sd_posix _app _out)
+  set (${_out} "${UOS_BOARD_SD_POSIX}" PARENT_SCOPE)
+endfunction ()
 # The POSIX port's name for the same knob.
 function (board_test_libraries _app _out)
   set (${_out} "" PARENT_SCOPE)
@@ -137,8 +147,15 @@ if (UOS_TESTS_STORAGE AND NOT TARGET ${PLATFORM_NAME}-test-storage)
   add_library (${PLATFORM_NAME}-test-storage INTERFACE)
   target_sources (${PLATFORM_NAME}-test-storage INTERFACE
     "${CMAKE_CURRENT_SOURCE_DIR}/portable-test-storage.cpp")
+  target_include_directories (${PLATFORM_NAME}-test-storage INTERFACE
+    "${CMAKE_CURRENT_SOURCE_DIR}/include")
+  # The card's driver set is per test (board_test_sd_posix), added beside.
   target_link_libraries (${PLATFORM_NAME}-test-storage INTERFACE
-    ${UOS_BOARD_SD_POSIX} xpacks::chan-fatfs)
+    xpacks::chan-fatfs micro-os-plus::iii-posix-io)
+  # The board's card as /dev/sd, for the tests that use the board's driver.
+  add_library (${PLATFORM_NAME}-test-storage-sd INTERFACE)
+  target_sources (${PLATFORM_NAME}-test-storage-sd INTERFACE
+    "${CMAKE_CURRENT_SOURCE_DIR}/portable-test-storage-sd.cpp")
 endif ()
 
 # The support the board's tests share: one copy per board, not per test.
@@ -216,13 +233,22 @@ foreach (_dir IN LISTS _test_dirs)
     list (APPEND _libs ${PLATFORM_NAME}-test-startup)
   endif ()
   if ("${_app}" IN_LIST UOS_TESTS_STORAGE)
-    if (NOT "${_app}" IN_LIST UOS_TESTS_PORTABLE)
-      message (FATAL_ERROR "${_app} is in UOS_TESTS_STORAGE but not in UOS_TESTS_PORTABLE.")
+    if ("${_app}" IN_LIST BOARD_TEST_NEED_DEVICES)
+      message (FATAL_ERROR "${_app} is in UOS_TESTS_STORAGE and in BOARD_TEST_NEED_DEVICES: the old flatfs/FatFs set and Chan FatFs cannot share an image.")
     endif ()
-    if (NOT UOS_BOARD_SD_POSIX)
+    board_test_sd_posix ("${_app}" _app_sd)
+    if (NOT _app_sd)
       message (FATAL_ERROR "${_app} uses the SD card, but platforms/${PLATFORM_NAME} sets no UOS_BOARD_SD_POSIX.")
     endif ()
     list (APPEND _libs ${PLATFORM_NAME}-test-storage)
+    if (NOT _app_sd STREQUAL "OWN")
+      list (APPEND _libs ${PLATFORM_NAME}-test-storage-sd ${_app_sd})
+    endif ()
+    # The storage start-up prints through the C library; a board test with
+    # its own start-up gets the system calls the platform's start-up has.
+    if (NOT "${_app}" IN_LIST UOS_TESTS_PORTABLE)
+      list (APPEND _libs ${UOS_TESTS_STARTUP_LIBS})
+    endif ()
   endif ()
   # Extra libraries (a harness suite's test::<suite>, a board's driver set).
   if (UOS_TESTS_PORT STREQUAL "posix")

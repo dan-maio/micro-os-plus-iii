@@ -7,7 +7,7 @@
  *       * 4 Compute Workers (prio normal)        : digital filtering, vector math, CRC32
  *       * 2 SD Writers      (prio normal)        : batch and append records to SD
  *       * 1 SD Auditor      (prio normal)        : reads back from SD, validates CRC & sequence
- *       * 1 Pacer           (prio above_normal)  : 150 ms cadence (no LED is driven)
+ *       * 1 Pacer           (prio above_normal)  : the board's LED at a 150 ms cadence
  *       * 1 Telemetry       (prio high)          : periodic 1s status summary
  *   - Heavy usage of os::rtos::this_thread::yield() for cooperative scheduling:
  *       * Queue backpressure yielding
@@ -34,6 +34,9 @@
 #include <cmsis-plus/posix-io/file-system.h>
 #include <cmsis-plus/posix-io/io.h>
 #include <cmsis-plus/posix/sys/statvfs.h>
+
+// The board's LED (upstream's blinky interface).
+#include <blink-led.h>
 
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -77,6 +80,10 @@ console (const char* fmt, ...)
   va_end (ap);
   console_mutex ().lock ();
   std::fputs (b, stdout);
+  // Written out while the mutex is held: the C library's stdout buffer
+  // would otherwise reach the console later, from whichever thread flushes
+  // it, and two cores' lines interleave character by character.
+  std::fflush (stdout);
   console_mutex ().unlock ();
 }
 
@@ -541,17 +548,20 @@ sd_auditor_thread (void* arg)
 // ---------------------------------------------------------------------------
 // 5. LED Pacer Thread (1 instance)
 // ---------------------------------------------------------------------------
+static blink_led g_led;
+
 static void*
 led_thread (void* arg)
 {
   (void)arg;
-  bool state = false;
+  g_led.power_up ();
   while (!g_finish)
     {
-      state = !state;
+      g_led.blink ();
       sysclock.sleep_for (150);
       this_thread::yield ();
     }
+  g_led.turn_on ();
   return nullptr;
 }
 

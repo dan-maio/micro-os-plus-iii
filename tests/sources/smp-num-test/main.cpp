@@ -4,10 +4,10 @@
  * Five concurrent worker threads with EXPLICIT priorities (highest first):
  *
  *   1. uart-writer      (prio high)          : console tick every 0.5 s
- *   2. led-blinker      (prio above_normal)  : the pacer: 5 "blinks" per
- *                                              pass, 0.3 s on / 0.3 s off,
- *                                              printing "led on"/"led off" on
- *                                              every edge (no LED is driven)
+ *   2. led-blinker      (prio above_normal)  : the pacer: 5 blinks of the
+ *                                              board's LED per pass, 0.3 s
+ *                                              on / 0.3 s off, printing "led
+ *                                              on"/"led off" on every edge
  *   3. sd-text-writer   (prio normal)        : 20 lines of ~100 chars appended
  *                                              to num.txt on the SD card
  *   4. fp-compute       (prio below_normal)  : 20 sin/cos/log results appended
@@ -39,6 +39,9 @@
 #include <cmsis-plus/posix-io/file-system.h>
 #include <cmsis-plus/posix-io/io.h>
 #include <cmsis-plus/posix/sys/statvfs.h>
+
+// The board's LED (upstream's blinky interface).
+#include <blink-led.h>
 
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -80,6 +83,10 @@ console (const char* fmt, ...)
   va_end (ap);
   console_mutex ().lock ();
   std::fputs (b, stdout);
+  // Written out while the mutex is held: the C library's stdout buffer
+  // would otherwise reach the console later, from whichever thread flushes
+  // it, and two cores' lines interleave character by character.
+  std::fflush (stdout);
   console_mutex ().unlock ();
 }
 
@@ -100,10 +107,11 @@ namespace
 // ---------------------------------------------------------------------------
 // Run control / iteration counts
 // ---------------------------------------------------------------------------
-// Wall-clock run length in ms. Override for short QEMU smoke tests with
-// make ... RUN_MS=5000  (Makefile forwards -DRUN_MS).
+// Wall-clock run length in ms (-DRUN_MS=... to change it). 15 s: about five
+// passes of the pacer, enough for every thread to write, compute and read
+// several times; 60 s made the board run (and its console) needlessly long.
 #ifndef RUN_MS
-#define RUN_MS 60000
+#define RUN_MS 15000
 #endif
 constexpr unsigned kTextLines = 20;    // SD text lines per pass
 constexpr unsigned kComputeLines = 20; // FPU compute lines per pass
@@ -114,6 +122,9 @@ constexpr unsigned kLedBlinks = 5;     // LED blinks per pass (0.3 s each)
 // ---------------------------------------------------------------------------
 // num.txt, on the card's FAT volume.
 static const char kNumFile[] = "/sd/tests/num.txt";
+
+// The board's LED, driven by the led-blinker thread only.
+static blink_led g_led;
 
 // All num.txt access serialised by this mutex.
 static mutex g_file_mtx { "file" };
@@ -255,8 +266,10 @@ led_thread (void*)
     {
       for (unsigned i = 0; i < kLedBlinks; ++i)
         {
+          g_led.turn_on ();
           console ("[c%u] led on\n", (unsigned)port_cpu_id ());
           sysclock.sleep_for (300);
+          g_led.turn_off ();
           console ("[c%u] led off\n", (unsigned)port_cpu_id ());
           sysclock.sleep_for (300);
         }
@@ -461,7 +474,12 @@ reader_thread (void*)
             }
           std::memcpy (tmp, g_read_buf + off, n);
           tmp[n] = '\0';
+          // Under the console mutex, as every other line: the stream must
+          // not interleave with the other threads' output.
+          console_mutex ().lock ();
           std::fputs (tmp, stdout);
+          std::fflush (stdout);
+          console_mutex ().unlock ();
           this_thread::yield ();
         }
       last_len = len;
@@ -488,6 +506,7 @@ os_main (int, char*[])
 {
   console ("\n+== µOS++ NUM TEST : console + pacer + SD + FPU, %u cores ==+\n\n",
            static_cast<unsigned> (OS_NCPU));
+  g_led.power_up ();
   if (!sd_prepare ())
     {
       return 1;
@@ -556,7 +575,10 @@ os_main (int, char*[])
               }
             std::memcpy (tmp, g_read_buf + off, n);
             tmp[n] = '\0';
+            console_mutex ().lock ();
             std::fputs (tmp, stdout);
+            std::fflush (stdout);
+            console_mutex ().unlock ();
           }
         console ("---- end num.txt ----\n");
       }

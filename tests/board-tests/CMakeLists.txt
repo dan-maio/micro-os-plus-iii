@@ -21,6 +21,9 @@
 #                             platform's start-up as a portable test, its
 #                             upstream dependencies, and the platform's
 #                             src/<suite>-support.cpp when there is one>)
+#   set (UOS_TESTS_STARTUP_DEFINES <what the platform's start-up and the
+#                             board's console need defined for its portable
+#                             tests, e.g. UOS_CONSOLE_UART_ONLY>)
 #   set (UOS_TESTS_STARTUP_LIBS <what the platform's start-up needs, e.g. the
 #                             kernel's C-library groups on AArch32>)
 #   set (UOS_TESTS_STORAGE  <the tests that use the SD card: they get the card
@@ -147,10 +150,13 @@ if ((UOS_TESTS_PORTABLE OR UOS_TESTS_SUITES)
     "${CMAKE_CURRENT_SOURCE_DIR}/portable-test-end.cpp")
   target_link_options (${PLATFORM_NAME}-test-startup INTERFACE "-Wl,--wrap=os_main")
   # The platform's own headers (include/), as upstream's portable tests see
-  # them (blinky's blink-led.h): clock-test's reference-clock.h.
+  # them (blinky's blink-led.h): clock-test's reference-clock.h; then the
+  # common ones a platform may override there (blink-led.h).
   target_include_directories (${PLATFORM_NAME}-test-startup INTERFACE
-    "${CMAKE_SOURCE_DIR}/platforms/${PLATFORM_NAME}/include")
+    "${CMAKE_SOURCE_DIR}/platforms/${PLATFORM_NAME}/include"
+    "${CMAKE_CURRENT_SOURCE_DIR}/include")
   target_link_libraries (${PLATFORM_NAME}-test-startup INTERFACE ${UOS_TESTS_STARTUP_LIBS})
+  target_compile_definitions (${PLATFORM_NAME}-test-startup INTERFACE ${UOS_TESTS_STARTUP_DEFINES})
 endif ()
 
 # The storage of a portable test that uses the SD card: the card as the posix-io

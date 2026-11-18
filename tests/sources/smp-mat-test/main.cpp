@@ -45,6 +45,10 @@
 #include <cstdio>
 #include <cstdlib>
 
+// The board's LED (upstream's blinky interface): it blinks while the
+// parallel solver runs.
+#include <blink-led.h>
+
 
 using namespace os::rtos;
 
@@ -88,6 +92,9 @@ namespace
   {
     out_mutex ().lock ();
     std::fputs (s, stdout);
+    // Written out while the mutex is held (two cores' lines would otherwise
+    // interleave when the C library flushes its buffer later).
+    std::fflush (stdout);
     out_mutex ().unlock ();
   }
 
@@ -863,10 +870,14 @@ os_main (int /*argc*/, char* /*argv*/[])
       solver_threads[c]->cpu_affinity (1u << c);
     }
 
+  static blink_led led;
+  led.power_up ();
   while (!g_solver_done)
     {
       sysclock.sleep_for (100);
+      led.blink ();
     }
+  led.power_down ();
   write_str ("Block elimination finished.\n");
 
   // ---- Classical solve (ground truth) --------------------------------------

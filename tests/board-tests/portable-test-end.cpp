@@ -19,11 +19,13 @@
 // secondary cores and calls os_main(); the test is linked with
 // -Wl,--wrap=os_main, so that call lands here.
 //
-// This prints the RESULT line the runners look for and ends the run, the way
-// the board tests always did: the console's puts() (mirrored to semihosting
-// on SEMIHOST builds), then hw_result -- the semihosting SYS_EXIT on a
-// SEMIHOST build, the process exit status on the host, nothing on a plain
-// image, which then idles.
+// This prints the RESULT line the runners look for and ends the run: on the
+// board's UART, then, on a SEMIHOST build, semihosting::report_result (),
+// which writes the same line to the semihosting console (what the runners
+// read) and stops the run with SYS_EXIT. On the host, hw_result gives the
+// process exit status; a plain image idles. The verdict reaches semihosting
+// even when the board keeps its console on the UART (UOS_CONSOLE_UART_ONLY:
+// on a probe where every semihosting call is slow, the Luckfox Lyra's).
 
 #include <cmsis-plus/rtos/os.h>
 
@@ -31,6 +33,9 @@
 
 #include <uart.hpp>
 #include <hw_result.hpp>
+#if defined(SEMIHOST)
+#include <semihosting.hpp>
+#endif
 
 extern "C" int
 __real_os_main (int argc, char* argv[]);
@@ -68,9 +73,11 @@ __wrap_os_main (int argc, char* argv[])
   // must reach the console before the run ends.
   std::fflush (nullptr);
 
-  // A single puts() is a single semihosted write: the line cannot be
-  // interleaved with another core's output.
-  uart::uart1.puts (code == 0 ? "\nRESULT: PASS\n" : "\nRESULT: FAIL\n");
+  uart::uart1.puts_uart (code == 0 ? "\nRESULT: PASS\n" : "\nRESULT: FAIL\n");
+#if defined(SEMIHOST)
+  // One semihosted write of the whole line, then SYS_EXIT.
+  semihosting::report_result (code == 0);
+#else
   if (code == 0)
     {
       hw_result::ok ();
@@ -79,6 +86,7 @@ __wrap_os_main (int argc, char* argv[])
     {
       hw_result::fail ();
     }
+#endif
 
   // Reached only on a plain image (no SEMIHOST): idle.
   for (;;)

@@ -36,6 +36,9 @@
 #include <cstring>
 #include <atomic>
 
+// The board's LED (upstream's blinky interface): the heartbeat's blink.
+#include <blink-led.h>
+
 
 
 extern "C" unsigned port_cpu_id (void);
@@ -65,6 +68,10 @@ console (const char* fmt, ...)
   va_end (ap);
   console_mutex ().lock ();
   std::fputs (b, stdout);
+  // Written out while the mutex is held: the C library's stdout buffer
+  // would otherwise reach the console later, from whichever thread flushes
+  // it, and two cores' lines interleave character by character.
+  std::fflush (stdout);
   console_mutex ().unlock ();
 }
 
@@ -187,11 +194,15 @@ constexpr flags::mask_t FLAG_SHUTDOWN     = (1 << 4);
 // ---------------------------------------------------------------------------
 static std::atomic<std::uint32_t> g_timer_ticks { 0 };
 
+// The board's LED, blinked by the heartbeat timer.
+static blink_led g_led;
+
 static void
 heartbeat_timer_cb (timer::func_args_t)
 {
   g_timer_ticks.fetch_add (1, std::memory_order_relaxed);
   g_events.raise (FLAG_TIMER_TICK);
+  g_led.blink ();
 }
 
 static timer g_heartbeat_timer {
@@ -488,6 +499,7 @@ os_main (int, char*[])
   console ("|  %u cores -- ALL Kernel Objects Demo                          |\n",
            static_cast<unsigned> (OS_NCPU));
   console ("+=============================================================+\n\n");
+  g_led.power_up ();
 
   // 1. The secondary cores were released by the platform, before os_main().
 

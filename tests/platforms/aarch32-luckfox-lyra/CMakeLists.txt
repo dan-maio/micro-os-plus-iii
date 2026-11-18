@@ -34,6 +34,13 @@ set (UOS_TESTS_PORTABLE smp_test0 smp_test1 smp_test2 smp_test3 smp_test4
      smp-mat-sdcard-test clock-test)
 # The platform start-up's needs (src/platform-support.cpp): the C library's
 # system calls (semihosting), its reentrancy and the POSIX I/O layer.
+# The console stays on the UART (the board's uart.hpp): every semihosting
+# call is a debug halt and a WCH-Link round trip, about a second per line
+# (more from cores 1 and 2), and a test that prints much spent its run in the
+# debugger (smp-num-test, smp-mat-test: past the 600 s cap; heavy semihosting
+# can also drop the link). The verdict still reaches semihosting
+# (board-tests/portable-test-end.cpp: semihosting::report_result ()).
+set (UOS_TESTS_STARTUP_DEFINES UOS_CONSOLE_UART_ONLY)
 set (UOS_TESTS_STARTUP_LIBS micro-os-plus::iii-semihosting
      micro-os-plus::iii-newlib-reent micro-os-plus::iii-posix-io)
 # Of those, the ones that use the SD card: the card as the posix-io block

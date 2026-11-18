@@ -26,10 +26,6 @@ set (UOS_BOARD_LINKER_QEMU "${CMAKE_SOURCE_DIR}/platforms/aarch32-rpi-zero-2w/de
 
 set (UOS_BOARD_LIBS  micro-os-plus::soc-bcm2837)
 
-# The driver set an application links when it needs the SD card or USB:
-# the BCM2837 SD host and DWC2, which is what these tests always linked.
-set (UOS_BOARD_DEVICES  micro-os-plus::devices)
-
 # The card as a µOS++ POSIX I/O block device (sd::block_device), with no file
 # system of its own: what the portable storage tests (UOS_TESTS_STORAGE) link,
 # under @xpacks/chan-fatfs.

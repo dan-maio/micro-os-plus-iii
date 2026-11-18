@@ -106,8 +106,7 @@ endfunction ()
 # The tests that use the SD card get UOS_SD_IMAGE, a file the host back-end
 # presents as the card. For the storage tests (posix-io + Chan FatFs) it is a
 # fresh boot card's layout for each run, MBR + FAT32 (board-tests/
-# sd-image.py, sd_test's with seed.bin), deleted when the run ends; flatfs-test
-# gets a file the back-end creates and grows itself.
+# sd-image.py, sd_test's with seed.bin), deleted when the run ends.
 function (uos_tests_add_host)
   cmake_parse_arguments (_a "" "NAME;APP;PROGRAM" "" ${ARGN})
   add_test (NAME "${_a_NAME}" COMMAND "${_a_PROGRAM}")
@@ -115,10 +114,8 @@ function (uos_tests_add_host)
   set_tests_properties ("${_a_NAME}" PROPERTIES
     LABELS "host" TIMEOUT ${_timeout} ${UOS_TESTS_RESULT_PROPERTIES})
   set (_img "${CMAKE_CURRENT_BINARY_DIR}/${_a_NAME}.disk.img")
-  if (_a_APP MATCHES "^(smp-num-test|smp-pipeline-test|smp-mat-sdcard-test|sd_test|flatfs-test)$")
-    set_tests_properties ("${_a_NAME}" PROPERTIES ENVIRONMENT "UOS_SD_IMAGE=${_img}")
-  endif ()
   if (_a_APP MATCHES "^(smp-num-test|smp-pipeline-test|smp-mat-sdcard-test|sd_test)$")
+    set_tests_properties ("${_a_NAME}" PROPERTIES ENVIRONMENT "UOS_SD_IMAGE=${_img}")
     find_package (Python3 COMPONENTS Interpreter REQUIRED)
     set (_make "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/board-tests/sd-image.py" "${_img}")
     if (_a_APP STREQUAL "sd_test")

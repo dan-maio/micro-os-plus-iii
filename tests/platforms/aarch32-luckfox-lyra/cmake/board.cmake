@@ -23,8 +23,8 @@ set (UOS_BOARD_NCPU  3)
 # `sdcard` is here because the predecessor's cortex-a7 project drove this
 # board's microSD -- src/sdcard/sdmmc.cpp, a DesignWare MSHC driver at
 # 0xFF480000 -- and that driver is now devices/soc/rk3506/. It is reached
-# through micro-os-plus::devices-rk3506, which is the RK3506 SD host under the
-# same flatfs/FatFs layers the Pi uses.
+# through micro-os-plus::devices-rk3506-sd-posix: the RK3506 SD host as the
+# posix-io block device /dev/sd, under Chan FatFs, as on the Pi.
 #
 # `usb-device` is here because the predecessor's RK3506 DWC2 gadget stack --
 # src/usb/ and include/usb/, 13 sources and 10 headers -- is now usb/ beside
@@ -46,10 +46,6 @@ set (UOS_BOARD_CAPS  smp sdcard usb-device led)
 set (UOS_BOARD_LINKER_HW "${CMAKE_SOURCE_DIR}/platforms/aarch32-luckfox-lyra/device/linker-scripts/linker.ld")
 
 set (UOS_BOARD_LIBS  "")
-
-# The driver set an application links when it needs this board's SD card or
-# USB: the RK3506 SD host under the same flatfs/FatFs layers the Pi uses.
-set (UOS_BOARD_DEVICES  micro-os-plus::devices-rk3506)
 
 # The card as a µOS++ POSIX I/O block device (sd::block_device), with no file
 # system of its own: what the portable storage tests (UOS_TESTS_STORAGE) link,

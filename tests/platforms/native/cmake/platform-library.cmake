@@ -83,7 +83,6 @@ set (UOS_BOARD_NCPU ${NCPU})
 # `sdcard`: the host file back-end below is a block device the SD tests can
 # reach. Not `usb-device`: nothing here can be a USB gadget.
 set (UOS_BOARD_CAPS smp sdcard led)
-set (UOS_BOARD_DEVICES micro-os-plus::devices-hostfile)
 # The host-file card as a µOS++ POSIX I/O block device (sd::block_device of
 # micro-os-plus-iii-devices-storage), with no file system of its own: what the
 # portable storage tests (UOS_TESTS_STORAGE) link, under @xpacks/chan-fatfs.

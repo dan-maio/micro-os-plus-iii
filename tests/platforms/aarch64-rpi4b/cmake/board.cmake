@@ -24,8 +24,8 @@
 #   boot             EL3 is handled as well as EL2 (src/startup.S)
 #
 # No USB device test: the USB-C port's DWC2 is not where the BCM2837's is and
-# the type-A ports are behind the VL805 host, so this board links the SD-only
-# driver set (micro-os-plus::devices-sd) and has no test/rpi4b/usb_test.
+# the type-A ports are behind the VL805 host, so this board's card is the SD
+# host alone (micro-os-plus::devices-sd-posix) and it has no test/rpi4b/usb_test.
 # -----------------------------------------------------------------------------
 
 set (UOS_BOARD_SRC_DIR "${UOS_AARCH64_ROOT}/test/boards/rpi4b")
@@ -42,9 +42,6 @@ set (UOS_BOARD_NCPU  4)
 set (UOS_BOARD_CAPS  smp sdcard led)
 
 set (UOS_BOARD_LIBS  micro-os-plus::soc-bcm2711)
-
-# The driver set an application links when it needs the SD card.
-set (UOS_BOARD_DEVICES  micro-os-plus::devices-sd)
 
 # The card as a µOS++ POSIX I/O block device (sd::block_device), with no file
 # system of its own: what the portable storage tests (UOS_TESTS_STORAGE) link,

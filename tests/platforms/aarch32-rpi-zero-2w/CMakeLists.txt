@@ -44,6 +44,9 @@ set (UOS_TESTS_STARTUP_LIBS micro-os-plus::iii-semihosting
 # device /dev/sd, under the Chan FatFs file system.
 set (UOS_TESTS_STORAGE sd_test smp-mat-sdcard-test smp-num-test
      smp-pipeline-test)
+# Upstream's suites (tests/sources/<suite>/), on the platform's start-up; the
+# validator's board glue is src/cmsis-os-validator-support.cpp.
+set (UOS_TESTS_SUITES mutex-stress rtos-apis cmsis-os-validator)
 set (UOS_TESTS_PORT aarch32)
 set (UOS_TESTS_BOARD_DIR "${UOS_AARCH32_DIR}/test/${BOARD}")
 add_subdirectory ("${CMAKE_SOURCE_DIR}/board-tests" "port-tests/test")

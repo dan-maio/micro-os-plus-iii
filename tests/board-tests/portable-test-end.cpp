@@ -44,12 +44,22 @@ __wrap_os_main (int argc, char* argv[]);
 extern "C" void
 uos_test_storage_start (void) __attribute__ ((weak));
 
+// What a test needs from the platform right before it runs: the platform's
+// support file for that test defines it (cmsis-os-validator pins the main
+// thread to core 0); for the others this stays undefined.
+extern "C" void
+uos_test_prologue (void) __attribute__ ((weak));
+
 extern "C" int
 __wrap_os_main (int argc, char* argv[])
 {
   if (uos_test_storage_start != nullptr)
     {
       uos_test_storage_start ();
+    }
+  if (uos_test_prologue != nullptr)
+    {
+      uos_test_prologue ();
     }
 
   const int code = __real_os_main (argc, argv);

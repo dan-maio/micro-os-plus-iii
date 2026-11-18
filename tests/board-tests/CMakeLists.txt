@@ -14,6 +14,13 @@
 #   set (UOS_TESTS_PORTABLE <those of them that are os_main() only: they get
 #                             the platform's start-up, src/platform-support.cpp,
 #                             and the common end, portable-test-end.cpp>)
+#   set (UOS_TESTS_SUITES   <upstream's test suites this board runs, from
+#                             tests/sources/<suite>/ (mutex-stress, rtos-apis,
+#                             cmsis-os-validator): each is its test::<suite>
+#                             library, which has its own os_main(), with the
+#                             platform's start-up as a portable test, its
+#                             upstream dependencies, and the platform's
+#                             src/<suite>-support.cpp when there is one>)
 #   set (UOS_TESTS_STARTUP_LIBS <what the platform's start-up needs, e.g. the
 #                             kernel's C-library groups on AArch32>)
 #   set (UOS_TESTS_STORAGE  <the tests that use the SD card: they get the card
@@ -132,7 +139,8 @@ endif ()
 # The start-up of a portable test: the platform's (board bring-up, the
 # secondary cores, then os_main) and the common end (the RESULT line and the
 # end of the run), wrapping os_main.
-if (UOS_TESTS_PORTABLE AND NOT TARGET ${PLATFORM_NAME}-test-startup)
+if ((UOS_TESTS_PORTABLE OR UOS_TESTS_SUITES)
+    AND NOT TARGET ${PLATFORM_NAME}-test-startup)
   add_library (${PLATFORM_NAME}-test-startup INTERFACE)
   target_sources (${PLATFORM_NAME}-test-startup INTERFACE
     "${CMAKE_SOURCE_DIR}/platforms/${PLATFORM_NAME}/src/platform-support.cpp"
@@ -172,6 +180,26 @@ endif ()
 
 file (GLOB _test_dirs LIST_DIRECTORIES true CONFIGURE_DEPENDS "${_test_dir}/*")
 # The portable tests: one copy for every board, in tests/sources/.
+# Upstream's suites: the same, from their libraries. What a suite needs beyond
+# its library is what upstream's platforms link it with (rtos-apis: the Chan
+# FatFs POSIX I/O integration; cmsis-os-validator: the Arm validator), and
+# its own configuration: the suite's cmsis-plus/os-app-config.h (the port's
+# hands over to it under UOS_HARNESS_SUITE).
+foreach (_t IN LISTS UOS_TESTS_SUITES)
+  if (IS_DIRECTORY "${_test_dir}/${_t}")
+    message (FATAL_ERROR "${_t} is both a suite (tests/sources/) and a board test (${_test_dir}).")
+  endif ()
+  if (NOT TARGET test::${_t})
+    message (FATAL_ERROR "UOS_TESTS_SUITES names ${_t}, but there is no test::${_t} (is tests/sources/${_t} in the platform's dependencies-folders.cmake?).")
+  endif ()
+  list (APPEND _test_dirs "${CMAKE_SOURCE_DIR}/sources/${_t}")
+endforeach ()
+if (UOS_TESTS_SUITES AND NOT TARGET ${PLATFORM_NAME}-test-suite)
+  add_library (${PLATFORM_NAME}-test-suite INTERFACE)
+  target_compile_definitions (${PLATFORM_NAME}-test-suite INTERFACE
+    OS_USE_OS_APP_CONFIG_H UOS_HARNESS_SUITE _POSIX_C_SOURCE=200809L _GNU_SOURCE)
+endif ()
+
 foreach (_t IN LISTS UOS_TESTS_SOURCES)
   if (IS_DIRECTORY "${_test_dir}/${_t}")
     message (FATAL_ERROR "${_t} is both a portable test (tests/sources/) and a board test (${_test_dir}).")
@@ -191,7 +219,10 @@ foreach (_dir IN LISTS _test_dirs)
     continue ()
   endif ()
   file (GLOB _srcs CONFIGURE_DEPENDS "${_dir}/*.cpp")
-  if (NOT _srcs)
+  if ("${_app}" IN_LIST UOS_TESTS_SUITES)
+    # A suite's sources are its library's (test::<suite>, below).
+    set (_srcs "")
+  elseif (NOT _srcs)
     continue ()
   endif ()
   list (APPEND _apps "${_app}")
@@ -235,6 +266,20 @@ foreach (_dir IN LISTS _test_dirs)
       message (FATAL_ERROR "${_app} is in UOS_TESTS_PORTABLE but not in UOS_TESTS_SOURCES.")
     endif ()
     list (APPEND _libs ${PLATFORM_NAME}-test-startup)
+  endif ()
+  if ("${_app}" IN_LIST UOS_TESTS_SUITES)
+    list (APPEND _libs ${PLATFORM_NAME}-test-startup ${PLATFORM_NAME}-test-suite
+          test::${_app})
+    if (_app STREQUAL "rtos-apis")
+      list (APPEND _libs xpacks::chan-fatfs micro-os-plus::iii-posix-io)
+    elseif (_app STREQUAL "cmsis-os-validator")
+      list (APPEND _libs xpacks::arm-cmsis-os-validator)
+    endif ()
+    set (_suite_support
+         "${CMAKE_SOURCE_DIR}/platforms/${PLATFORM_NAME}/src/${_app}-support.cpp")
+    if (EXISTS "${_suite_support}")
+      list (APPEND _app_sources "${_suite_support}")
+    endif ()
   endif ()
   if ("${_app}" IN_LIST UOS_TESTS_STORAGE)
     if ("${_app}" IN_LIST BOARD_TEST_NEED_DEVICES)

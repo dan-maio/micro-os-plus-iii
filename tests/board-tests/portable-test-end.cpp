@@ -38,9 +38,20 @@ __real_os_main (int argc, char* argv[]);
 extern "C" int
 __wrap_os_main (int argc, char* argv[]);
 
+// A test that uses the SD card (UOS_TESTS_STORAGE) links
+// portable-test-storage.cpp, which mounts the card at /sd/ before the test
+// runs; for the others this stays undefined.
+extern "C" void
+uos_test_storage_start (void) __attribute__ ((weak));
+
 extern "C" int
 __wrap_os_main (int argc, char* argv[])
 {
+  if (uos_test_storage_start != nullptr)
+    {
+      uos_test_storage_start ();
+    }
+
   const int code = __real_os_main (argc, argv);
 
   // The test printed through the C library (printf); its buffered output

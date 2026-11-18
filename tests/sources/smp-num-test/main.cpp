@@ -19,32 +19,32 @@
  * the LED thread paces the passes with a counting semaphore (3 posts per pass:
  * one for each writer, one for the reader).
  *
- * Storage:
- *   - hardware build (HW_BUILD): the existing FAT32 boot partition, files
- *     under /tests (num.txt), never formatted (FatFs).
- *   - QEMU / host build: flatfs over a raw disk image, num.txt at the volume
- *     root.
+ * Storage: /sd/tests/num.txt, through µOS++ POSIX I/O, on the card's FAT
+ * volume (the posix-io block device /dev/sd with Chan FatFs, mounted at /sd/
+ * before os_main() by board-tests/portable-test-storage.cpp). The same path
+ * on hardware (the boot card, never formatted), under QEMU and on the host
+ * (an MBR + FAT32 image).
  *
  * One copy for every board: it was a copy per board in the architecture
  * ports (test/<board>/), merged in step 6b of the upstream alignment; the
  * number of cores is OS_NCPU.
  *
- * A portable test: os_main() only, the µOS++ interfaces only (and the
- * storage drivers of the device packages). The platform brings the board and
+ * A portable test: os_main() only, the µOS++ interfaces only. The platform brings the board and
  * the secondary cores up before os_main() and prints the RESULT line from its
  * return value (board-tests/portable-test-end.cpp).
  */
 
 #include <cmsis-plus/rtos/os.h>
 #include <cmsis-plus/diag/trace.h>
-#include <sd.hpp>
-#if defined(HW_BUILD)
-#include <fatfs_hw.hpp>
-#else
-#include <flatfs.hpp>
-#endif
+#include <cmsis-plus/posix-io/file-system.h>
+#include <cmsis-plus/posix-io/io.h>
+#include <cmsis-plus/posix/sys/statvfs.h>
+
+#include <fcntl.h>
+#include <sys/stat.h>
 
 #include <atomic>
+#include <cerrno>
 #include <cmath>
 #include <cstdarg>
 #include <cstdint>
@@ -112,14 +112,8 @@ constexpr unsigned kLedBlinks = 5;     // LED blinks per pass (0.3 s each)
 // ---------------------------------------------------------------------------
 // Shared state
 // ---------------------------------------------------------------------------
-sd::SdCard g_card;
-#if defined(HW_BUILD)
-#else
-flatfs::FlatFs g_fs;
-#endif
-
-// num.txt file name (8.3-safe).
-static const char kNumFile[] = "num.txt";
+// num.txt, on the card's FAT volume.
+static const char kNumFile[] = "/sd/tests/num.txt";
 
 // All num.txt access serialised by this mutex.
 static mutex g_file_mtx { "file" };
@@ -141,14 +135,8 @@ static std::atomic<unsigned> g_led_fail{0};
 // Set by os_main just before RESULT so the infinite uart thread can exit.
 static std::atomic<bool> g_finish{false};
 
-// In-memory copy of num.txt: flatfs cannot append, so the whole file is
-// rewritten on every line. num.txt grows over the RUN_MS window (writers run
-// every LED beat); allow ~2 min of 40 lines / ~3 s -> ~1600 lines * ~110 B
-// ~= 176 KB. Keep headroom.
-static char g_num_buf[256 * 1024];
-static unsigned g_num_len = 0;
-
-// Whole-file read buffer (reader + final dump). Same bound as g_num_buf.
+// Whole-file read buffer (reader + final dump): num.txt grows over the
+// RUN_MS window, ~1600 lines * ~110 B ~= 176 KB in 2 min; keep headroom.
 static char g_read_buf[256 * 1024];
 
 // Per-core count of appended lines (the "[cN]" of each write), for a summary.
@@ -181,52 +169,36 @@ sd_append (const char* text, unsigned len)
     }
   std::memcpy (tagged + tn, text, len);
 
-#if defined(HW_BUILD)
-  return fatfshw::append_file (kNumFile, tagged,
-                               static_cast<unsigned> (tn) + len);
-#else
-  // flatfs has no append: accumulate in RAM and rewrite the whole file.
-  if (g_num_len + static_cast<unsigned> (tn) + len >= sizeof (g_num_buf))
+  os::posix::io* f
+      = os::posix::open (kNumFile, O_WRONLY | O_CREAT | O_APPEND);
+  if (f == nullptr)
     {
       return false;
     }
-  std::memcpy (g_num_buf + g_num_len, tagged, static_cast<unsigned> (tn) + len);
-  g_num_len += static_cast<unsigned> (tn) + len;
-  return g_fs.write_file (kNumFile, g_num_buf, g_num_len)
-         == flatfs::FlatFs::Result::ok;
-#endif
+  const unsigned n = static_cast<unsigned> (tn) + len;
+  const bool ok = (f->write (tagged, n) == static_cast<ssize_t> (n));
+  return (f->close () == 0) && ok;
 }
 
 bool
 sd_read_all (char* out, unsigned cap, unsigned& len)
 {
-#if defined(HW_BUILD)
-  std::uint32_t size = 0;
-  if (!fatfshw::file_size (kNumFile, size) || size > cap)
+  struct stat st;
+  if (os::posix::stat (kNumFile, &st) != 0
+      || static_cast<unsigned> (st.st_size) > cap)
     {
       return false;
     }
-  if (!fatfshw::load_file (kNumFile, out, size))
+  const unsigned size = static_cast<unsigned> (st.st_size);
+  os::posix::io* f = os::posix::open (kNumFile, O_RDONLY);
+  if (f == nullptr)
     {
       return false;
     }
-  len = size;
-  return true;
-#else
-  std::uint32_t size = 0;
-  if (g_fs.file_size (kNumFile, size) != flatfs::FlatFs::Result::ok
-      || size > cap)
-    {
-      return false;
-    }
-  if (g_fs.read_file (kNumFile, out, size, nullptr)
-      != flatfs::FlatFs::Result::ok)
-    {
-      return false;
-    }
-  len = size;
-  return true;
-#endif
+  const bool ok = (f->read (out, size) == static_cast<ssize_t> (size));
+  f->close ();
+  len = ok ? size : 0;
+  return ok;
 }
 
 void
@@ -234,48 +206,21 @@ sd_remove_num ()
 {
   // Delete num.txt if present so each run starts from an empty file.
   // A missing file is fine (nothing to remove); a real I/O error is ignored.
-#if defined(HW_BUILD)
-  fatfshw::remove_file (kNumFile);
-#else
-  g_fs.remove_file (kNumFile);
-#endif
+  os::posix::unlink (kNumFile);
   console ("  removed previous num.txt (if any)\n");
 }
 
 bool
 sd_prepare ()
 {
-  console ("Initialising SD card...\n");
-  if (!g_card.init ())
+  // The volume the storage start-up mounted (it printed why, if it did not).
+  struct statvfs vfs;
+  if (os::posix::statvfs ("/sd/", &vfs) != 0)
     {
-      console ("  SD init FAILED: %s\n", g_card.last_error ());
+      console ("  no FAT volume mounted at /sd/ (errno %d)\n", errno);
       return false;
     }
-  console ("  SD card ready: %u sectors (~%u MiB)\n", g_card.sector_count (),
-           static_cast<unsigned> (g_card.capacity_bytes () >> 20));
-
-#if defined(HW_BUILD)
-  fatfshw::bind_card (g_card);
-  if (!fatfshw::mount_volume ())
-    {
-      console ("  FAT32 mount failed: %s\n", fatfshw::last_error ());
-      return false;
-    }
-  if (!fatfshw::ensure_tests_dir ())
-    {
-      console ("  mkdir tests failed: %s\n", fatfshw::last_error ());
-      return false;
-    }
-  console ("  FAT32 /tests ready (boot files untouched).\n");
-#else
-  flatfs::FlatFs::Result r = g_fs.format (g_card);
-  if (r != flatfs::FlatFs::Result::ok)
-    {
-      console ("  flatfs format failed: %s\n", flatfs::FlatFs::result_str (r));
-      return false;
-    }
-  console ("  flatfs volume formatted.\n");
-#endif
+  console ("  FAT volume at /sd/, num.txt in /sd/tests/.\n");
   return true;
 }
 

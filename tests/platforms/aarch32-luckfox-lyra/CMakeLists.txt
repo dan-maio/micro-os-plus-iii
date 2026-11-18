@@ -38,7 +38,8 @@ set (UOS_TESTS_STARTUP_LIBS micro-os-plus::iii-semihosting
      micro-os-plus::iii-newlib-reent micro-os-plus::iii-posix-io)
 # Of those, the ones that use the SD card: the card as the posix-io block
 # device /dev/sd, under the Chan FatFs file system.
-set (UOS_TESTS_STORAGE sd_test smp-mat-sdcard-test)
+set (UOS_TESTS_STORAGE sd_test smp-mat-sdcard-test smp-num-test
+     smp-pipeline-test)
 set (UOS_TESTS_PORT aarch32)
 set (UOS_TESTS_BOARD_DIR "${UOS_AARCH32_DIR}/test/${BOARD}")
 add_subdirectory ("${CMAKE_SOURCE_DIR}/board-tests" "port-tests/test")

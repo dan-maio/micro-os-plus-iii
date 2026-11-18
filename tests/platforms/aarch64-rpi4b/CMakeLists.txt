@@ -43,7 +43,8 @@ set (UOS_TESTS_PORTABLE smp_test0 smp_test1 smp_test2 smp_test3 smp_test4
      smp-mat-sdcard-test)
 # Of those, the ones that use the SD card: the card as the posix-io block
 # device /dev/sd, under the Chan FatFs file system.
-set (UOS_TESTS_STORAGE sd_test smp-mat-sdcard-test)
+set (UOS_TESTS_STORAGE sd_test smp-mat-sdcard-test smp-num-test
+     smp-pipeline-test)
 set (UOS_TESTS_PORT aarch64)
 set (UOS_TESTS_BOARD_DIR "${UOS_AARCH64_DIR}/test/${BOARD}")
 add_subdirectory ("${CMAKE_SOURCE_DIR}/board-tests" "port-tests/test")

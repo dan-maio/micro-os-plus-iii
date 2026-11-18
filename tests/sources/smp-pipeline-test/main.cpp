@@ -13,16 +13,17 @@
  *       * Queue backpressure yielding
  *       * Cooperative compute chunking in worker loops
  *       * Writer/auditor inter-thread yield points
- *   - Dual storage target:
- *       * QEMU build (!HW_BUILD) : flatfs volume on disk.img (pipe.dat)
- *       * Hardware   (HW_BUILD)  : FatFs on the FAT32 boot partition (/tests/pipe.dat)
+ *   - Storage: /sd/tests/pipe.dat, through µOS++ POSIX I/O, on the card's
+ *     FAT volume (the posix-io block device /dev/sd with Chan FatFs, mounted
+ *     at /sd/ before os_main() by board-tests/portable-test-storage.cpp); the
+ *     same path on hardware (the boot card, never formatted), under QEMU and
+ *     on the host (an MBR + FAT32 image).
  *
  * One copy for every board: it was a copy per board in the architecture
  * ports (test/<board>/), merged in step 6b of the upstream alignment; the
  * number of cores is OS_NCPU.
  *
- * A portable test: os_main() only, the µOS++ interfaces only (and the
- * storage drivers of the device packages). The platform brings the board and
+ * A portable test: os_main() only, the µOS++ interfaces only. The platform brings the board and
  * the secondary cores up before os_main() and prints the RESULT line from its
  * return value (board-tests/portable-test-end.cpp).
  */
@@ -30,12 +31,15 @@
 #include <cmsis-plus/rtos/os.h>
 #include <cmsis-plus/diag/trace.h>
 
-#include <sd.hpp>
-#if defined(HW_BUILD)
-#include <fatfs_hw.hpp>
-#else
-#include <flatfs.hpp>
-#endif
+#include <cmsis-plus/posix-io/file-system.h>
+#include <cmsis-plus/posix-io/io.h>
+#include <cmsis-plus/posix/sys/statvfs.h>
+
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
+#include <cerrno>
 
 #include <cmath>
 #include <cstdarg>
@@ -85,14 +89,8 @@ namespace
 #define RUN_MS 30000
 #endif
 
-sd::SdCard g_card;
-
-#if defined(HW_BUILD)
-static const char kPipeFile[] = "pipe.dat";
-#else
-static const char kPipeFile[] = "pipe.dat";
-static flatfs::FlatFs g_fs;
-#endif
+// pipe.dat, on the card's FAT volume.
+static const char kPipeFile[] = "/sd/tests/pipe.dat";
 
 // Mutexes
 static mutex g_in_mtx      { "in_queue" };
@@ -192,82 +190,64 @@ static char g_read_buf[kAuditWindow];
 bool
 sd_prepare (void)
 {
-  console ("Initialising SD card...\n");
-  if (!g_card.init ())
+  // The volume the storage start-up mounted (it printed why, if it did not).
+  struct statvfs vfs;
+  if (os::posix::statvfs ("/sd/", &vfs) != 0)
     {
-      console ("  SD init FAILED: %s\n", g_card.last_error ());
+      console ("  no FAT volume mounted at /sd/ (errno %d)\n", errno);
       return false;
     }
-  console ("  SD card ready: %u sectors (~%u MiB)\n", g_card.sector_count (),
-           static_cast<unsigned> (g_card.capacity_bytes () >> 20));
-
-#if defined(HW_BUILD)
-  fatfshw::bind_card (g_card);
-  if (!fatfshw::mount_volume ())
-    {
-      console ("  FAT32 mount failed: %s\n", fatfshw::last_error ());
-      return false;
-    }
-  if (!fatfshw::ensure_tests_dir ())
-    {
-      console ("  mkdir tests failed: %s\n", fatfshw::last_error ());
-      return false;
-    }
-  fatfshw::remove_file (kPipeFile);
-  console ("  FAT32 /tests ready, removed previous %s\n", kPipeFile);
-#else
-  flatfs::FlatFs::Result r = g_fs.format (g_card);
-  if (r != flatfs::FlatFs::Result::ok)
-    {
-      console ("  flatfs format failed: %s\n", flatfs::FlatFs::result_str (r));
-      return false;
-    }
-  g_fs.remove_file (kPipeFile);
-  console ("  flatfs volume formatted, %s ready\n", kPipeFile);
-#endif
+  os::posix::unlink (kPipeFile);
+  console ("  FAT volume at /sd/, removed previous %s\n", kPipeFile);
   return true;
 }
 
 bool
 sd_append (const char* text, unsigned len)
 {
-#if defined(HW_BUILD)
-  return fatfshw::append_file (kPipeFile, text, len);
-#else
-  // flatfs appends for real (see FlatFs::append_file). This used to stage the
-  // whole file in a 256 KiB RAM buffer and rewrite it with write_file() on
-  // every batch, which was O(n^2) in the record count and stopped persisting
-  // altogether — silently — once the buffer filled at ~4950 records.
-  return g_fs.append_file (kPipeFile, text, len) == flatfs::FlatFs::Result::ok;
-#endif
+  os::posix::io* f
+      = os::posix::open (kPipeFile, O_WRONLY | O_CREAT | O_APPEND);
+  if (f == nullptr)
+    {
+      return false;
+    }
+  const bool ok = (f->write (text, len) == static_cast<ssize_t> (len));
+  return (f->close () == 0) && ok;
 }
 
 // Read up to `cap` bytes of pipe.dat starting at `offset`. Returns false only
 // on a real I/O error; at end-of-file it succeeds with len == 0. Reading from
-// an offset is what lets the audit follow a file that outgrows any RAM buffer —
-// the previous whole-file read stopped auditing without a word once the file
-// passed the buffer size.
+// an offset is what lets the audit follow a file that outgrows any RAM buffer.
 bool
 sd_read_from (unsigned offset, char* out, unsigned cap, unsigned& len)
 {
   len = 0;
-#if defined(HW_BUILD)
-  std::uint32_t size = 0;
-  if (!fatfshw::file_size (kPipeFile, size)) return false;
-  if (offset >= size) return true;
-  std::uint32_t want = size - offset;
-  if (want > cap) want = cap;
-  if (!fatfshw::load_file_at (kPipeFile, offset, out, want)) return false;
-  len = want;
-  return true;
-#else
-  std::uint32_t got = 0;
-  if (g_fs.read_file_at (kPipeFile, offset, out, cap, got)
-      != flatfs::FlatFs::Result::ok)
-    return false;
-  len = got;
-  return true;
-#endif
+  struct stat st;
+  if (os::posix::stat (kPipeFile, &st) != 0)
+    {
+      return false;
+    }
+  const unsigned size = static_cast<unsigned> (st.st_size);
+  if (offset >= size)
+    {
+      return true;
+    }
+  unsigned want = size - offset;
+  if (want > cap)
+    {
+      want = cap;
+    }
+  os::posix::io* f = os::posix::open (kPipeFile, O_RDONLY);
+  if (f == nullptr)
+    {
+      return false;
+    }
+  bool ok = (f->lseek (static_cast<off_t> (offset), SEEK_SET)
+             == static_cast<off_t> (offset));
+  ok = ok && (f->read (out, want) == static_cast<ssize_t> (want));
+  f->close ();
+  len = ok ? want : 0;
+  return ok;
 }
 
 // ---------------------------------------------------------------------------

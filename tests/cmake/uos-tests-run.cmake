@@ -55,10 +55,9 @@ endfunction ()
 #   [SHIM <shim image> LOAD_ADDRESS <address>])  AArch32 on a 64-bit machine
 #
 # The tests that use the SD card get a fresh 4 GiB raw image (sparse where the
-# file system allows it) for each run, deleted when the run ends: sd_test and
-# smp-mat-sdcard-test a boot card's layout, MBR + FAT32 (board-tests/
-# sd-image.py; sd_test's with a host-written seed.bin), the others a blank card
-# they format themselves.
+# file system allows it) for each run, deleted when the run ends: a boot card's
+# layout, MBR + FAT32 (board-tests/sd-image.py; sd_test's with a host-written
+# seed.bin).
 function (uos_tests_add_qemu)
   cmake_parse_arguments (
     _a "" "NAME;APP;IMAGE;QEMU;SHIM;LOAD_ADDRESS" "MACHINE" ${ARGN}
@@ -78,7 +77,7 @@ function (uos_tests_add_qemu)
     if (_a_APP STREQUAL "sd_test")
       # A boot card's layout (MBR + FAT32), with the host-written seed.bin.
       set (_make "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/board-tests/sd-image.py" "${_img}" --seed)
-    elseif (_a_APP STREQUAL "smp-mat-sdcard-test")
+    elseif (_a_APP MATCHES "^(smp-mat-sdcard-test|smp-num-test|smp-pipeline-test)$")
       # A boot card's layout (MBR + FAT32), empty.
       set (_make "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/board-tests/sd-image.py" "${_img}")
     else ()
@@ -108,15 +107,31 @@ endfunction ()
 # uos_tests_add_host (NAME <ctest name> APP <app> PROGRAM <executable>)
 #
 # The tests that use the SD card get UOS_SD_IMAGE, a file the host back-end
-# presents as the card; the back-end creates and grows it itself.
+# presents as the card. For the storage tests (posix-io + Chan FatFs) it is a
+# fresh boot card's layout for each run, MBR + FAT32 (board-tests/
+# sd-image.py, sd_test's with seed.bin), deleted when the run ends; flatfs-test
+# gets a file the back-end creates and grows itself.
 function (uos_tests_add_host)
   cmake_parse_arguments (_a "" "NAME;APP;PROGRAM" "" ${ARGN})
   add_test (NAME "${_a_NAME}" COMMAND "${_a_PROGRAM}")
   uos_tests_timeout ("${_a_APP}" _timeout)
   set_tests_properties ("${_a_NAME}" PROPERTIES
     LABELS "host" TIMEOUT ${_timeout} ${UOS_TESTS_RESULT_PROPERTIES})
+  set (_img "${CMAKE_CURRENT_BINARY_DIR}/${_a_NAME}.disk.img")
   if (_a_APP MATCHES "^(smp-num-test|smp-pipeline-test|smp-mat-sdcard-test|sd_test|flatfs-test)$")
-    set_tests_properties ("${_a_NAME}" PROPERTIES
-      ENVIRONMENT "UOS_SD_IMAGE=${CMAKE_CURRENT_BINARY_DIR}/${_a_NAME}.disk.img")
+    set_tests_properties ("${_a_NAME}" PROPERTIES ENVIRONMENT "UOS_SD_IMAGE=${_img}")
+  endif ()
+  if (_a_APP MATCHES "^(smp-num-test|smp-pipeline-test|smp-mat-sdcard-test|sd_test)$")
+    find_package (Python3 COMPONENTS Interpreter REQUIRED)
+    set (_make "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/board-tests/sd-image.py" "${_img}")
+    if (_a_APP STREQUAL "sd_test")
+      list (APPEND _make --seed)
+    endif ()
+    set (_fixture "${_a_NAME}-sd")
+    add_test (NAME "${_a_NAME}-sd-make" COMMAND ${_make})
+    add_test (NAME "${_a_NAME}-sd-remove" COMMAND "${CMAKE_COMMAND}" -E rm -f "${_img}")
+    set_tests_properties ("${_a_NAME}-sd-make" PROPERTIES FIXTURES_SETUP "${_fixture}" LABELS "host")
+    set_tests_properties ("${_a_NAME}-sd-remove" PROPERTIES FIXTURES_CLEANUP "${_fixture}" LABELS "host")
+    set_tests_properties ("${_a_NAME}" PROPERTIES FIXTURES_REQUIRED "${_fixture}")
   endif ()
 endfunction ()

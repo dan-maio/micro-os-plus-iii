@@ -12,11 +12,11 @@
 /*
  * sd_test -- the SD card through the µOS++ POSIX I/O layer.
  *
- * The board's card is the block device /dev/sd (the platform declares it,
- * board-tests/portable-test-storage.cpp). The test reads its partition table,
- * mounts the first FAT partition with the Chan FatFs POSIX I/O file system at
- * /sd/, and works through the posix-io calls only (open, read, write, stat,
- * mkdir, opendir, statvfs):
+ * The board's card is the block device /dev/sd; before os_main() its first
+ * FAT partition is mounted at /sd/ with the Chan FatFs POSIX I/O file system
+ * and /sd/tests/ created (board-tests/portable-test-storage.cpp). The test
+ * works through the posix-io calls on paths only (open, read, write, stat,
+ * unlink, opendir, statvfs):
  *
  *   Phase A, host -> device: when the volume has /seed.bin (the QEMU card,
  *            made by tests/scripts/fat-image.py), its content is checked
@@ -33,10 +33,6 @@
  */
 
 #include <cmsis-plus/rtos/os.h>
-#include <cmsis-plus/posix-io/block-device.h>
-#include <cmsis-plus/posix-io/block-device-partition.h>
-#include <cmsis-plus/posix-io/chan-fatfs-file-system.h>
-#include <cmsis-plus/posix-io/device-registry.h>
 #include <cmsis-plus/posix-io/directory.h>
 #include <cmsis-plus/posix-io/file-system.h>
 #include <cmsis-plus/posix-io/io.h>
@@ -52,16 +48,10 @@
 
 using namespace os;
 
-// The partition template is declared `extern` by posix-io; the application
-// instantiates the variant it uses (as rtos-apis' test-posix-io-api.cpp does).
-template class os::posix::block_device_partition_implementable<>;
-
 namespace
 {
 
-  constexpr const char* kCardName = "/dev/sd";
   constexpr const char* kMount = "/sd/";
-  constexpr std::size_t kBlock = 512;
 
   // -------------------------------------------------------------------------
   // Deterministic pseudo-random content: the LCG the host tool uses, so either
@@ -126,68 +116,6 @@ namespace
   {
     return spec.is_text ? static_cast<std::uint32_t> (std::strlen (kHelloText))
                         : spec.size;
-  }
-
-  // -------------------------------------------------------------------------
-  // The FAT volume inside the card: the first FAT partition of the MBR, or
-  // the whole card when there is no partition table.
-  // -------------------------------------------------------------------------
-  bool
-  is_fat_type (std::uint8_t t)
-  {
-    switch (t)
-      {
-      case 0x01:
-      case 0x04:
-      case 0x06:
-      case 0x0e: // FAT12/FAT16
-      case 0x0b:
-      case 0x0c:
-      case 0x1b:
-      case 0x1c: // FAT32
-      case 0x2b:
-      case 0x2c:
-        return true;
-      default:
-        return false;
-      }
-  }
-
-  std::uint32_t
-  le32 (const std::uint8_t* p)
-  {
-    return static_cast<std::uint32_t> (p[0])
-           | (static_cast<std::uint32_t> (p[1]) << 8)
-           | (static_cast<std::uint32_t> (p[2]) << 16)
-           | (static_cast<std::uint32_t> (p[3]) << 24);
-  }
-
-  bool
-  locate_fat (posix::block_device& card, std::uint32_t& start,
-              std::uint32_t& count)
-  {
-    std::uint8_t mbr[kBlock];
-    if (card.read_block (mbr, 0, 1) != 1)
-      {
-        return false;
-      }
-    start = 0;
-    count = static_cast<std::uint32_t> (card.blocks ());
-    if (mbr[510] != 0x55 || mbr[511] != 0xAA)
-      {
-        return true; // no partition table: the whole card
-      }
-    for (int i = 0; i < 4; ++i)
-      {
-        const std::uint8_t* e = mbr + 446 + i * 16;
-        if (e[4] != 0 && is_fat_type (e[4]))
-          {
-            start = le32 (e + 8);
-            count = le32 (e + 12);
-            return true;
-          }
-      }
-    return true; // a table with no FAT partition: the whole card
   }
 
   // -------------------------------------------------------------------------
@@ -317,13 +245,6 @@ namespace
   {
     std::printf ("\nPhase B: device->device  (files in /sd/tests)\n");
 
-    if (posix::mkdir ("/sd/tests", 0) != 0 && errno != EEXIST)
-      {
-        std::printf ("  mkdir /sd/tests failed (errno %d)\n", errno);
-        report ("tests/ folder", false);
-        return;
-      }
-
     char path[64];
     for (const auto& spec : kWriteSpecs)
       {
@@ -388,56 +309,20 @@ os_main (int, char*[])
 {
   std::printf ("sd_test: the SD card through µOS++ POSIX I/O and Chan FatFs\n");
 
-  // ---- the card --------------------------------------------------------------
-  auto* card = static_cast<posix::block_device*> (
-      posix::device_registry<posix::device>::identify_device (kCardName));
-  if (card == nullptr)
+  // The volume the storage start-up mounted (it printed why, if it did not).
+  struct statvfs vfs;
+  if (posix::statvfs (kMount, &vfs) != 0)
     {
-      std::printf ("  no %s on this platform\n", kCardName);
+      std::printf ("  no FAT volume mounted at %s (errno %d)\n", kMount,
+                   errno);
       return 1;
     }
-  if (card->open () < 0)
-    {
-      std::printf ("  SD init FAILED (errno %d)\n", errno);
-      return 1;
-    }
-  std::printf ("  SD card ready: %u sectors (~%u MiB)\n",
-               static_cast<unsigned> (card->blocks ()),
-               static_cast<unsigned> (card->blocks () / 2048u));
-
-  std::uint32_t start = 0;
-  std::uint32_t count = 0;
-  if (!locate_fat (*card, start, count))
-    {
-      std::printf ("  reading the partition table FAILED\n");
-      card->close ();
-      return 1;
-    }
-  std::printf ("  FAT window: start LBA %u, %u sectors (%u MiB)\n",
-               static_cast<unsigned> (start), static_cast<unsigned> (count),
-               static_cast<unsigned> (count / 2048u));
-
-  // ---- the file system -------------------------------------------------------
-  static posix::block_device_partition_implementable<> part{ "sd1", *card };
-  part.configure (start, count);
-
-  // FatFs is built without its own locking: the mutex serialises its users.
-  static rtos::mutex fs_mutex{ "fat" };
-  static posix::chan_fatfs_file_system_lockable<rtos::mutex> fs{ "fat", part,
-                                                                 fs_mutex };
-  if (fs.mount (kMount) != 0)
-    {
-      std::printf ("  mount %s FAILED (errno %d)\n", kMount, errno);
-      card->close ();
-      return 1;
-    }
-  std::printf ("  mounted the FAT volume at %s\n", kMount);
+  std::printf ("  FAT volume at %s: %u blocks of %u bytes\n", kMount,
+               static_cast<unsigned> (vfs.f_blocks),
+               static_cast<unsigned> (vfs.f_frsize));
 
   phase_host_seed ();
   phase_write_and_verify ();
-
-  fs.umount ();
-  card->close ();
 
   std::printf ("\nsd_test: %s\n",
                g_all_pass ? "SD verified" : "FAILED (see above)");

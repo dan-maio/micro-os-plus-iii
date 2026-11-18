@@ -23,9 +23,10 @@
  *     xclassic.mat the classical solver's solution, written back
  *
  * Flow (os_main does all the file I/O; the solver cores work in RAM):
- *   1. mount the card's first FAT partition at /sd/ (the posix-io block
- *      device /dev/sd, the Chan FatFs file system); on a boot card the boot
- *      files are never touched and nothing is formatted;
+ *   1. check the card's FAT volume at /sd/ (mounted before os_main() on the
+ *      posix-io block device /dev/sd with Chan FatFs, by
+ *      board-tests/portable-test-storage.cpp); on a boot card the boot files
+ *      are never touched and nothing is formatted;
  *   2. a Thread-Pool demo (10 workers, 20 tasks) across the cores;
  *   3. generate a diagonally dominant A and b in RAM, STORE them to A.mat and
  *      b.mat, and LOAD the solver's working copy and the classical solver's
@@ -48,13 +49,10 @@
  */
 
 #include <cmsis-plus/rtos/os.h>
-#include <cmsis-plus/posix-io/block-device.h>
-#include <cmsis-plus/posix-io/block-device-partition.h>
-#include <cmsis-plus/posix-io/chan-fatfs-file-system.h>
-#include <cmsis-plus/posix-io/device-registry.h>
 #include <cmsis-plus/posix-io/directory.h>
 #include <cmsis-plus/posix-io/file-system.h>
 #include <cmsis-plus/posix-io/io.h>
+#include <cmsis-plus/posix/sys/statvfs.h>
 
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -787,15 +785,10 @@ solve_classical (const float src_A[N][N], const float src_b[N],
 }
 
 // ----------------------------------------------------------------------------
-// The SD card matrix store, through µOS++ POSIX I/O: the board's card is the
-// block device /dev/sd (board-tests/portable-test-storage.cpp); its first FAT
-// partition is mounted at /sd/ with the Chan FatFs file system. Only os_main
-// uses it.
+// The SD card matrix store, through µOS++ POSIX I/O: the card's FAT volume,
+// mounted at /sd/ before os_main() (board-tests/portable-test-storage.cpp).
+// Only os_main uses it.
 // ----------------------------------------------------------------------------
-
-// The partition template is declared `extern` by posix-io; the application
-// instantiates the variant it uses (as rtos-apis' test-posix-io-api.cpp does).
-template class os::posix::block_device_partition_implementable<>;
 
 namespace
 {
@@ -804,103 +797,19 @@ namespace
   constexpr const char* kFileXb = "/sd/tests/x_block.mat";
   constexpr const char* kFileXc = "/sd/tests/xclassic.mat";
 
-  std::uint32_t
-  le32 (const std::uint8_t* p)
-  {
-    return static_cast<std::uint32_t> (p[0])
-           | (static_cast<std::uint32_t> (p[1]) << 8)
-           | (static_cast<std::uint32_t> (p[2]) << 16)
-           | (static_cast<std::uint32_t> (p[3]) << 24);
-  }
-
-  // The first FAT partition of the MBR, or the whole card without one.
   bool
-  locate_fat (os::posix::block_device& card, std::uint32_t& start,
-              std::uint32_t& count)
+  sd_mounted (void)
   {
-    static std::uint8_t mbr[512];
-    if (card.read_block (mbr, 0, 1) != 1)
+    struct statvfs vfs;
+    if (os::posix::statvfs ("/sd/", &vfs) != 0)
       {
+        write_fmt ("  no FAT volume mounted at /sd/ (errno %d)\n", errno);
         return false;
       }
-    start = 0;
-    count = static_cast<std::uint32_t> (card.blocks ());
-    if (mbr[510] != 0x55 || mbr[511] != 0xAA)
-      {
-        return true;
-      }
-    for (int i = 0; i < 4; ++i)
-      {
-        const std::uint8_t* e = mbr + 446 + i * 16;
-        switch (e[4])
-          {
-          case 0x01:
-          case 0x04:
-          case 0x06:
-          case 0x0e:
-          case 0x0b:
-          case 0x0c:
-          case 0x1b:
-          case 0x1c:
-          case 0x2b:
-          case 0x2c:
-            start = le32 (e + 8);
-            count = le32 (e + 12);
-            return true;
-          default:
-            break;
-          }
-      }
-    return true;
-  }
-
-  bool
-  sd_mount (void)
-  {
-    auto* card = static_cast<os::posix::block_device*> (
-        os::posix::device_registry<os::posix::device>::identify_device (
-            "/dev/sd"));
-    if (card == nullptr)
-      {
-        write_str ("  no /dev/sd on this platform\n");
-        return false;
-      }
-    if (card->open () < 0)
-      {
-        write_fmt ("  SD init failed (errno %d)\n", errno);
-        return false;
-      }
-    write_fmt ("  SD ready: %u sectors (~%u MiB)\n",
-               static_cast<unsigned> (card->blocks ()),
-               static_cast<unsigned> (card->blocks () / 2048u));
-    std::uint32_t start = 0;
-    std::uint32_t count = 0;
-    if (!locate_fat (*card, start, count))
-      {
-        write_str ("  reading the partition table failed\n");
-        return false;
-      }
-    static os::posix::block_device_partition_implementable<> part{ "sd1",
-                                                                   *card };
-    part.configure (start, count);
-
-    // FatFs is built without its own locking: the mutex serialises its users.
-    static os::rtos::mutex fs_mutex{ "fat" };
-    static os::posix::chan_fatfs_file_system_lockable<os::rtos::mutex> fs{
-      "fat", part, fs_mutex
-    };
-    if (fs.mount ("/sd/") != 0)
-      {
-        write_fmt ("  mount /sd/ failed (errno %d)\n", errno);
-        return false;
-      }
-    if (os::posix::mkdir ("/sd/tests", 0) != 0 && errno != EEXIST)
-      {
-        write_fmt ("  mkdir /sd/tests failed (errno %d)\n", errno);
-        return false;
-      }
-    write_fmt ("  FAT volume at /sd/ (LBA %u), files in /sd/tests.\n",
-               static_cast<unsigned> (start));
+    write_fmt ("  FAT volume at /sd/: %u blocks of %u bytes, files in "
+               "/sd/tests.\n",
+               static_cast<unsigned> (vfs.f_blocks),
+               static_cast<unsigned> (vfs.f_frsize));
     return true;
   }
 
@@ -989,8 +898,8 @@ os_main (int /*argc*/, char* /*argv*/[])
   write_str ("=============================================\n");
 
   // ---- The SD card ---------------------------------------------------------
-  write_str ("Mounting the SD card...\n");
-  if (!sd_mount ())
+  write_str ("Checking the SD card...\n");
+  if (!sd_mounted ())
     {
       write_str ("FATAL: SD card not available\n");
       return 1;

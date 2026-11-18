@@ -26,10 +26,10 @@ include ("cmake/platform-library.cmake")
 # board's test folder (still in the port until the tests move into tests/).
 # The portable tests this board runs (tests/sources/).
 set (UOS_TESTS_SOURCES smp_test0 smp_test1 smp_test2 smp_test3 smp_test4
-     smp-num-test smp-pipeline-test smp-pro-cons-test)
+     smp-num-test smp-pipeline-test smp-pro-cons-test smp-mat-test)
 # Of those, the ones that are os_main() only (the platform starts them up).
 set (UOS_TESTS_PORTABLE smp_test0 smp_test1 smp_test2 smp_test3 smp_test4
-     smp-num-test smp-pipeline-test smp-pro-cons-test)
+     smp-num-test smp-pipeline-test smp-pro-cons-test smp-mat-test)
 # The platform start-up's needs (src/platform-support.cpp): the C library's
 # system calls (semihosting), its reentrancy and the POSIX I/O layer.
 set (UOS_TESTS_STARTUP_LIBS micro-os-plus::iii-semihosting

@@ -25,10 +25,10 @@ include ("${CMAKE_SOURCE_DIR}/cmake/uos-tests-run.cmake")
 # board's test folder (still in the port until the tests move into tests/).
 # The portable tests this board runs (tests/sources/).
 set (UOS_TESTS_SOURCES smp_test0 smp_test1 smp_test2 smp_test3 smp_test4
-     smp-num-test smp-pipeline-test smp-pro-cons-test)
+     smp-num-test smp-pipeline-test smp-pro-cons-test smp-mat-test)
 # Of those, the ones that are os_main() only (the platform starts them up).
 set (UOS_TESTS_PORTABLE smp_test0 smp_test1 smp_test2 smp_test3 smp_test4
-     smp-num-test smp-pipeline-test smp-pro-cons-test)
+     smp-num-test smp-pipeline-test smp-pro-cons-test smp-mat-test)
 set (UOS_TESTS_PORT aarch64)
 set (UOS_TESTS_BOARD_DIR "${UOS_AARCH64_DIR}/test/${BOARD}")
 add_subdirectory ("${CMAKE_SOURCE_DIR}/board-tests" "port-tests/test")

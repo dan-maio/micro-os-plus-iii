@@ -24,8 +24,10 @@ function (uos_add_app _name)
   set (_many SOURCES INCLUDES DEFINES OPTIONS LIBRARIES)
   cmake_parse_arguments (A "${_opts}" "${_one}" "${_many}" ${ARGN})
 
-  if (NOT A_SOURCES)
-    message (FATAL_ERROR "uos_add_app(${_name}): SOURCES is required")
+  # An application whose sources all come from its libraries (an upstream
+  # suite, test::<suite>) names no SOURCES of its own.
+  if (NOT A_SOURCES AND NOT A_LIBRARIES)
+    message (FATAL_ERROR "uos_add_app(${_name}): SOURCES or LIBRARIES is required")
   endif ()
 
   add_executable (${_name} ${A_SOURCES})

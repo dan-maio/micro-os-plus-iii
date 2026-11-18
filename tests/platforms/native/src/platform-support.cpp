@@ -40,7 +40,9 @@
 // builder, which already compiles test/<board>/src/test-smp-boot.cpp into
 // every application. Reusing it keeps one copy of the bring-up, exactly as the
 // port's tests share it.
+#if defined(OS_USE_SMP_SCHEDULER)
 #include <smp.hpp>
+#endif
 
 // ----------------------------------------------------------------------------
 
@@ -86,10 +88,14 @@ extern "C"
     // Bring the other cores up, so the suite runs on all of them: install one
     // idle thread per core, then release cores 1..N-1 (each waits on its own
     // timer tick before the next is let go).
+    // (Not in a 1-CPU image, e.g. upstream's suites built at OS_NCPU=1 to prove
+    // the port's non-SMP branch: there is no other core.)
+#if defined(OS_USE_SMP_SCHEDULER)
     smp_install_boot_threads ();
     smp::start_secondary_cores ();
     extern int test_wait_secondaries (int timeout_ms);
     test_wait_secondaries (3000);
+#endif
 
     // The harness test contract is os_main(argc, argv); run with no arguments,
     // as the port's own tests do.

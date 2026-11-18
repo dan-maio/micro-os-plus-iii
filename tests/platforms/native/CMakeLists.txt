@@ -35,6 +35,10 @@ set (UOS_TESTS_PORTABLE smp_test0 smp_test1 smp_test2 smp_test3 smp_test4
 # Of those, the ones that use the SD card (here a host file): the card as the
 # posix-io block device /dev/sd, under the Chan FatFs file system.
 set (UOS_TESTS_STORAGE smp-num-test smp-pipeline-test)
+# Upstream's suites (tests/sources/<suite>/), on the platform's start-up. The
+# board builds them single-core (test/native/tests.cmake): the port's OS_NCPU=1
+# leg. The validator is registered below, as upstream's native platform does.
+set (UOS_TESTS_SUITES mutex-stress rtos-apis)
 set (UOS_TESTS_PORT posix)
 set (UOS_TESTS_BOARD_DIR "${UOS_POSIX_ARCH_DIR}/test/${BOARD}")
 add_subdirectory ("${CMAKE_SOURCE_DIR}/board-tests" "port-tests")

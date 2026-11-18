@@ -20,10 +20,18 @@
 //
 // A block device links itself into the registry when constructed. The card is
 // initialised on the first open (the mount), not here.
+//
+// posix-io gives every open device, file and folder a file descriptor, from a
+// table the application sizes: the three standard streams, the card, its
+// partition, and the files and folders a test keeps open at once.
+
+#include <cmsis-plus/posix-io/file-descriptors-manager.h>
 
 #include <sd-block-device.h>
 
 namespace
 {
+  os::posix::file_descriptors_manager descriptors_manager{ 16 };
+
   sd::block_device sd_card{ "sd" };
 } // namespace

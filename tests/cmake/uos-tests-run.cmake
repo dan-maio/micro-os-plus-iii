@@ -52,16 +52,16 @@ endfunction ()
 # uos_tests_add_qemu (
 #   NAME <ctest name> APP <app> IMAGE <raw image>
 #   QEMU <qemu-system-*> MACHINE <machine arguments...>
-#   [SHIM <shim image> LOAD_ADDRESS <address>]   AArch32 on a 64-bit machine
-#   [TEST_SOURCE_DIR <dir>])                     where sd_test/flatfs_tool.py is
+#   [SHIM <shim image> LOAD_ADDRESS <address>])  AArch32 on a 64-bit machine
 #
 # The tests that use the SD card get a fresh 4 GiB raw image (sparse where the
-# file system allows it) for each run, deleted when the run ends: sd_test a
-# flatfs volume seeded by its own flatfs_tool.py, the others a blank card they
-# format themselves.
+# file system allows it) for each run, deleted when the run ends: sd_test and
+# smp-mat-sdcard-test a boot card's layout, MBR + FAT32 (board-tests/
+# sd-image.py; sd_test's with a host-written seed.bin), the others a blank card
+# they format themselves.
 function (uos_tests_add_qemu)
   cmake_parse_arguments (
-    _a "" "NAME;APP;IMAGE;QEMU;SHIM;LOAD_ADDRESS;TEST_SOURCE_DIR" "MACHINE" ${ARGN}
+    _a "" "NAME;APP;IMAGE;QEMU;SHIM;LOAD_ADDRESS" "MACHINE" ${ARGN}
   )
 
   if (_a_SHIM)
@@ -76,7 +76,11 @@ function (uos_tests_add_qemu)
     find_package (Python3 COMPONENTS Interpreter REQUIRED)
     set (_img "${CMAKE_CURRENT_BINARY_DIR}/${_a_NAME}.disk.img")
     if (_a_APP STREQUAL "sd_test")
-      set (_make "${Python3_EXECUTABLE}" "${_a_TEST_SOURCE_DIR}/sd_test/flatfs_tool.py" make-seed "${_img}")
+      # A boot card's layout (MBR + FAT32), with the host-written seed.bin.
+      set (_make "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/board-tests/sd-image.py" "${_img}" --seed)
+    elseif (_a_APP STREQUAL "smp-mat-sdcard-test")
+      # A boot card's layout (MBR + FAT32), empty.
+      set (_make "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/board-tests/sd-image.py" "${_img}")
     else ()
       set (_make "${Python3_EXECUTABLE}" -c "open(__import__('sys').argv[1],'wb').truncate(4<<30)" "${_img}")
     endif ()

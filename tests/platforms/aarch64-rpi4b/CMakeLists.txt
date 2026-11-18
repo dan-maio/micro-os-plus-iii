@@ -35,16 +35,20 @@ include ("${CMAKE_SOURCE_DIR}/cmake/uos-tests-run.cmake")
 # board's test folder (still in the port until the tests move into tests/).
 # The portable tests this board runs (tests/sources/).
 set (UOS_TESTS_SOURCES smp_test0 smp_test1 smp_test2 smp_test3 smp_test4
-     smp-num-test smp-pipeline-test smp-pro-cons-test smp-mat-test)
+     smp-num-test smp-pipeline-test smp-pro-cons-test smp-mat-test sd_test
+     smp-mat-sdcard-test)
 # Of those, the ones that are os_main() only (the platform starts them up).
 set (UOS_TESTS_PORTABLE smp_test0 smp_test1 smp_test2 smp_test3 smp_test4
-     smp-num-test smp-pipeline-test smp-pro-cons-test smp-mat-test)
+     smp-num-test smp-pipeline-test smp-pro-cons-test smp-mat-test sd_test
+     smp-mat-sdcard-test)
+# Of those, the ones that use the SD card: the card as the posix-io block
+# device /dev/sd, under the Chan FatFs file system.
+set (UOS_TESTS_STORAGE sd_test smp-mat-sdcard-test)
 set (UOS_TESTS_PORT aarch64)
 set (UOS_TESTS_BOARD_DIR "${UOS_AARCH64_DIR}/test/${BOARD}")
 add_subdirectory ("${CMAKE_SOURCE_DIR}/board-tests" "port-tests/test")
 
 set (_port_bin "${CMAKE_CURRENT_BINARY_DIR}/port-tests/test")
-set (_port_test_dir "${UOS_AARCH64_DIR}/test/rpi4b")
 set (_board_hw "${UOS_AARCH64_DIR}/test/boards/${BOARD}/hw.sh")
 
 # -----------------------------------------------------------------------------
@@ -68,7 +72,6 @@ foreach (_app IN LISTS UOS_TESTS_APPS)
     NAME "${PLATFORM_NAME}-${_app}-qemu" APP "${_app}"
     IMAGE "${_port_bin}/${_app}-qemu.bin"
     QEMU "${_qemu}" MACHINE -M raspi4b -smp 4
-    TEST_SOURCE_DIR "${_port_test_dir}"
   )
 
   add_test (

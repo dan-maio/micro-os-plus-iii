@@ -138,6 +138,10 @@ if (UOS_TESTS_PORTABLE AND NOT TARGET ${PLATFORM_NAME}-test-startup)
     "${CMAKE_SOURCE_DIR}/platforms/${PLATFORM_NAME}/src/platform-support.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/portable-test-end.cpp")
   target_link_options (${PLATFORM_NAME}-test-startup INTERFACE "-Wl,--wrap=os_main")
+  # The platform's own headers (include/), as upstream's portable tests see
+  # them (blinky's blink-led.h): clock-test's reference-clock.h.
+  target_include_directories (${PLATFORM_NAME}-test-startup INTERFACE
+    "${CMAKE_SOURCE_DIR}/platforms/${PLATFORM_NAME}/include")
   target_link_libraries (${PLATFORM_NAME}-test-startup INTERFACE ${UOS_TESTS_STARTUP_LIBS})
 endif ()
 

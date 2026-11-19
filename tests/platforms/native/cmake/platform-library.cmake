@@ -66,9 +66,9 @@ endif ()
 # -----------------------------------------------------------------------------
 # The board: the POSIX host, OS_NCPU host threads standing in for cores. Its
 # facts were the port's test/boards/native/board.cmake; the port is now
-# architecture only, and the board is this platform's. The board code (the
-# console, the LED, the secondary-CPU release) is still in the port's
-# test/boards/native/ until the board tests move (step 6).
+# architecture only, and the board is this platform's, code included: the
+# console, the LED and the secondary-CPU release are in include/ and src/
+# beside this platform's own code, as upstream's platforms keep theirs.
 #
 # No -mcpu (the host compiler targets the host), no linker script (the host
 # toolchain links with its own) and no QEMU image (the host IS the machine).
@@ -88,13 +88,16 @@ set (UOS_BOARD_CAPS smp sdcard led)
 # portable storage tests (UOS_TESTS_STORAGE) link, under @xpacks/chan-fatfs.
 set (UOS_BOARD_SD_POSIX micro-os-plus::devices-hostfile-sd
                         micro-os-plus::devices-storage-posix)
-set (UOS_BOARD_SRC_DIR "${UOS_POSIX_ARCH_ROOT}/test/boards/native")
+set (UOS_BOARD_SRC_DIR "${CMAKE_SOURCE_DIR}/platforms/native")
 
 add_library (board-native-interface INTERFACE EXCLUDE_FROM_ALL)
 target_include_directories (board-native-interface INTERFACE
   "${UOS_BOARD_SRC_DIR}/include"
 )
+# The board's sources; not the test start-up (platform-support.cpp and the
+# <suite>-support.cpp files), which the tests' builder adds where it belongs.
 file (GLOB _board_sources CONFIGURE_DEPENDS "${UOS_BOARD_SRC_DIR}/src/*.cpp")
+list (FILTER _board_sources EXCLUDE REGEX "/[a-z0-9-]*support\\.cpp$")
 target_sources (board-native-interface INTERFACE ${_board_sources})
 target_compile_definitions (board-native-interface INTERFACE
   # No CPU count in the text: a test may build at another count than the

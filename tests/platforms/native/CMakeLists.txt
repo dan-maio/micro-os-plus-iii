@@ -36,15 +36,14 @@ set (UOS_TESTS_PORTABLE smp_test0 smp_test1 smp_test2 smp_test3 smp_test4
 # posix-io block device /dev/sd, under the Chan FatFs file system.
 set (UOS_TESTS_STORAGE smp-num-test smp-pipeline-test)
 # Upstream's suites (tests/sources/<suite>/), on the platform's start-up. The
-# board builds them single-core (test/native/tests.cmake): the port's OS_NCPU=1
+# board builds them single-core (tests/tests.cmake): the port's OS_NCPU=1
 # leg. The validator is registered below, as upstream's native platform does.
 set (UOS_TESTS_SUITES mutex-stress rtos-apis)
 set (UOS_TESTS_PORT posix)
-set (UOS_TESTS_BOARD_DIR "${UOS_POSIX_ARCH_DIR}/test/${BOARD}")
+# The board-only tests: this platform's tests/ (tests.cmake, include/, src/,
+# one folder per test).
+set (UOS_TESTS_BOARD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/tests")
 add_subdirectory ("${CMAKE_SOURCE_DIR}/board-tests" "port-tests")
-
-set (_port_bin "${CMAKE_CURRENT_BINARY_DIR}/port-tests")
-set (_port_test_dir "${UOS_POSIX_ARCH_DIR}/test/${BOARD}")
 
 # -----------------------------------------------------------------------------
 # One CTest case per port test: <platform>-<app>-host.

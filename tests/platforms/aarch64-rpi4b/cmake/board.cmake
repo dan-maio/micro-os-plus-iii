@@ -1,6 +1,6 @@
 # The facts of this board, the platform's since step 4 (they were
-# micro-os-plus-iii-aarch64/test/boards/rpi4b/board.cmake). The board's code
-# stays in the port's test/boards/ until the board tests move (step 6); its
+# micro-os-plus-iii-aarch64/test/boards/rpi4b/board.cmake). The board's code is
+# in this platform's include/ and src/ since step 6; its
 # linker scripts are in ../device/linker-scripts/.
 #
 # -----------------------------------------------------------------------------
@@ -25,10 +25,10 @@
 #
 # No USB device test: the USB-C port's DWC2 is not where the BCM2837's is and
 # the type-A ports are behind the VL805 host, so this board's card is the SD
-# host alone (micro-os-plus::devices-sd-posix) and it has no test/rpi4b/usb_test.
+# host alone (micro-os-plus::devices-sd-posix) and it has no platforms/aarch64-rpi4b/tests/usb_test.
 # -----------------------------------------------------------------------------
 
-set (UOS_BOARD_SRC_DIR "${UOS_AARCH64_ROOT}/test/boards/rpi4b")
+set (UOS_BOARD_SRC_DIR "${CMAKE_SOURCE_DIR}/platforms/aarch64-rpi4b")
 set (UOS_BOARD_SOC_DIR "${UOS_DEVICES_BCM283X_ROOT}/soc/bcm2711")
 
 # -Os overrides the -O2 that uos-app.cmake gives every bare-metal target

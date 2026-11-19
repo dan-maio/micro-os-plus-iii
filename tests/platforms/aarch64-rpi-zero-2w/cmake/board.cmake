@@ -1,6 +1,6 @@
 # The facts of this board, the platform's since step 4 (they were
-# micro-os-plus-iii-aarch64/test/boards/rpi-zero-2w/board.cmake). The board's code
-# stays in the port's test/boards/ until the board tests move (step 6); its
+# micro-os-plus-iii-aarch64/test/boards/rpi-zero-2w/board.cmake). The board's code is
+# in this platform's include/ and src/ since step 6; its
 # linker scripts are in ../device/linker-scripts/.
 #
 # -----------------------------------------------------------------------------
@@ -12,7 +12,7 @@
 
 # This board's own sources. rpi3b is the same silicon and the same code, so
 # its board.cmake points back here rather than copying any of it.
-set (UOS_BOARD_SRC_DIR "${UOS_AARCH64_ROOT}/test/boards/rpi-zero-2w")
+set (UOS_BOARD_SRC_DIR "${CMAKE_SOURCE_DIR}/platforms/aarch64-rpi-zero-2w")
 
 set (UOS_BOARD_FLAGS -mcpu=cortex-a53)
 set (UOS_BOARD_NCPU  4)

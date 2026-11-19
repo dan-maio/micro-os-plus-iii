@@ -1,6 +1,6 @@
 # The facts of this board, the platform's since step 4 (they were
-# micro-os-plus-iii-aarch64/test/boards/rpi3b/board.cmake). The board's code
-# stays in the port's test/boards/ until the board tests move (step 6); its
+# micro-os-plus-iii-aarch64/test/boards/rpi3b/board.cmake). The board's code is
+# in this platform's include/ and src/ since step 6 (the Pi 3 B builds the Zero 2 W platform's); its
 # linker scripts are in ../device/linker-scripts/.
 #
 # -----------------------------------------------------------------------------
@@ -22,7 +22,7 @@
 # plus linker-rpi3b.ld, whose RAM region is that number again. Those last three
 # are ONE fact written three times; they must be changed together.
 
-set (UOS_BOARD_SRC_DIR "${UOS_AARCH64_ROOT}/test/boards/rpi3b/../rpi-zero-2w")
+set (UOS_BOARD_SRC_DIR "${CMAKE_SOURCE_DIR}/platforms/aarch64-rpi-zero-2w")
 
 set (UOS_BOARD_FLAGS -mcpu=cortex-a53)
 set (UOS_BOARD_NCPU  4)

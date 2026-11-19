@@ -5,7 +5,7 @@
 # BCM2837 and the same port sources, built with -DBOARD_RPI3B (see
 # cmake/definitions.cmake), and the board's own tests. Two differences here:
 #
-#   hwd    runs through the board's own hw.sh (test/boards/rpi3b/hw.sh, which
+#   hwd    runs through the board's own hw.sh (this platform's hw.sh, which
 #          hands the Zero 2 W runner its OpenOCD facts), as the Lyra platform
 #          does, so the port's builder is add_subdirectory()'d into
 #          port-tests/test -- the layout that script expects.
@@ -17,9 +17,9 @@
 # Cortex-A53 cores in AArch64, which is the state this port runs in, so there
 # is no boot shim.
 #
-# The port owns its tests (test/rpi3b/<app>/), and its builder compiles
-# each twice -- `qemu` and `hwd`. This platform reuses that builder, so every
-# test the port has appears, named `<platform>-<app>-qemu` / `-hwd`.
+# The board's tests are this platform's tests/<app>/, and the tests' builder
+# (board-tests/) compiles each twice -- `qemu` and `hwd` -- so every one
+# appears, named `<platform>-<app>-qemu` / `-hwd`.
 # -----------------------------------------------------------------------------
 
 message (VERBOSE "Processing 'tests/platforms/${PLATFORM_NAME}'...")
@@ -51,11 +51,13 @@ set (UOS_TESTS_STORAGE sd_test smp-mat-sdcard-test smp-num-test
 # validator's board glue is src/cmsis-os-validator-support.cpp.
 set (UOS_TESTS_SUITES mutex-stress rtos-apis cmsis-os-validator)
 set (UOS_TESTS_PORT aarch64)
-set (UOS_TESTS_BOARD_DIR "${UOS_AARCH64_DIR}/test/${BOARD}")
+# The board-only tests: this platform's tests/ (tests.cmake, include/, src/,
+# one folder per test).
+set (UOS_TESTS_BOARD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/tests")
 add_subdirectory ("${CMAKE_SOURCE_DIR}/board-tests" "port-tests/test")
 
 set (_port_bin "${CMAKE_CURRENT_BINARY_DIR}/port-tests/test")
-set (_board_hw "${UOS_AARCH64_DIR}/test/boards/${BOARD}/hw.sh")
+set (_board_hw "${CMAKE_CURRENT_SOURCE_DIR}/hw.sh")
 
 # -----------------------------------------------------------------------------
 # The QEMU binary and machine arguments: raspi3b, image handed to -kernel.
@@ -96,22 +98,11 @@ foreach (_app IN LISTS UOS_TESTS_APPS)
 endforeach ()
 
 # -----------------------------------------------------------------------------
-# The harness suites are NOT a special case here.
-#
-# mutex-stress and rtos-apis are built as board apps by the port's own builder
-# above: test/rpi3b/<suite>/ carries the wrapper that prints the RESULT line,
-# and test/rpi3b/tests.cmake's board_test_libs() names the harness's
-# test::<suite> plus aarch64-rpi3b-harness-suite (the suite's os-app-config.h,
-# the startup hooks and --wrap=os_main). The loop
-# further up therefore registers their qemu and hwd cases with the same code
-# path as every port test -- `<platform>-mutex-stress-qemu` and so on. The
-# older add_harness_suite() here built a second, differently-named image
-# against a separately-maintained platform-support library; it was the thing
-# that left the kernel on its DEFAULT os-app-config.h (no OS_USE_OS_APP_CONFIG_H
-# reached the suite), which is what stopped rtos-apis in malloc_memory_
-# resource(). Naming test::<suite> through the builder's own seam is what the
-# proven Cortex-M pico2 platform does, and it carries the suite's config with
-# it.
+# Upstream's suites (UOS_TESTS_SUITES above) are not a special case: the
+# tests' builder builds them from test::<suite> on this platform's start-up
+# (src/platform-support.cpp; the validator's glue is
+# src/cmsis-os-validator-support.cpp), and the loop above registers their
+# qemu and hwd cases with every other test's.
 
 # -----------------------------------------------------------------------------
 message (STATUS "AArch64 rpi3b: port tests + harness suites registered")

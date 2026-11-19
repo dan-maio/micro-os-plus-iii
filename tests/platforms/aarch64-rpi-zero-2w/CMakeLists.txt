@@ -5,9 +5,9 @@
 # Cortex-A53 cores in AArch64, which is the state this port runs in, so there
 # is no boot shim.
 #
-# The port owns its tests (test/rpi-zero-2w/<app>/), and its builder compiles
-# each twice -- `qemu` and `hwd`. This platform reuses that builder, so every
-# test the port has appears, named `<platform>-<app>-qemu` / `-hwd`.
+# The board's tests are this platform's tests/<app>/, and the tests' builder
+# (board-tests/) compiles each twice -- `qemu` and `hwd` -- so every one
+# appears, named `<platform>-<app>-qemu` / `-hwd`.
 # -----------------------------------------------------------------------------
 
 message (VERBOSE "Processing 'tests/platforms/${PLATFORM_NAME}'...")
@@ -39,11 +39,13 @@ set (UOS_TESTS_STORAGE sd_test smp-mat-sdcard-test smp-num-test
 # validator's board glue is src/cmsis-os-validator-support.cpp.
 set (UOS_TESTS_SUITES mutex-stress rtos-apis cmsis-os-validator)
 set (UOS_TESTS_PORT aarch64)
-set (UOS_TESTS_BOARD_DIR "${UOS_AARCH64_DIR}/test/${BOARD}")
+# The board-only tests: this platform's tests/ (tests.cmake, include/, src/,
+# one folder per test).
+set (UOS_TESTS_BOARD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/tests")
 add_subdirectory ("${CMAKE_SOURCE_DIR}/board-tests" "port-tests/test")
 
 set (_port_bin "${CMAKE_CURRENT_BINARY_DIR}/port-tests/test")
-set (_board_hw "${UOS_AARCH64_DIR}/test/boards/${BOARD}/hw.sh")
+set (_board_hw "${CMAKE_CURRENT_SOURCE_DIR}/hw.sh")
 
 # -----------------------------------------------------------------------------
 # The QEMU binary and machine arguments: raspi3b, image handed to -kernel.

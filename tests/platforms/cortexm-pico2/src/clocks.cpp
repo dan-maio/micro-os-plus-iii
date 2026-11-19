@@ -230,6 +230,25 @@ namespace clocks
         __asm__ volatile ("dsb 0xf" ::: "memory");
       }
 #endif
+#ifdef PICO2_PSRAM
+    // The PSRAM (QMI M1) was set up by boot.S at the boot clock with CLKDIV 2,
+    // timed (RXDELAY 1) for a 75 MHz SCK at 150 MHz, and the board's data is
+    // already in it. Above 150 MHz, and up to the 200 MHz the overclock block
+    // above does not cover, CLKDIV 2 would clock it at 88..100 MHz: reads go
+    // wrong (seen: smp-test-nested-clock_200 at 200 MHz, its PSRAM heap
+    // corrupt at the first free). Keep the SCK <= 75 MHz. Safe here, still on
+    // the slow boot clock: raising the divider only slows PSRAM accesses.
+    if (e.khz > 150000u && e.khz <= 200000u)
+      {
+        constexpr std::uint32_t QMI_M1_TIMING = 0x400D0020u; // CLKDIV = bits[7:0]
+        const std::uint32_t div = (e.khz + 74999u) / 75000u;  // 176..200 -> 3
+        if ((reg (QMI_M1_TIMING) & 0xFFu) < div)
+          {
+            reg (QMI_M1_TIMING) = (reg (QMI_M1_TIMING) & ~0xFFu) | div;
+            __asm__ volatile ("dsb 0xf" ::: "memory");
+          }
+      }
+#endif
     bring_up_clock_tree (e.fbdiv, e.pd1, e.pd2);
     g_index = idx;
     g_khz = e.khz;

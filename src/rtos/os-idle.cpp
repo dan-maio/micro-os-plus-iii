@@ -16,6 +16,8 @@
 #include <cmsis-plus/rtos/os.h>
 #include <cmsis-plus/diag/instrumentation.h>
 
+#include <new>
+
 #if !defined(OS_DISABLE_WAIT_FOR_INTERRUPT) \
     && (defined(OS_USE_TRACE_SEGGER_RTT) || defined(SEGGER_SYSVIEW_VERSION))
 // When using SEGGER RTT (for trace or SystemView), the core cannot enter WFI.
@@ -149,7 +151,27 @@ thread* os_idle_thread;
 #pragma clang diagnostic ignored "-Wmissing-variable-declarations"
 #endif
 
+#if defined(OS_USE_SMP_SCHEDULER)
+
+// SMP: exit() must not destroy the idle thread. exit() runs the static
+// destructors on whichever core the calling thread is on; when that is not
+// core 0, core 0's idle thread is the thread running there, and nothing else
+// can replace it, so thread::kill() waits for it for ever (seen on the
+// Luckfox Lyra: smp_test_int2's main thread exits on core 1). The secondary
+// cores' idle threads are never destroyed either. The storage is therefore
+// not an object with a destructor: the thread is constructed into it by
+// os_startup_create_thread_idle() (or allocated, with dynamic memory) and
+// lives until the end of the run. Single-core builds keep upstream's code.
+
 #if defined(OS_EXCLUDE_DYNAMIC_MEMORY_ALLOCATIONS)
+
+alignas (thread_inclusive<OS_INTEGER_RTOS_IDLE_STACK_SIZE_BYTES>) static char
+    os_idle_thread_storage_[sizeof (
+        thread_inclusive<OS_INTEGER_RTOS_IDLE_STACK_SIZE_BYTES>)];
+
+#endif /* defined(OS_EXCLUDE_DYNAMIC_MEMORY_ALLOCATIONS) */
+
+#elif defined(OS_EXCLUDE_DYNAMIC_MEMORY_ALLOCATIONS)
 
 static thread_inclusive<OS_INTEGER_RTOS_IDLE_STACK_SIZE_BYTES> os_idle_thread_{
   "idle", os_idle, nullptr
@@ -159,14 +181,33 @@ static thread_inclusive<OS_INTEGER_RTOS_IDLE_STACK_SIZE_BYTES> os_idle_thread_{
 
 static std::unique_ptr<thread> os_idle_thread_;
 
-#endif /* defined(OS_EXCLUDE_DYNAMIC_MEMORY_ALLOCATIONS) */
+#endif /* defined(OS_USE_SMP_SCHEDULER) */
 
 #pragma GCC diagnostic pop
 
 void __attribute__ ((weak))
 os_startup_create_thread_idle (void)
 {
+#if defined(OS_USE_SMP_SCHEDULER)
+
 #if defined(OS_EXCLUDE_DYNAMIC_MEMORY_ALLOCATIONS)
+
+  // Constructed in place; never destroyed (see above).
+  os_idle_thread = new (os_idle_thread_storage_)
+      thread_inclusive<OS_INTEGER_RTOS_IDLE_STACK_SIZE_BYTES>{ "idle", os_idle,
+                                                               nullptr };
+
+#else
+
+  thread::attributes attr = thread::initializer;
+  attr.th_stack_size_bytes = OS_INTEGER_RTOS_IDLE_STACK_SIZE_BYTES;
+
+  // Allocated; never deleted (see above).
+  os_idle_thread = new thread ("idle", os_idle, nullptr, attr);
+
+#endif /* defined(OS_EXCLUDE_DYNAMIC_MEMORY_ALLOCATIONS) */
+
+#elif defined(OS_EXCLUDE_DYNAMIC_MEMORY_ALLOCATIONS)
 
   // The thread object instance was created by the static constructors.
   os_idle_thread = &os_idle_thread_;

@@ -228,19 +228,31 @@ namespace uart
   {
     unreset_block (RESET_UART0 | RESET_IO_BANK0 | RESET_PADS_BANK0);
 
-    // GPIO0 = TX, GPIO1 = RX (function 2). CTRL is at IO_BANK0 + pin*8 + 4.
-    rp2350::reg (rp2350::IO_BANK0_BASE + 0x04)
-        = (rp2350::reg (rp2350::IO_BANK0_BASE + 0x04) & ~0x1FU)
+    // The board's UART0 pins (this board: GPIO12 = TX, GPIO13 = RX, from
+    // cmake/board.cmake; the Pico 2's 0/1 by default), function 2, as the
+    // board's own driver selects them. CTRL is at IO_BANK0 + pin*8 + 4.
+#if !defined(PICO2_UART_TX_PIN)
+#define PICO2_UART_TX_PIN 0
+#endif
+#if !defined(PICO2_UART_RX_PIN)
+#define PICO2_UART_RX_PIN 1
+#endif
+    const std::uint32_t tx = PICO2_UART_TX_PIN;
+    const std::uint32_t rx = PICO2_UART_RX_PIN;
+    rp2350::reg (rp2350::IO_BANK0_BASE + tx * 8 + 4)
+        = (rp2350::reg (rp2350::IO_BANK0_BASE + tx * 8 + 4) & ~0x1FU)
           | GPIO_FUNC_UART0;
-    rp2350::reg (rp2350::IO_BANK0_BASE + 0x0C)
-        = (rp2350::reg (rp2350::IO_BANK0_BASE + 0x0C) & ~0x1FU)
+    rp2350::reg (rp2350::IO_BANK0_BASE + rx * 8 + 4)
+        = (rp2350::reg (rp2350::IO_BANK0_BASE + rx * 8 + 4) & ~0x1FU)
           | GPIO_FUNC_UART0;
 
     // Un-isolate the pads (PADS reg for pin n is at 0x04 + n*4).
-    rp2350::reg (rp2350::PADS_BANK0_BASE + 0x04)
-        = (rp2350::reg (rp2350::PADS_BANK0_BASE + 0x04) & ~PADS_ISO) | PADS_IE;
-    rp2350::reg (rp2350::PADS_BANK0_BASE + 0x08)
-        = (rp2350::reg (rp2350::PADS_BANK0_BASE + 0x08) & ~PADS_ISO) | PADS_IE;
+    rp2350::reg (rp2350::PADS_BANK0_BASE + 0x04 + tx * 4)
+        = (rp2350::reg (rp2350::PADS_BANK0_BASE + 0x04 + tx * 4) & ~PADS_ISO)
+          | PADS_IE;
+    rp2350::reg (rp2350::PADS_BANK0_BASE + 0x04 + rx * 4)
+        = (rp2350::reg (rp2350::PADS_BANK0_BASE + 0x04 + rx * 4) & ~PADS_ISO)
+          | PADS_IE;
 
     const std::uint32_t u = rp2350::UART0_BASE;
     rp2350::reg (u + CR) = 0;               // disable while configuring

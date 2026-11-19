@@ -61,3 +61,9 @@ node_modules/
 
 # kbd_forward, built by tests/platforms/aarch32-luckfox-lyra/tests/smp_test_int*/host/Makefile
 tests/platforms/aarch32-luckfox-lyra/tests/*/host/kbd_forward
+
+# Python byte-code caches (the host tools run from their own folders) and
+# editor/backup copies.
+__pycache__/
+*.pyc
+*.bak

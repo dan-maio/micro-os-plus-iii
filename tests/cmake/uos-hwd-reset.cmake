@@ -14,7 +14,7 @@
 # Pi's firmware to boot and re-enable JTAG). A CTest fixture of the test
 # (uos_tests_add_hwd's RESET), run as:
 #
-#   cmake -D OPENOCD=<openocd> -D ARGS=<openocd arguments, a ;-list>
+#   cmake -D OPENOCD=<openocd> -D ARGS=<openocd arguments, joined with '|'>
 #         -D EXPECT=<regex the session's output must match>
 #         -D WAIT=<seconds> -D LOG=<log file> -P uos-hwd-reset.cmake
 #
@@ -27,8 +27,9 @@ foreach (_v OPENOCD ARGS EXPECT WAIT LOG)
   endif ()
 endforeach ()
 
+string (REPLACE "|" ";" _args "${ARGS}")
 execute_process (
-  COMMAND "${OPENOCD}" ${ARGS}
+  COMMAND "${OPENOCD}" ${_args}
   OUTPUT_VARIABLE _out ERROR_VARIABLE _out
   TIMEOUT 60)
 file (WRITE "${LOG}" "${_out}")

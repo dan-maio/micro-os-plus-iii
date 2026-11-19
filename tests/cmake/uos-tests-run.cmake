@@ -203,8 +203,14 @@ function (uos_tests_add_hwd)
   if (_a_RESET_COMMAND)
     list (JOIN _a_RESET_COMMAND "\n" _reset)
     set (_reset_args ${_ocd_args} -c "${_reset}")
-    # One -D value: its own ';' list separators must survive add_test.
-    string (REPLACE ";" "\;" _reset_args "${_reset_args}")
+    # One -D value: CTest would keep its ';' escaped, so the arguments travel
+    # joined with '|' (in no path and no Tcl command here) and
+    # uos-hwd-reset.cmake splits them again.
+    string (FIND "${_reset_args}" "|" _bar)
+    if (NOT _bar EQUAL -1)
+      message (FATAL_ERROR "${_a_NAME}: a reset argument contains '|'.")
+    endif ()
+    list (JOIN _reset_args "|" _reset_args)
     add_test (NAME "${_a_NAME}-reset"
       COMMAND "${CMAKE_COMMAND}"
               "-DOPENOCD=${UOS_TESTS_OPENOCD}" "-DARGS=${_reset_args}"

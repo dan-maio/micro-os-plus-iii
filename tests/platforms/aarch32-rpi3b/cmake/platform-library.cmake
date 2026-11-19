@@ -107,7 +107,7 @@ message (
 # The hardware variant is NOT a sibling library. The harness suite is built by
 # the port's own test builder, which compiles platform-support.cpp into each
 # image with that image's variant defines (QEMU_BUILD or HW_BUILD) and its own
-# linker script -- see test/rpi3b/tests.cmake's aarch32-rpi3b-harness-suite.
+# linker script -- see platforms/aarch32-rpi3b/tests/tests.cmake's aarch32-rpi3b-harness-suite.
 # One support file therefore serves both images, and no per-variant copy of the
 # platform interface is needed.
 add_library (platform-aarch32-rpi3b-support-interface INTERFACE

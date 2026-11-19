@@ -12,7 +12,7 @@
 
 # This board's own sources. rpi3b is the same silicon and the same code, so
 # its board.cmake points back here rather than copying any of it.
-set (UOS_BOARD_SRC_DIR "${UOS_AARCH32_ROOT}/test/boards/rpi-zero-2w")
+set (UOS_BOARD_SRC_DIR "${CMAKE_SOURCE_DIR}/platforms/aarch32-rpi-zero-2w")
 
 set (UOS_BOARD_FLAGS -mcpu=cortex-a53 -marm -mfloat-abi=hard -mfpu=neon-fp-armv8)
 set (UOS_BOARD_NCPU  4)

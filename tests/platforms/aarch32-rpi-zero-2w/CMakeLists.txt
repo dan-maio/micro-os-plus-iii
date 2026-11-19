@@ -1,12 +1,10 @@
 # -----------------------------------------------------------------------------
 # Test executables — µOS++ III AArch32 on the Raspberry Pi Zero 2 W.
 #
-# The port owns its tests (test/rpi-zero-2w/<app>/), and its own builder
-# (test/CMakeLists.txt) knows how to compile each of them twice -- `qemu` for
-# the emulator and `hwd` for the probe. So this platform does not re-list the
-# tests: it add_subdirectory()s the port's builder and then registers the
-# targets it produced, one CTest case per (test, variant). Every test the port
-# has appears here, and a test added to the port appears here with no edit.
+# The board's tests are this platform's tests/<app>/; the tests' builder
+# (board-tests/) compiles each of them twice -- `qemu` for the emulator and
+# `hwd` for the probe -- and this platform registers the targets it produced,
+# one CTest case per (test, variant).
 #
 # CTest runs QEMU itself (tests/cmake/uos-tests-run.cmake); the hwd cases
 # still go through the board's hw.sh (run-hw.sh) until step 7. The names carry
@@ -48,11 +46,13 @@ set (UOS_TESTS_STORAGE sd_test smp-mat-sdcard-test smp-num-test
 # validator's board glue is src/cmsis-os-validator-support.cpp.
 set (UOS_TESTS_SUITES mutex-stress rtos-apis cmsis-os-validator)
 set (UOS_TESTS_PORT aarch32)
-set (UOS_TESTS_BOARD_DIR "${UOS_AARCH32_DIR}/test/${BOARD}")
+# The board-only tests: this platform's tests/ (tests.cmake, include/, src/,
+# one folder per test).
+set (UOS_TESTS_BOARD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/tests")
 add_subdirectory ("${CMAKE_SOURCE_DIR}/board-tests" "port-tests/test")
 
 set (_port_bin "${CMAKE_CURRENT_BINARY_DIR}/port-tests/test")
-set (_board_hw "${UOS_AARCH32_DIR}/test/boards/${BOARD}/hw.sh")
+set (_board_hw "${CMAKE_CURRENT_SOURCE_DIR}/hw.sh")
 set (_shim_img "${_port_bin}/shim8.img")
 
 # -----------------------------------------------------------------------------
@@ -68,9 +68,6 @@ else ()
 endif ()
 
 # -----------------------------------------------------------------------------
-# One CTest case per (test, variant). The test list is the port's own: the
-# directories under test/rpi-zero-2w/ that hold sources, exactly as the port's
-# builder enumerates them.
 # One CTest case per test the builder built (board-tests/: UOS_TESTS_APPS).
 foreach (_app IN LISTS UOS_TESTS_APPS)
 

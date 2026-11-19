@@ -6,7 +6,7 @@
 # kernel twice and fail on the duplicate micro-os-plus::iii alias.
 #
 # The port's own board tests are built directly by CMakeLists.txt from the
-# port's test/luckfox-lyra/. The only harness test source this platform needs
+# platforms/aarch32-luckfox-lyra/tests/. The only harness test source this platform needs
 # is the portable mutex-stress suite.
 # -----------------------------------------------------------------------------
 

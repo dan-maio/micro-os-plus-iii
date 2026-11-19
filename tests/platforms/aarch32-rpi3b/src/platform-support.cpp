@@ -27,7 +27,7 @@
 //
 // The C library and the exit procedure are NOT implemented here. They come
 // from the kernel's optional groups, linked by the harness suite's INTERFACE
-// target (aarch32-rpi3b-harness-suite, in the port's test/rpi3b/tests.cmake):
+// target (aarch32-rpi3b-harness-suite, in platforms/aarch32-rpi3b/tests/tests.cmake):
 // micro-os-plus::iii-newlib-reent (the newlib reentrant syscalls) and
 // micro-os-plus::iii-semihosting (the __posix_* layer and the strong
 // _Exit(), which issues the semihosting SYS_EXIT). That is the same

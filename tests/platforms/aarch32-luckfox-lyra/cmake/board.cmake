@@ -13,7 +13,7 @@
 # -----------------------------------------------------------------------------
 
 # This board's sources are its own.
-set (UOS_BOARD_SRC_DIR "${UOS_AARCH32_ROOT}/test/boards/luckfox-lyra")
+set (UOS_BOARD_SRC_DIR "${CMAKE_SOURCE_DIR}/platforms/aarch32-luckfox-lyra")
 
 set (UOS_BOARD_FLAGS -mcpu=cortex-a7 -marm -mfloat-abi=hard -mfpu=neon-vfpv4)
 set (UOS_BOARD_NCPU  3)
@@ -72,7 +72,7 @@ set (UOS_BOARD_DEFINES
 # smp_test6 and smp_test7 each have a different usb_vendor_gadget.cpp,
 # smp_test_int4 a different sdmmc.cpp. Compiling the shared copy into every
 # application would be a duplicate definition of the symbols the test means to
-# provide itself. test/luckfox-lyra/tests.cmake names, per test, what it takes
+# provide itself. platforms/aarch32-luckfox-lyra/tests/tests.cmake names, per test, what it takes
 # -- the same list the predecessor's Makefile did.
 
 # The RK3506 DWC2 device (gadget) stack, carried over whole from
@@ -87,30 +87,30 @@ set (UOS_BOARD_DEFINES
 #
 # smp_test_int3 and smp_test_int4 take none of the sources, only the headers:
 # their usb/usb1_int3.cpp drives the DWC2 registers directly.
-set (UOS_BOARD_USB_INCLUDE "${UOS_AARCH32_ROOT}/test/boards/luckfox-lyra/usb/include")
+set (UOS_BOARD_USB_INCLUDE "${CMAKE_SOURCE_DIR}/platforms/aarch32-luckfox-lyra/usb/include")
 set (UOS_BOARD_USB_CORE_SOURCES
-     "${UOS_AARCH32_ROOT}/test/boards/luckfox-lyra/usb/src/udc_core.cpp"
-     "${UOS_AARCH32_ROOT}/test/boards/luckfox-lyra/usb/src/usb_composite.cpp"
-     "${UOS_AARCH32_ROOT}/test/boards/luckfox-lyra/usb/src/usb_config.cpp"
-     "${UOS_AARCH32_ROOT}/test/boards/luckfox-lyra/usb/src/usb_endpoint_autoconfig.cpp"
-     "${UOS_AARCH32_ROOT}/test/boards/luckfox-lyra/usb/src/usb_string_table.cpp"
-     "${UOS_AARCH32_ROOT}/test/boards/luckfox-lyra/usb/src/dwc2_driver.cpp"
-     "${UOS_AARCH32_ROOT}/test/boards/luckfox-lyra/usb/src/dwc2_ep0.cpp"
-     "${UOS_AARCH32_ROOT}/test/boards/luckfox-lyra/usb/src/dwc2_gadget.cpp")
+     "${CMAKE_SOURCE_DIR}/platforms/aarch32-luckfox-lyra/usb/src/udc_core.cpp"
+     "${CMAKE_SOURCE_DIR}/platforms/aarch32-luckfox-lyra/usb/src/usb_composite.cpp"
+     "${CMAKE_SOURCE_DIR}/platforms/aarch32-luckfox-lyra/usb/src/usb_config.cpp"
+     "${CMAKE_SOURCE_DIR}/platforms/aarch32-luckfox-lyra/usb/src/usb_endpoint_autoconfig.cpp"
+     "${CMAKE_SOURCE_DIR}/platforms/aarch32-luckfox-lyra/usb/src/usb_string_table.cpp"
+     "${CMAKE_SOURCE_DIR}/platforms/aarch32-luckfox-lyra/usb/src/dwc2_driver.cpp"
+     "${CMAKE_SOURCE_DIR}/platforms/aarch32-luckfox-lyra/usb/src/dwc2_ep0.cpp"
+     "${CMAKE_SOURCE_DIR}/platforms/aarch32-luckfox-lyra/usb/src/dwc2_gadget.cpp")
 
 # Two more the board owns, kept out of USB_CORE_SOURCES because only the
 # gadget tests want them: smp_test6 and smp_test7 each carried a
 # BYTE-IDENTICAL private copy of both until the duplicate gate named them.
 set (UOS_BOARD_USB_GADGET_SOURCES
-     "${UOS_AARCH32_ROOT}/test/boards/luckfox-lyra/usb/src/dma_pool.cpp"
-     "${UOS_AARCH32_ROOT}/test/boards/luckfox-lyra/usb/src/usb_env_stateos.cpp")
+     "${CMAKE_SOURCE_DIR}/platforms/aarch32-luckfox-lyra/usb/src/dma_pool.cpp"
+     "${CMAKE_SOURCE_DIR}/platforms/aarch32-luckfox-lyra/usb/src/usb_env_stateos.cpp")
 
 # The register-level USB driver the two interrupt tests drive directly,
 # instead of the core sources above. smp_test_int3 and smp_test_int4 carried
 # a byte-identical copy each; it now lives with the board, like everything
 # else both of them use.
 set (UOS_BOARD_USB_INT_SOURCES
-     "${UOS_AARCH32_ROOT}/test/boards/luckfox-lyra/usb/src/usb1_int3.cpp")
+     "${CMAKE_SOURCE_DIR}/platforms/aarch32-luckfox-lyra/usb/src/usb1_int3.cpp")
 
 # No SoC folder: the board compiles no SoC code of its own. The RK3506 code it
 # needs is the board's own (include/rk3506.hpp: registers, the SRAM mailbox)

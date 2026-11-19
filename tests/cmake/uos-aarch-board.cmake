@@ -9,9 +9,8 @@
 # The board facts are the platform's (tests/platforms/<P>/cmake/board.cmake);
 # this builds the board target from them: the SoC's include/ and src/ (a
 # device package's soc/<chip>/, UOS_BOARD_SOC_DIR), then the board's
-# include/ and src/ (the platform's own, or for AArch32 still the port's
-# test/boards/<b>/ until it moves), the board's defines and flags, and its
-# libraries. This is what the
+# include/ and src/ (the platform's own), the board's defines and flags, and
+# its libraries. This is what the
 # port target carried when the port still read the board.
 #
 # Facts read: UOS_BOARD_SRC_DIR, UOS_BOARD_FLAGS, UOS_BOARD_NCPU,

@@ -48,16 +48,16 @@ set (UOS_TESTS_STARTUP_LIBS micro-os-plus::iii-semihosting
 set (UOS_TESTS_STORAGE sd_test smp-mat-sdcard-test smp-num-test
      smp-pipeline-test)
 set (UOS_TESTS_PORT aarch32)
-set (UOS_TESTS_BOARD_DIR "${UOS_AARCH32_DIR}/test/${BOARD}")
+# The board-only tests: this platform's tests/ (tests.cmake, include/, src/,
+# one folder per test).
+set (UOS_TESTS_BOARD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/tests")
 add_subdirectory ("${CMAKE_SOURCE_DIR}/board-tests" "port-tests/test")
 
 set (_port_bin "${CMAKE_CURRENT_BINARY_DIR}/port-tests")
-set (_port_test_dir "${UOS_AARCH32_DIR}/test/luckfox-lyra")
-set (_board_hw "${UOS_AARCH32_DIR}/test/boards/${BOARD}/hw.sh")
+set (_port_test_dir "${CMAKE_CURRENT_SOURCE_DIR}/tests")
+set (_board_hw "${CMAKE_CURRENT_SOURCE_DIR}/hw.sh")
 
 # -----------------------------------------------------------------------------
-# One CTest case per port test: <platform>-<app>-hwd. The test list is the
-# port's own -- the directories under test/luckfox-lyra/ that hold sources.
 # One CTest case per test the builder built (board-tests/: UOS_TESTS_APPS).
 foreach (_app IN LISTS UOS_TESTS_APPS)
 
@@ -76,7 +76,7 @@ endforeach ()
 # hooks, so they link micro-os-plus::platform-support. The image lands where
 # the board's hw.sh looks for it, <bin>/port-tests/test/<name>-hwd.
 #
-# The board's shared SMP bring-up (test/luckfox-lyra/src/test-smp-boot.cpp:
+# The board's shared SMP bring-up (tests/src/test-smp-boot.cpp:
 # smp_install_boot_threads() and test_wait_secondaries()) is compiled in here
 # too. The port's own builder adds test/<board>/src/*.cpp to every test it
 # builds, which is how the Pi harness suites get these symbols; this platform

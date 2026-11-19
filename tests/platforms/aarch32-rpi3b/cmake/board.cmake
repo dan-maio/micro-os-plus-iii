@@ -23,7 +23,7 @@
 # are ONE fact written three times; they must be changed together.
 # -----------------------------------------------------------------------------
 
-set (UOS_BOARD_SRC_DIR "${UOS_AARCH32_ROOT}/test/boards/rpi3b/../rpi-zero-2w")
+set (UOS_BOARD_SRC_DIR "${CMAKE_SOURCE_DIR}/platforms/aarch32-rpi-zero-2w")
 
 set (UOS_BOARD_FLAGS -mcpu=cortex-a53 -marm -mfloat-abi=hard -mfpu=neon-fp-armv8)
 set (UOS_BOARD_NCPU  4)

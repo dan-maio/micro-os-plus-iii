@@ -163,70 +163,28 @@ endfunction ()
 # -----------------------------------------------------------------------------
 # The harness suites.
 #
-# They are not board tests: their sources live in the harness,
-# tests/sources/<suite>/, and the directory under platforms/cortexm-pico/tests/ carries only the
-# name. The harness's platform add_subdirectory()s those sources into
-# test::<suite>, so naming that library here brings its sources AND its include
-# directory -- including the suite's own cmsis-plus/os-app-config.h, which is
-# why the directory must stay off the board's include path.
-#
-# Everything else is a port test's: the board's glue and trace come from
-# board_test_sources below, and the variant logic (hwd against the board, qemu
-# against the generic device) is the builder's, unchanged.
+# Upstream's suites (tests/sources/<suite>/, test::<suite>), built by the
+# tests' builder from the platform's UOS_TESTS_SUITES on the platform's
+# start-up: <platform>-test-startup (the end of the run is
+# board-tests/cortexm/test-end.cpp, the RESULT line through this platform's
+# include/test-end-console.h; -Wl,--wrap=os_main) and <platform>-test-suite
+# (the suite's own os-app-config.h, UOS_HARNESS_SUITE). The names below are
+# still this board's knobs (single core, defines).
 # -----------------------------------------------------------------------------
 set (_harness_suites rtos-apis rtos-apis-ram mutex-stress mutex-stress-ram cmsis-os-validator cmsis-os-validator-ram fp-switch)
 
-# What a harness platform gives a suite and a board app does not, gathered in
-# one interface so each suite names it once:
-#
-#   OS_USE_OS_APP_CONFIG_H  the kernel headers read the suite's own
-#                           cmsis-plus/os-app-config.h only under it (the
-#                           harness platforms get it from
-#                           micro-os-plus::common-options);
-#   the platform include    that os-app-config.h includes cmsis-plus/platform.h,
-#                           which is the harness platform's -- the one this
-#                           port's builder is add_subdirectory()'d from;
-#   the syscall groups      the suites call gettimeofday() and the POSIX I/O
-#                           layer. The qemu image already links all three; the
-#                           hwd image links only the SoC, so it needs them here;
-#   --wrap=os_main          the verdict. A suite RETURNS its code from os_main();
-#                           hw.sh reads a RESULT line. Each placeholder
-#                           harness-suite.cpp defines __wrap_os_main(), which
-#                           calls the suite and prints that line; the code then
-#                           goes back to the kernel's std::exit(), which is the
-#                           same semihosting SYS_EXIT hw_result::ok()/fail() use.
-#
-# A suite exists only inside the harness -- test::<suite> is the harness's --
-# so PLATFORM_NAME and the harness's platforms/ are always there when this is.
-if (NOT TARGET pico-harness-suite)
-  add_library (pico-harness-suite INTERFACE)
-  # UOS_HARNESS_SUITE hands the board's os-app-config.h over to the suite's
-  # (platforms/cortexm-pico/include/cmsis-plus/os-app-config.h). The POSIX pair is
-  # what the kernel's semihosting syscalls need (S_IREAD), exactly as the
-  # pico2-1cpu platform defines them.
-  target_compile_definitions (pico-harness-suite INTERFACE
-                              OS_USE_OS_APP_CONFIG_H UOS_HARNESS_SUITE
-                              _POSIX_C_SOURCE=200809L _GNU_SOURCE)
-  target_include_directories (pico-harness-suite INTERFACE
-                              "${CMAKE_SOURCE_DIR}/platforms/${PLATFORM_NAME}/include")
-  target_link_libraries (pico-harness-suite INTERFACE
-                         micro-os-plus::iii-semihosting
-                         micro-os-plus::iii-newlib-reent
-                         micro-os-plus::iii-posix-io)
-  target_link_options (pico-harness-suite INTERFACE "-Wl,--wrap=os_main")
-endif ()
-
 function (board_test_libs _app _out)
-  if (_app STREQUAL "rtos-apis" OR _app STREQUAL "rtos-apis-ram")
-    set (${_out} test::rtos-apis xpacks::chan-fatfs pico-harness-suite
-         PARENT_SCOPE)
-  elseif (_app STREQUAL "mutex-stress" OR _app STREQUAL "mutex-stress-ram")
-    set (${_out} test::mutex-stress pico-harness-suite PARENT_SCOPE)
-  elseif (_app STREQUAL "fp-switch")
-    set (${_out} test::fp-switch pico-harness-suite PARENT_SCOPE)
-  elseif (_app STREQUAL "cmsis-os-validator" OR _app STREQUAL "cmsis-os-validator-ram")
+  # The -ram variants: the same suites, run from RAM (their own linker script
+  # and runner), on the same start-up and suite targets as the suites.
+  set (_suite_libs ${PLATFORM_NAME}-test-startup ${PLATFORM_NAME}-test-suite)
+  if (_app STREQUAL "rtos-apis-ram")
+    set (${_out} test::rtos-apis xpacks::chan-fatfs micro-os-plus::iii-posix-io
+         ${_suite_libs} PARENT_SCOPE)
+  elseif (_app STREQUAL "mutex-stress-ram")
+    set (${_out} test::mutex-stress ${_suite_libs} PARENT_SCOPE)
+  elseif (_app STREQUAL "cmsis-os-validator-ram")
     set (${_out} test::cmsis-os-validator xpacks::arm-cmsis-os-validator
-         pico-harness-suite PARENT_SCOPE)
+         ${_suite_libs} PARENT_SCOPE)
   else ()
     set (${_out} "" PARENT_SCOPE)
   endif ()

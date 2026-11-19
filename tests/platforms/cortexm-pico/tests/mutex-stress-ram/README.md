@@ -24,7 +24,7 @@ Like `cmsis-os-validator-ram`, this test is linked to execute **entirely from in
 | File | Purpose |
 |------|---------|
 | `linker-ram.ld` | Dedicated linker script mapping all loadable sections (`.text`, `.rodata`, `.data`) to SRAM `0x20000000` (264 KB). Marks `.bss`, `.heap` and the 8 KB `.stack` as `(NOLOAD)` and discards `.boot2` (the flash second stage, not needed in RAM), so only the loadable sections are downloaded (~39 KB). |
-| `harness-suite.cpp` | Test registration stub including `../harness-suite.hpp` for `__wrap_os_main()` semihosting and UART verdict reporting. |
+| `harness-suite.cpp` | Name-only source: the suite is `test::<suite>`, the verdict `board-tests/cortexm/test-end.cpp` on the platform's start-up |
 | `hw.sh` | Custom hardware test runner. Sets the OpenOCD target work-area to the top of SRAM (`0x20041000`, size `0x1000`; used only by `verify_image`, before the run), automates direct SRAM image loading, core 1 bootrom holding, core 0 VTOR/SP/PC configuration, semihosting monitoring, and clean exit. |
 | `load-ram.cfg` | Standalone TCL script for interactive debugging or manual OpenOCD flashing. |
 

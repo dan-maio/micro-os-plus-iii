@@ -144,9 +144,23 @@ endif ()
 if ((UOS_TESTS_PORTABLE OR UOS_TESTS_SUITES)
     AND NOT TARGET ${PLATFORM_NAME}-test-startup)
   add_library (${PLATFORM_NAME}-test-startup INTERFACE)
-  target_sources (${PLATFORM_NAME}-test-startup INTERFACE
-    "${CMAKE_SOURCE_DIR}/platforms/${PLATFORM_NAME}/src/platform-support.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/portable-test-end.cpp")
+  # The platform's start-up, where it has one (a Cortex-M board's library
+  # already brings the board up and calls os_main itself).
+  set (_platform_support
+       "${CMAKE_SOURCE_DIR}/platforms/${PLATFORM_NAME}/src/platform-support.cpp")
+  if (EXISTS "${_platform_support}")
+    target_sources (${PLATFORM_NAME}-test-startup INTERFACE "${_platform_support}")
+  endif ()
+  # The end of the run: the Cortex-M boards' (the RESULT line on the UART and
+  # on semihosting, then back to the board's own end of run), or the common
+  # one.
+  if (UOS_TESTS_PORT STREQUAL "cortexm")
+    target_sources (${PLATFORM_NAME}-test-startup INTERFACE
+      "${CMAKE_CURRENT_SOURCE_DIR}/cortexm/test-end.cpp")
+  else ()
+    target_sources (${PLATFORM_NAME}-test-startup INTERFACE
+      "${CMAKE_CURRENT_SOURCE_DIR}/portable-test-end.cpp")
+  endif ()
   target_link_options (${PLATFORM_NAME}-test-startup INTERFACE "-Wl,--wrap=os_main")
   # The platform's own headers (include/), as upstream's portable tests see
   # them (blinky's blink-led.h): clock-test's reference-clock.h; then the
@@ -154,6 +168,10 @@ if ((UOS_TESTS_PORTABLE OR UOS_TESTS_SUITES)
   target_include_directories (${PLATFORM_NAME}-test-startup INTERFACE
     "${CMAKE_SOURCE_DIR}/platforms/${PLATFORM_NAME}/include"
     "${CMAKE_CURRENT_SOURCE_DIR}/include")
+  if (UOS_TESTS_PORT STREQUAL "cortexm")
+    target_include_directories (${PLATFORM_NAME}-test-startup INTERFACE
+      "${CMAKE_CURRENT_SOURCE_DIR}/cortexm")
+  endif ()
   target_link_libraries (${PLATFORM_NAME}-test-startup INTERFACE ${UOS_TESTS_STARTUP_LIBS})
   target_compile_definitions (${PLATFORM_NAME}-test-startup INTERFACE ${UOS_TESTS_STARTUP_DEFINES})
 endif ()
@@ -253,6 +271,8 @@ foreach (_dir IN LISTS _test_dirs)
 
   # The port, then the board (its facts and code, micro-os-plus::board).
   set (_libs ${_port_lib} micro-os-plus::board)
+  # What the test itself needs, gathered below.
+  set (_test_libs "")
   set (_no_kernel "")
   if ("${_app}" IN_LIST BOARD_TEST_NO_KERNEL)
     if (UOS_TESTS_PORT STREQUAL "cortexm")
@@ -267,15 +287,15 @@ foreach (_dir IN LISTS _test_dirs)
     if (NOT "${_app}" IN_LIST UOS_TESTS_SOURCES)
       message (FATAL_ERROR "${_app} is in UOS_TESTS_PORTABLE but not in UOS_TESTS_SOURCES.")
     endif ()
-    list (APPEND _libs ${PLATFORM_NAME}-test-startup)
+    list (APPEND _test_libs ${PLATFORM_NAME}-test-startup)
   endif ()
   if ("${_app}" IN_LIST UOS_TESTS_SUITES)
-    list (APPEND _libs ${PLATFORM_NAME}-test-startup ${PLATFORM_NAME}-test-suite
+    list (APPEND _test_libs ${PLATFORM_NAME}-test-startup ${PLATFORM_NAME}-test-suite
           test::${_app})
     if (_app STREQUAL "rtos-apis")
-      list (APPEND _libs xpacks::chan-fatfs micro-os-plus::iii-posix-io)
+      list (APPEND _test_libs xpacks::chan-fatfs micro-os-plus::iii-posix-io)
     elseif (_app STREQUAL "cmsis-os-validator")
-      list (APPEND _libs xpacks::arm-cmsis-os-validator)
+      list (APPEND _test_libs xpacks::arm-cmsis-os-validator)
     endif ()
     set (_suite_support
          "${CMAKE_SOURCE_DIR}/platforms/${PLATFORM_NAME}/src/${_app}-support.cpp")
@@ -288,16 +308,20 @@ foreach (_dir IN LISTS _test_dirs)
     if (NOT _app_sd)
       message (FATAL_ERROR "${_app} uses the SD card, but platforms/${PLATFORM_NAME} sets no UOS_BOARD_SD_POSIX.")
     endif ()
-    list (APPEND _libs ${PLATFORM_NAME}-test-storage)
+    list (APPEND _test_libs ${PLATFORM_NAME}-test-storage)
     if (NOT _app_sd STREQUAL "OWN")
-      list (APPEND _libs ${PLATFORM_NAME}-test-storage-sd ${_app_sd})
+      list (APPEND _test_libs ${PLATFORM_NAME}-test-storage-sd ${_app_sd})
     endif ()
     # The storage start-up prints through the C library; a board test with
     # its own start-up gets the system calls the platform's start-up has.
     if (NOT "${_app}" IN_LIST UOS_TESTS_PORTABLE)
-      list (APPEND _libs ${UOS_TESTS_STARTUP_LIBS})
+      list (APPEND _test_libs ${UOS_TESTS_STARTUP_LIBS})
     endif ()
   endif ()
+  # What the test itself needs (its start-up, its suite, its storage) goes
+  # with the board's libraries -- and with the emulated image's, where those
+  # replace the board (board_test_qemu_libs).
+  list (APPEND _libs ${_test_libs})
   # Extra libraries (a harness suite's test::<suite>, a board's driver set).
   if (UOS_TESTS_PORT STREQUAL "posix")
     board_test_libraries ("${_app}" _app_libs)
@@ -342,7 +366,7 @@ foreach (_dir IN LISTS _test_dirs)
       # the kernel plus a generic device, its own linker script and one CPU.
       board_test_qemu_libs ("${_app}" _qemu_libs)
       if (_qemu_libs)
-        set (_variant_libs ${_qemu_libs} ${_app_libs})
+        set (_variant_libs ${_qemu_libs} ${_test_libs} ${_app_libs})
         set (_variant_linker "")
         set (_variant_ncpu 1)
       endif ()

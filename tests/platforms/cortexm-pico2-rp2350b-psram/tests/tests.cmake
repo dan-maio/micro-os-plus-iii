@@ -184,34 +184,6 @@ function (board_test_qemu_includes _app _out)
   set (${_out} "${UOS_BOARD_SRC_DIR}/qemu/include" PARENT_SCOPE)
 endfunction ()
 
-# -----------------------------------------------------------------------------
-# The harness suite.
-#
-# fp-switch, exactly as on the Pico 2: its sources are the harness's
-# tests/sources/fp-switch/ (test::fp-switch), the directory under this board
-# carries only the name, and the verdict wrapper is platforms/cortexm-pico2/tests/harness-suite.hpp.
-# See platforms/cortexm-pico2/tests/tests.cmake, "The harness suites", for what each part of the
-# interface below is for. It links the board's normal 16 MB map, not the PSRAM
-# one: what it tests is the FPU context switch, not the external memory.
-# -----------------------------------------------------------------------------
-if (NOT TARGET pico2-harness-suite)
-  add_library (pico2-harness-suite INTERFACE)
-  target_compile_definitions (pico2-harness-suite INTERFACE
-                              OS_USE_OS_APP_CONFIG_H UOS_HARNESS_SUITE
-                              _POSIX_C_SOURCE=200809L _GNU_SOURCE)
-  target_include_directories (pico2-harness-suite INTERFACE
-                              "${CMAKE_SOURCE_DIR}/platforms/${PLATFORM_NAME}/include")
-  target_link_libraries (pico2-harness-suite INTERFACE
-                         micro-os-plus::iii-semihosting
-                         micro-os-plus::iii-newlib-reent
-                         micro-os-plus::iii-posix-io)
-  target_link_options (pico2-harness-suite INTERFACE "-Wl,--wrap=os_main")
-endif ()
-
 function (board_test_libs _app _out)
-  if (_app STREQUAL "fp-switch")
-    set (${_out} test::fp-switch pico2-harness-suite PARENT_SCOPE)
-  else ()
-    set (${_out} "" PARENT_SCOPE)
-  endif ()
+  set (${_out} "" PARENT_SCOPE)
 endfunction ()

@@ -28,6 +28,12 @@ include ("cmake/platform-library.cmake")
 # The board tests, built by the tests' own builder (board-tests/) from the
 # board's test folder (still in the port until the tests move into tests/).
 set (UOS_TESTS_PORT cortexm)
+# Upstream's suites (tests/sources/<suite>/), on the platform's start-up
+# (board-tests/cortexm/test-end.cpp, include/test-end-console.h), with the
+# system calls they use (semihosting, the newlib reentrancy, POSIX I/O).
+set (UOS_TESTS_SUITES fp-switch)
+set (UOS_TESTS_STARTUP_LIBS micro-os-plus::iii-semihosting
+     micro-os-plus::iii-newlib-reent micro-os-plus::iii-posix-io)
 # The board-only tests: this platform's tests/ (tests.cmake, include/, src/,
 # one folder per test).
 set (UOS_TESTS_BOARD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/tests")

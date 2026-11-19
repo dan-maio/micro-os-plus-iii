@@ -62,6 +62,26 @@ endif ()
 # tests.cmake lists the rest HWD_ONLY), so the qemu case is registered only
 # when the target exists.
 # One CTest case per test the builder built (board-tests/: UOS_TESTS_APPS).
+include ("${CMAKE_SOURCE_DIR}/cmake/uos-tests-run.cmake")
+
+# The hardware run's OpenOCD commands (they were the board's hw.sh): program,
+# reset, semihosting on, run.
+set (_hwd_flash
+     "init" "reset init" "program {@ELF@} verify" "reset init"
+     "targets rp2350.cm1" "arm semihosting enable" "resume"
+     "targets rp2350.cm0" "arm semihosting enable" "resume")
+set (_hwd_ram
+     "init" "reset init"
+     "rp2350.cm0 configure -work-area-phys 0x20070000 -work-area-size 0x8000"
+     "load_image {@ELF@}" "verify_image {@ELF@}"
+     "targets rp2350.cm1" "arm semihosting enable" "resume"
+     "targets rp2350.cm0" "arm semihosting enable"
+     [=[set v [read_memory 0x20000000 32 2]]=]
+     "mww 0xe000ed08 0x20000000"
+     [=[reg sp [lindex $v 0]]=]
+     [=[reg pc [expr {[lindex $v 1] & ~1}]]=]
+     "resume")
+
 foreach (_app IN LISTS UOS_TESTS_APPS)
 
   if (TARGET "${_app}-qemu")
@@ -80,13 +100,27 @@ foreach (_app IN LISTS UOS_TESTS_APPS)
 
   # A board run gets 4 minutes (hw.sh's own limit); CTest's allows one more
   # for flashing and tear-down, so hw.sh reports the TIMEOUT, not CTest.
+  # The same run through the board's hw.sh, label hwsh: kept until the
+  # OpenOCD runs are proven on the board (step 7).
   add_test (
-    NAME "${PLATFORM_NAME}-${_app}-hwd"
+    NAME "${PLATFORM_NAME}-${_app}-hwsh"
     COMMAND bash "${_board_hw}" "${_app}" 240
   )
   set_tests_properties (
-    "${PLATFORM_NAME}-${_app}-hwd"
-    PROPERTIES ENVIRONMENT "BUILD=${_port_bin}" LABELS "hwd" TIMEOUT 300
+    "${PLATFORM_NAME}-${_app}-hwsh"
+    PROPERTIES ENVIRONMENT "BUILD=${_port_bin}" LABELS "hwsh" TIMEOUT 300
+  )
+  # The hardware run: OpenOCD from CTest (cmake/uos-tests-run.cmake), the
+  # board's commands above (the -ram variants run from RAM).
+  if (_app MATCHES "-ram$")
+    set (_hwd_commands ${_hwd_ram})
+  else ()
+    set (_hwd_commands ${_hwd_flash})
+  endif ()
+  uos_tests_add_openocd (
+    NAME "${PLATFORM_NAME}-${_app}-hwd" APP "${_app}"
+    ELF "$<TARGET_FILE:${_app}-hwd>" CFG "${CMAKE_CURRENT_SOURCE_DIR}/openocd.cfg"
+    COMMANDS ${_hwd_commands} TIMEOUT 300
   )
 endforeach ()
 

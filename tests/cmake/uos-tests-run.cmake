@@ -129,3 +129,127 @@ function (uos_tests_add_host)
     set_tests_properties ("${_a_NAME}" PROPERTIES FIXTURES_REQUIRED "${_fixture}")
   endif ()
 endfunction ()
+
+# -----------------------------------------------------------------------------
+# Hardware tests: CTest runs OpenOCD directly, as upstream's hardware tests
+# do; no shell script in between. The newest OpenOCD xPack, else the PATH's.
+
+file (GLOB _uos_ocd_bins
+      "$ENV{HOME}/.local/xPacks/@xpack-dev-tools/openocd/*/.content/bin/openocd")
+if (_uos_ocd_bins)
+  list (SORT _uos_ocd_bins COMPARE NATURAL ORDER DESCENDING)
+  list (GET _uos_ocd_bins 0 UOS_TESTS_OPENOCD)
+  get_filename_component (_uos_ocd_dir "${UOS_TESTS_OPENOCD}" DIRECTORY)
+  set (UOS_TESTS_OPENOCD_SCRIPTS "${_uos_ocd_dir}/../openocd/scripts")
+else ()
+  find_program (UOS_TESTS_OPENOCD openocd)
+  set (UOS_TESTS_OPENOCD_SCRIPTS "")
+endif ()
+
+# uos_tests_add_hwd (
+#   NAME <ctest name> APP <app> ELF <image>
+#   CFG <board's OpenOCD configuration> [INIT] [PRE_CFG <Tcl commands...>]
+#   ENTRY <address> TARGET_FMT <format> CORES <i...> SEMIHOST_CORES <i...>
+#   RESUME entry|cpsr|pc-first|cpsr-first|pc
+#   [ADAPTER_KHZ <kHz>] [PRELOAD <Tcl>]
+#   [RESET_COMMAND <Tcl> RESET_EXPECT <regex> RESET_WAIT <seconds>]
+#   [TIMEOUT <seconds>])
+#
+# A board OpenOCD halts and loads (the AArch boards, image in RAM):
+# uos-hwd.tcl's uos_hwd_run does the run, the test's semihosting SYS_EXIT
+# ends OpenOCD, the RESULT line is the verdict. INIT: the configuration does
+# not init itself. PRE_CFG: commands before the configuration (a probe
+# default). RESET_*: a reset that drops the debug link, run in its own OpenOCD
+# session as a CTest fixture of the test, then RESET_WAIT seconds for the
+# board to come back; the test is not run if the session's output does not
+# match RESET_EXPECT. Tcl's ';' in PRELOAD and RESET_COMMAND becomes a
+# newline (CMake splits a function's arguments at ';').
+function (uos_tests_add_hwd)
+  cmake_parse_arguments (_a "INIT"
+    "NAME;APP;ELF;CFG;ENTRY;TARGET_FMT;RESUME;ADAPTER_KHZ;RESET_EXPECT;RESET_WAIT;TIMEOUT"
+    "CORES;SEMIHOST_CORES;PRE_CFG;PRELOAD;RESET_COMMAND" ${ARGN})
+  get_filename_component (_cfg_dir "${_a_CFG}" DIRECTORY)
+  set (_ocd_args -s "${_cfg_dir}")
+  if (UOS_TESTS_OPENOCD_SCRIPTS)
+    list (APPEND _ocd_args -s "${UOS_TESTS_OPENOCD_SCRIPTS}")
+  endif ()
+  foreach (_c IN LISTS _a_PRE_CFG)
+    list (APPEND _ocd_args -c "${_c}")
+  endforeach ()
+  list (APPEND _ocd_args -f "${_a_CFG}")
+  if (_a_INIT)
+    list (APPEND _ocd_args -c "init")
+  endif ()
+
+  list (JOIN _a_CORES " " _cores)
+  list (JOIN _a_SEMIHOST_CORES " " _semi)
+  # PRELOAD and RESET_COMMAND arrive split at their ';' (CMake splits a
+  # function's arguments there): join the pieces with newlines, which Tcl
+  # reads the same way.
+  list (JOIN _a_PRELOAD "\n" _preload)
+  add_test (NAME "${_a_NAME}"
+    COMMAND "${UOS_TESTS_OPENOCD}" ${_ocd_args}
+            -f "${CMAKE_SOURCE_DIR}/cmake/uos-hwd.tcl"
+            -c "uos_hwd_run {${_a_ELF}} ${_a_ENTRY} {${_a_TARGET_FMT}} {${_cores}} {${_semi}} ${_a_RESUME} {${_a_ADAPTER_KHZ}} {${_preload}}")
+  if (_a_TIMEOUT)
+    set (_timeout ${_a_TIMEOUT})
+  else ()
+    uos_tests_timeout ("${_a_APP}" _timeout)
+  endif ()
+  set_tests_properties ("${_a_NAME}" PROPERTIES
+    LABELS "hwd" TIMEOUT ${_timeout} RUN_SERIAL TRUE
+    ${UOS_TESTS_RESULT_PROPERTIES})
+
+  if (_a_RESET_COMMAND)
+    list (JOIN _a_RESET_COMMAND "\n" _reset)
+    set (_reset_args ${_ocd_args} -c "${_reset}")
+    # One -D value: its own ';' list separators must survive add_test.
+    string (REPLACE ";" "\;" _reset_args "${_reset_args}")
+    add_test (NAME "${_a_NAME}-reset"
+      COMMAND "${CMAKE_COMMAND}"
+              "-DOPENOCD=${UOS_TESTS_OPENOCD}" "-DARGS=${_reset_args}"
+              "-DEXPECT=${_a_RESET_EXPECT}" "-DWAIT=${_a_RESET_WAIT}"
+              "-DLOG=${CMAKE_CURRENT_BINARY_DIR}/${_a_NAME}-reset.log"
+              -P "${CMAKE_SOURCE_DIR}/cmake/uos-hwd-reset.cmake")
+    set_tests_properties ("${_a_NAME}-reset" PROPERTIES
+      LABELS "hwd-reset" TIMEOUT 120 RUN_SERIAL TRUE
+      FIXTURES_SETUP "${_a_NAME}-reset")
+    set_tests_properties ("${_a_NAME}" PROPERTIES
+      FIXTURES_REQUIRED "${_a_NAME}-reset")
+  endif ()
+endfunction ()
+
+# uos_tests_add_openocd (
+#   NAME <ctest name> APP <app> ELF <image> CFG <board's OpenOCD configuration>
+#   [PRE_CFG <Tcl commands...>] COMMANDS <Tcl commands...> [TIMEOUT <seconds>])
+#
+# A board OpenOCD programs and resets (the Cortex-M boards), as upstream's
+# hardware tests run: the configuration, then each command as a -c, @ELF@
+# standing for the image. The test's semihosting SYS_EXIT ends OpenOCD; the
+# RESULT line is the verdict.
+function (uos_tests_add_openocd)
+  cmake_parse_arguments (_a "" "NAME;APP;ELF;CFG;TIMEOUT" "PRE_CFG;COMMANDS"
+                         ${ARGN})
+  get_filename_component (_cfg_dir "${_a_CFG}" DIRECTORY)
+  set (_ocd_args -s "${_cfg_dir}")
+  if (UOS_TESTS_OPENOCD_SCRIPTS)
+    list (APPEND _ocd_args -s "${UOS_TESTS_OPENOCD_SCRIPTS}")
+  endif ()
+  foreach (_c IN LISTS _a_PRE_CFG)
+    list (APPEND _ocd_args -c "${_c}")
+  endforeach ()
+  list (APPEND _ocd_args -f "${_a_CFG}")
+  foreach (_c IN LISTS _a_COMMANDS)
+    string (REPLACE "@ELF@" "${_a_ELF}" _c "${_c}")
+    list (APPEND _ocd_args -c "${_c}")
+  endforeach ()
+  add_test (NAME "${_a_NAME}" COMMAND "${UOS_TESTS_OPENOCD}" ${_ocd_args})
+  if (_a_TIMEOUT)
+    set (_timeout ${_a_TIMEOUT})
+  else ()
+    uos_tests_timeout ("${_a_APP}" _timeout)
+  endif ()
+  set_tests_properties ("${_a_NAME}" PROPERTIES
+    LABELS "hwd" TIMEOUT ${_timeout} RUN_SERIAL TRUE
+    ${UOS_TESTS_RESULT_PROPERTIES})
+endfunction ()

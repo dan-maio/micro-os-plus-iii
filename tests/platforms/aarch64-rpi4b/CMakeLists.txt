@@ -80,17 +80,30 @@ foreach (_app IN LISTS UOS_TESTS_APPS)
     QEMU "${_qemu}" MACHINE -M raspi4b -smp 4
   )
 
+  # The same run through the board's hw.sh (test_smpl/run-hw.sh), label
+  # hwsh: kept until the OpenOCD runs are proven on the board (step 7).
   add_test (
-    NAME "${PLATFORM_NAME}-${_app}-hwd"
+    NAME "${PLATFORM_NAME}-${_app}-hwsh"
     # 1800 s: the budget counts from OpenOCD's start, and loading an image
     # over the CMSIS-DAP probe alone takes 3-8 minutes (~0.6 KB/s; the
     # images are 100-290 KB). The watchdog reset and boot wait come first.
     COMMAND bash "${_board_hw}" "${_app}" 1800
   )
   set_tests_properties (
-    "${PLATFORM_NAME}-${_app}-hwd"
+    "${PLATFORM_NAME}-${_app}-hwsh"
     PROPERTIES ENVIRONMENT "BUILD=${CMAKE_CURRENT_BINARY_DIR}/port-tests;UOS_SMP_DIR=${CMAKE_SOURCE_DIR}/.."
-               LABELS "hwd" TIMEOUT 2400
+               LABELS "hwsh" TIMEOUT 2400
+  )
+  # The hardware run: OpenOCD from CTest (cmake/uos-tests-run.cmake,
+  # cmake/uos-hwd.tcl), the PM watchdog reset as its fixture.
+  uos_tests_add_hwd (
+    NAME "${PLATFORM_NAME}-${_app}-hwd" APP "${_app}" ELF "$<TARGET_FILE:${_app}-hwd>"
+    CFG "${CMAKE_CURRENT_SOURCE_DIR}/openocd-cmsis-dap-rpi4b.cfg" INIT
+    ENTRY 0x80000 TARGET_FMT "bcm2711.cpu%d" CORES 0
+    SEMIHOST_CORES 0 1 2 3 RESUME pc-first
+    RESET_COMMAND "init; targets bcm2711.cpu0; halt; catch {mww 0xfe100024 0x5a000001}; catch {mww 0xfe10001c 0x5a000020}; shutdown"
+    RESET_EXPECT "tap/device found" RESET_WAIT 10
+    TIMEOUT 2400
   )
 endforeach ()
 

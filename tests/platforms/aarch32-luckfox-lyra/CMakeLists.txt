@@ -59,16 +59,47 @@ set (_board_hw "${CMAKE_CURRENT_SOURCE_DIR}/hw.sh")
 
 # -----------------------------------------------------------------------------
 # One CTest case per test the builder built (board-tests/: UOS_TESTS_APPS).
+include ("${CMAKE_SOURCE_DIR}/cmake/uos-tests-run.cmake")
+
+# The hardware run's facts (they were the board's hw.sh): core 0 alone (the
+# secondaries are held in reset until the kernel releases them), resumed at the
+# entry with no register touched (the RK3506's loader leaves SVC), 4 MHz SWD,
+# the RK3506 full global reset as a fixture, and the pre-load that turns the
+# MMU and caches off (the loader leaves them on, and load_image through them
+# leaves DRAM holding something else).
+set (_lyra_preload [=[if {[catch {
+  set _t [target current]
+  set _s [$_t arm mrc 15 0 1 0 0]
+  $_t arm mcr 15 0 1 0 0 [expr {$_s & ~0x1005}]
+  $_t arm mcr 15 0 7 5 0 0
+  $_t arm mcr 15 0 7 5 6 0
+  $_t arm mcr 15 0 8 7 0 0
+} _e]} { echo "SANITIZE-ERR: $_e" } else { echo [format "SANITIZE-OK: SCTLR 0x%08x -> MMU/caches off" $_s] }]=])
+function (lyra_add_hwd _test _elf)
+  uos_tests_add_hwd (
+    NAME "${PLATFORM_NAME}-${_test}-hwd" APP "${_test}" ELF "${_elf}"
+    CFG "${CMAKE_CURRENT_SOURCE_DIR}/openocd.cfg"
+    ENTRY 0x00200000 TARGET_FMT "rk3506.a7.%d" CORES 0 SEMIHOST_CORES 0
+    RESUME entry ADAPTER_KHZ 4000 PRELOAD "${_lyra_preload}"
+    RESET_COMMAND "catch { rk3506_reset_full }; shutdown"
+    RESET_EXPECT "Triggering RK3506 Full Global Software Reset" RESET_WAIT 3
+    TIMEOUT 1200
+  )
+endfunction ()
+
 foreach (_app IN LISTS UOS_TESTS_APPS)
 
+  # The same run through the board's hw.sh, label hwsh: kept until the
+  # OpenOCD runs are proven on the board (step 7).
   add_test (
-    NAME "${PLATFORM_NAME}-${_app}-hwd"
+    NAME "${PLATFORM_NAME}-${_app}-hwsh"
     COMMAND bash "${_board_hw}" "${_app}" 600
   )
   set_tests_properties (
-    "${PLATFORM_NAME}-${_app}-hwd"
-    PROPERTIES ENVIRONMENT "BUILD=${_port_bin};UOS_SMP_DIR=${CMAKE_SOURCE_DIR}/.." LABELS "hwd" TIMEOUT 1200
+    "${PLATFORM_NAME}-${_app}-hwsh"
+    PROPERTIES ENVIRONMENT "BUILD=${_port_bin};UOS_SMP_DIR=${CMAKE_SOURCE_DIR}/.." LABELS "hwsh" TIMEOUT 1200
   )
+  lyra_add_hwd ("${_app}" "$<TARGET_FILE:${_app}-hwd>")
 endforeach ()
 
 # -----------------------------------------------------------------------------
@@ -107,14 +138,17 @@ function (add_harness_suite _suite _name)
             "$<TARGET_FILE:${_name}>.bin"
     VERBATIM
   )
+  # The same run through the board's hw.sh, label hwsh: kept until the
+  # OpenOCD runs are proven on the board (step 7).
   add_test (
-    NAME "${PLATFORM_NAME}-${_name}-hwd"
+    NAME "${PLATFORM_NAME}-${_name}-hwsh"
     COMMAND bash "${_board_hw}" "${_name}" 600
   )
   set_tests_properties (
-    "${PLATFORM_NAME}-${_name}-hwd"
-    PROPERTIES ENVIRONMENT "BUILD=${_port_bin};UOS_SMP_DIR=${CMAKE_SOURCE_DIR}/.." LABELS "hwd" TIMEOUT 1200
+    "${PLATFORM_NAME}-${_name}-hwsh"
+    PROPERTIES ENVIRONMENT "BUILD=${_port_bin};UOS_SMP_DIR=${CMAKE_SOURCE_DIR}/.." LABELS "hwsh" TIMEOUT 1200
   )
+  lyra_add_hwd ("${_name}" "$<TARGET_FILE:${_name}>")
 endfunction ()
 
 add_harness_suite (mutex-stress mutex-stress-test)

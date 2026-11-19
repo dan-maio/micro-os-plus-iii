@@ -847,7 +847,7 @@
           "toolchainFileName": "gcc.cmake"
         },
         "actions": {
-          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE hwd"
+          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE \"hwd|hwsh\""
         }
       },
       "native-cmake-gcc-release": {
@@ -1134,7 +1134,7 @@
           "shortConfigurationName": "m0d"
         },
         "actions": {
-          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE hwd"
+          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE \"hwd|hwsh\""
         }
       },
       "qemu-cortex-m0-cmake-gcc-release": {
@@ -1164,7 +1164,7 @@
           "shortConfigurationName": "m3d"
         },
         "actions": {
-          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE hwd"
+          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE \"hwd|hwsh\""
         }
       },
       "qemu-cortex-m3-cmake-gcc-release": {
@@ -1194,7 +1194,7 @@
           "shortConfigurationName": "m4fd"
         },
         "actions": {
-          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE hwd"
+          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE \"hwd|hwsh\""
         }
       },
       "qemu-cortex-m4f-cmake-gcc-release": {
@@ -1224,7 +1224,7 @@
           "shortConfigurationName": "m7fd"
         },
         "actions": {
-          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE hwd"
+          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE \"hwd|hwsh\""
         }
       },
       "qemu-cortex-m7f-cmake-gcc-release": {
@@ -1339,7 +1339,7 @@
           }
         },
         "actions": {
-          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE hwd",
+          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE \"hwd|hwsh\"",
           "link-deps": [
             "xpm link @micro-os-plus/micro-os-plus-iii-cortexm --config {{ configuration.name }}",
             "xpm link @xpack-3rd-party/raspberrypi-pico-sdk --config {{ configuration.name }}"
@@ -1372,7 +1372,7 @@
           "shortConfigurationName": "cp2d"
         },
         "actions": {
-          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE hwd"
+          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE \"hwd|hwsh\""
         }
       },
       "cortexm-pico2-cmake-gcc-release": {
@@ -1401,7 +1401,7 @@
           "shortConfigurationName": "cp1d"
         },
         "actions": {
-          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE hwd"
+          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE \"hwd|hwsh\""
         }
       },
       "cortexm-pico-cmake-gcc-release": {
@@ -1431,7 +1431,7 @@
           "shortConfigurationName": "p2c1d"
         },
         "actions": {
-          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE hwd"
+          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE \"hwd|hwsh\""
         }
       },
       "pico2-1cpu-cmake-gcc-release": {
@@ -1461,7 +1461,7 @@
           "shortConfigurationName": "2cm33d"
         },
         "actions": {
-          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE hwd"
+          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE \"hwd|hwsh\""
         }
       },
       "2xcortex-m33-cmake-gcc-release": {
@@ -1490,7 +1490,7 @@
           "shortConfigurationName": "cpzd"
         },
         "actions": {
-          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE hwd"
+          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE \"hwd|hwsh\""
         }
       },
       "cortexm-pico2-pizero-cmake-gcc-release": {
@@ -1519,7 +1519,7 @@
           "shortConfigurationName": "cpsd"
         },
         "actions": {
-          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE hwd"
+          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE \"hwd|hwsh\""
         }
       },
       "cortexm-pico2-rp2350b-psram-cmake-gcc-release": {
@@ -1548,7 +1548,7 @@
           "shortConfigurationName": "cnfd"
         },
         "actions": {
-          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE hwd"
+          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE \"hwd|hwsh\""
         }
       },
       "cortexm-nucleof411-cmake-gcc-release": {
@@ -1577,7 +1577,7 @@
           "shortConfigurationName": "cw4d"
         },
         "actions": {
-          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE hwd"
+          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE \"hwd|hwsh\""
         }
       },
       "cortexm-weactf411-cmake-gcc-release": {
@@ -1606,7 +1606,7 @@
           "shortConfigurationName": "cw4rd"
         },
         "actions": {
-          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE hwd"
+          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE \"hwd|hwsh\""
         }
       },
       "cortexm-weactf412-cmake-gcc-release": {
@@ -1637,7 +1637,7 @@
           "link-deps": [
             "xpm link @micro-os-plus/micro-os-plus-iii-cortexm @xpack-segger/rtt @xpack-segger/system-view --config {{ configuration.name }}"
           ],
-          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE hwd"
+          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE \"hwd|hwsh\""
         },
         "devDependencies": {
           "@xpack-segger/rtt": {
@@ -1677,7 +1677,7 @@
           "shortConfigurationName": "nf7d"
         },
         "actions": {
-          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE hwd",
+          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE \"hwd|hwsh\"",
           "link-deps": [
             "xpm link @micro-os-plus/micro-os-plus-iii-cortexm --config {{ configuration.name }}"
           ]
@@ -1708,7 +1708,7 @@
           "shortConfigurationName": "nh7d"
         },
         "actions": {
-          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE hwd",
+          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE \"hwd|hwsh\"",
           "link-deps": [
             "xpm link @micro-os-plus/micro-os-plus-iii-cortexm --config {{ configuration.name }}"
           ]
@@ -1737,7 +1737,7 @@
           "shortConfigurationName": "a32d"
         },
         "actions": {
-          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE hwd"
+          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE \"hwd|hwsh\""
         }
       },
       "aarch32-rpi-zero-2w-cmake-gcc-release": {
@@ -1763,7 +1763,7 @@
           "shortConfigurationName": "a32p3d"
         },
         "actions": {
-          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE hwd"
+          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE \"hwd|hwsh\""
         }
       },
       "aarch32-rpi3b-cmake-gcc-release": {
@@ -1790,7 +1790,7 @@
           "commandCMakeReconfigure": "cmake -S . -B {{ properties.buildFolderRelativePathPosix }} -G Ninja -D CMAKE_BUILD_TYPE={{ properties.buildType }} -D PLATFORM_NAME={{ properties.platformName }} -D ENABLE_HW_TESTS=ON"
         },
         "actions": {
-          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE hwd"
+          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE \"hwd|hwsh\""
         }
       },
       "aarch32-luckfox-lyra-cmake-gcc-release": {
@@ -1816,7 +1816,7 @@
           "shortConfigurationName": "a64d"
         },
         "actions": {
-          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE hwd"
+          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE \"hwd|hwsh\""
         }
       },
       "aarch64-rpi-zero-2w-cmake-gcc-release": {
@@ -1842,7 +1842,7 @@
           "shortConfigurationName": "a64p3d"
         },
         "actions": {
-          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE hwd"
+          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE \"hwd|hwsh\""
         }
       },
       "aarch64-rpi3b-cmake-gcc-release": {
@@ -1868,7 +1868,7 @@
           "shortConfigurationName": "a64p4d"
         },
         "actions": {
-          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE hwd"
+          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE \"hwd|hwsh\""
         }
       },
       "aarch64-rpi4b-cmake-gcc-release": {

@@ -70,14 +70,27 @@ foreach (_app IN LISTS UOS_TESTS_APPS)
     QEMU "${_qemu}" MACHINE -M raspi3b -smp 4
   )
 
+  # The same run through the board's hw.sh (test_smpl/run-hw.sh), label
+  # hwsh: kept until the OpenOCD runs are proven on the board (step 7).
   add_test (
-    NAME "${PLATFORM_NAME}-${_app}-hwd"
+    NAME "${PLATFORM_NAME}-${_app}-hwsh"
     COMMAND bash "${_board_hw}" "${_app}" 600
   )
   set_tests_properties (
-    "${PLATFORM_NAME}-${_app}-hwd"
+    "${PLATFORM_NAME}-${_app}-hwsh"
     PROPERTIES ENVIRONMENT "BUILD=${CMAKE_CURRENT_BINARY_DIR}/port-tests;UOS_SMP_DIR=${CMAKE_SOURCE_DIR}/.."
-               LABELS "hwd" TIMEOUT 1200
+               LABELS "hwsh" TIMEOUT 1200
+  )
+  # The hardware run: OpenOCD from CTest (cmake/uos-tests-run.cmake,
+  # cmake/uos-hwd.tcl), the PM watchdog reset as its fixture.
+  uos_tests_add_hwd (
+    NAME "${PLATFORM_NAME}-${_app}-hwd" APP "${_app}" ELF "$<TARGET_FILE:${_app}-hwd>"
+    CFG "${CMAKE_CURRENT_SOURCE_DIR}/openocd-probe.cfg" INIT
+    ENTRY 0x80000 TARGET_FMT "bcm2837.cpu%d" CORES 0 1 2 3
+    SEMIHOST_CORES 0 1 2 3 RESUME pc-first
+    RESET_COMMAND "init; targets bcm2837.cpu0; halt; mww 0x3f100024 0x5a000001; mww 0x3f10001c 0x5a000020; shutdown"
+    RESET_EXPECT "tap/device found" RESET_WAIT 12
+    TIMEOUT 1200
   )
 endforeach ()
 

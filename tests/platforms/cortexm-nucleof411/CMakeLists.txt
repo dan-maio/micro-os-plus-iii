@@ -1,8 +1,8 @@
 # -----------------------------------------------------------------------------
 # Test executables — µOS++ III Cortex-M on the ST Nucleo-F411RE (STM32F411RE).
 #
-# The port owns its tests (test/nucleof411/<app>/) and its own builder
-# (test/CMakeLists.txt). This board is hardware-only -- it is programmed over
+# The board's tests are this platform's tests/<app>/, built by the tests' builder
+# (board-tests/). This board is hardware-only -- it is programmed over
 # its ST-Link and run on the desk -- so the builder emits `hwd` alone and this
 # platform registers what it produced, named `<platform>-<app>-hwd`.
 #
@@ -23,12 +23,13 @@ include ("cmake/platform-library.cmake")
 # The board tests, built by the tests' own builder (board-tests/) from the
 # board's test folder (still in the port until the tests move into tests/).
 set (UOS_TESTS_PORT cortexm)
-set (UOS_TESTS_BOARD_DIR "${UOS_CORTEXM_DIR}/test/${BOARD}")
+# The board-only tests: this platform's tests/ (tests.cmake, include/, src/,
+# one folder per test).
+set (UOS_TESTS_BOARD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/tests")
 add_subdirectory ("${CMAKE_SOURCE_DIR}/board-tests" "port-tests/test")
 
 set (_port_bin "${CMAKE_CURRENT_BINARY_DIR}/port-tests")
-set (_port_test_dir "${UOS_CORTEXM_DIR}/test/${BOARD}")
-set (_board_hw "${UOS_CORTEXM_DIR}/test/boards/${BOARD}/hw.sh")
+set (_board_hw "${CMAKE_CURRENT_SOURCE_DIR}/hw.sh")
 
 # -----------------------------------------------------------------------------
 # One CTest case per test. Every one is `hwd`: the board has no `qemu` image.

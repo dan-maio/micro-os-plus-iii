@@ -14,7 +14,7 @@ set (
   xpack_dependencies_folders
   # The portable harness suites. Their sources become test::<suite>, which the
   # port's board_test_libs() names for the three placeholder applications under
-  # test/pico2/.
+  # platforms/cortexm-pico2/tests/.
   "${CMAKE_SOURCE_DIR}/sources/rtos-apis"
   "${CMAKE_SOURCE_DIR}/sources/mutex-stress"
   "${CMAKE_SOURCE_DIR}/sources/cmsis-os-validator"

@@ -1,7 +1,7 @@
 /******************************************************************************
  * linker.ld - Linker script for the Raspberry Pi Pico (RP2040, 2x M0+).
  *
- * The Pico 2 board's script (test/boards/pico2/linker.ld) for the RP2040's
+ * The Pico 2 board's script (platforms/cortexm-pico2/linker.ld) for the RP2040's
  * memory and boot flow:
  *
  *   FLASH  2 MB XIP @0x10000000. The first 256 bytes are boot2 (src/boot2.S),

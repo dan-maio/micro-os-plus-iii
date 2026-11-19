@@ -180,7 +180,7 @@ file (GLOB _test_support CONFIGURE_DEPENDS "${_test_dir}/src/*.cpp")
 set (_test_includes "${_test_dir}/include")
 if (UOS_TESTS_PORT STREQUAL "cortexm")
   # The cross-board helpers of the Cortex-M boards (hw_result.hpp, ...).
-  list (APPEND _test_includes "${UOS_CORTEXM_DIR}/test/boards/shared")
+  list (APPEND _test_includes "${CMAKE_SOURCE_DIR}/board-tests/cortexm")
 endif ()
 
 file (GLOB _test_dirs LIST_DIRECTORIES true CONFIGURE_DEPENDS "${_test_dir}/*")

@@ -1,6 +1,6 @@
 # The facts of this board, the platform's since step 4 (they were
 # micro-os-plus-iii-cortexm/test/boards/pico2-rp2350b-psram/board.cmake). The board's code
-# stays in the port's test/boards/pico2-rp2350b-psram/ until the board tests move (step 6);
+# is in this platform's folder since step 6;
 # its linker scripts are in ../device/linker-scripts/.
 #
 # -----------------------------------------------------------------------------

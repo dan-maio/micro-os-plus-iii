@@ -1,18 +1,17 @@
 # -----------------------------------------------------------------------------
 # Test executables — µOS++ III Cortex-M on the Raspberry Pi Pico 2 (RP2350).
 #
-# The port owns its tests (test/pico2/<app>/) and its own builder
-# (test/CMakeLists.txt), which compiles each test as `-hwd` for the probe and,
-# for the tests the board can run emulated, `-qemu`. This platform reuses that
-# builder and registers what it produced, so every test the port has appears,
-# named `<platform>-<app>-<variant>`.
+# The board's tests are this platform's tests/<app>/; the tests' builder
+# (board-tests/) compiles each test as `-hwd` for the probe and, for the tests
+# the board can run emulated, `-qemu`, and this platform registers what it
+# produced, named `<platform>-<app>-<variant>`.
 #
 # hwd tests are NOT run by a plain `ctest`: they need the board, one test per
 # power cycle. They carry the `hwd` label.
 #
 # The `qemu` images end themselves: each test prints a RESULT line and, under
 # QEMU_BUILD, exits through the strong semihosting _Exit() (see the port's
-# test/pico2/include/hw_result.hpp), so CTest reads a real exit code and needs
+# platforms/cortexm-pico2/tests/include/hw_result.hpp), so CTest reads a real exit code and needs
 # no runner script.
 # -----------------------------------------------------------------------------
 
@@ -29,12 +28,13 @@ include ("cmake/platform-library.cmake")
 # The board tests, built by the tests' own builder (board-tests/) from the
 # board's test folder (still in the port until the tests move into tests/).
 set (UOS_TESTS_PORT cortexm)
-set (UOS_TESTS_BOARD_DIR "${UOS_CORTEXM_DIR}/test/${BOARD}")
+# The board-only tests: this platform's tests/ (tests.cmake, include/, src/,
+# one folder per test).
+set (UOS_TESTS_BOARD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/tests")
 add_subdirectory ("${CMAKE_SOURCE_DIR}/board-tests" "port-tests/test")
 
 set (_port_bin "${CMAKE_CURRENT_BINARY_DIR}/port-tests")
-set (_port_test_dir "${UOS_CORTEXM_DIR}/test/${BOARD}")
-set (_board_hw "${UOS_CORTEXM_DIR}/test/boards/${BOARD}/hw.sh")
+set (_board_hw "${CMAKE_CURRENT_SOURCE_DIR}/hw.sh")
 
 # The QEMU binary, for the tests the board can run emulated. The RP2350's
 # Cortex-M33 is close enough to QEMU's generic mps2-an500 Cortex-M7 for the

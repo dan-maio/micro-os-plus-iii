@@ -1,6 +1,6 @@
 # The facts of this board, the platform's since step 4 (they were
 # micro-os-plus-iii-cortexm/test/boards/pico/board.cmake). The board's code
-# stays in the port's test/boards/pico/ until the board tests move (step 6);
+# is in this platform's folder since step 6;
 # its linker scripts are in ../device/linker-scripts/.
 #
 # -----------------------------------------------------------------------------
@@ -36,7 +36,7 @@
 # JTAG -- at 15 MHz by default (openocd.cfg, hw.sh).
 # -----------------------------------------------------------------------------
 
-set (UOS_BOARD_SRC_DIR "${UOS_CORTEXM_ROOT}/test/boards/pico")
+set (UOS_BOARD_SRC_DIR "${CMAKE_SOURCE_DIR}/platforms/cortexm-pico")
 
 set (UOS_BOARD_FLAGS -mcpu=cortex-m0plus -mthumb -mfloat-abi=soft)
 set (UOS_BOARD_NCPU  2)
@@ -65,14 +65,14 @@ set (UOS_BOARD_DEFINES
      "PORT_GREETING=\"µOS++ Raspberry Pi Pico (RP2040, 2x Cortex-M0+ SMP)\"")
 
 # src/ is compiled into every application; glue/ is composed per test by
-# test/pico/tests.cmake, exactly as the Pico 2's (see its board.cmake).
-set (UOS_BOARD_UART      "${UOS_CORTEXM_ROOT}/test/boards/pico/glue/uart.cpp")
-set (UOS_BOARD_MULTICORE "${UOS_CORTEXM_ROOT}/test/boards/pico/glue/multicore.cpp")
+# platforms/cortexm-pico/tests/tests.cmake, exactly as the Pico 2's (see its board.cmake).
+set (UOS_BOARD_UART      "${CMAKE_SOURCE_DIR}/platforms/cortexm-pico/glue/uart.cpp")
+set (UOS_BOARD_MULTICORE "${CMAKE_SOURCE_DIR}/platforms/cortexm-pico/glue/multicore.cpp")
 set (UOS_BOARD_RTOS_GLUE
-     "${UOS_CORTEXM_ROOT}/test/boards/pico/glue/rtos-glue.cpp"
-     "${UOS_CORTEXM_ROOT}/test/boards/pico/glue/trace-uart.cpp"
-     # One copy for the whole port; see test/boards/shared/syscalls.c.
-     "${UOS_CORTEXM_ROOT}/test/boards/pico/../shared/syscalls.c")
+     "${CMAKE_SOURCE_DIR}/platforms/cortexm-pico/glue/rtos-glue.cpp"
+     "${CMAKE_SOURCE_DIR}/platforms/cortexm-pico/glue/trace-uart.cpp"
+     # One copy for the whole port; see board-tests/cortexm/syscalls.c.
+     "${CMAKE_SOURCE_DIR}/board-tests/cortexm/syscalls.c")
 
 # -----------------------------------------------------------------------------
 # The USB device stack, for the two USB gadget tests.
@@ -84,9 +84,9 @@ set (UOS_BOARD_RTOS_GLUE
 # or an IRQ number are the RP2040's own, in usb/pico-shim/ here; that
 # directory comes FIRST, so it shadows the Pico 2's and the rest of the shim
 # (the SDK's USB register headers) is the Pico 2's.
-set (_pico2_usb "${UOS_CORTEXM_ROOT}/test/boards/pico/../pico2/usb")
+set (_pico2_usb "${CMAKE_SOURCE_DIR}/platforms/cortexm-pico2/usb")
 set (UOS_BOARD_USB_INCLUDE
-     "${UOS_CORTEXM_ROOT}/test/boards/pico/usb/pico-shim"
+     "${CMAKE_SOURCE_DIR}/platforms/cortexm-pico/usb/pico-shim"
      "${_pico2_usb}/pico-shim"
      "${_pico2_usb}/tinyusb")
 set (UOS_BOARD_USB_CORE_SOURCES
@@ -95,7 +95,7 @@ set (UOS_BOARD_USB_CORE_SOURCES
      "${_pico2_usb}/tinyusb/device/usbd.c"
      "${_pico2_usb}/tinyusb/portable/raspberrypi/rp2040/dcd_rp2040.c"
      "${_pico2_usb}/tinyusb/portable/raspberrypi/rp2040/rp2040_usb.c"
-     "${UOS_CORTEXM_ROOT}/test/boards/pico/usb/pico-shim/pico-shim.c")
+     "${CMAKE_SOURCE_DIR}/platforms/cortexm-pico/usb/pico-shim/pico-shim.c")
 
 set (UOS_BOARD_USB_CDC_INCLUDE "${_pico2_usb}/cdc")
 set (UOS_BOARD_USB_CDC_SOURCES

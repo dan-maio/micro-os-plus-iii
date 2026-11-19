@@ -1,6 +1,6 @@
 # The facts of this board, the platform's since step 4 (they were
 # micro-os-plus-iii-cortexm/test/boards/pico2/board.cmake). The board's code
-# stays in the port's test/boards/pico2/ until the board tests move (step 6);
+# is in this platform's folder since step 6;
 # its linker scripts are in ../device/linker-scripts/.
 #
 # -----------------------------------------------------------------------------
@@ -27,7 +27,7 @@
 # while core 1's SysTick only reschedules core 1.
 # -----------------------------------------------------------------------------
 
-set (UOS_BOARD_SRC_DIR "${UOS_CORTEXM_ROOT}/test/boards/pico2")
+set (UOS_BOARD_SRC_DIR "${CMAKE_SOURCE_DIR}/platforms/cortexm-pico2")
 
 set (UOS_BOARD_FLAGS -mcpu=cortex-m33 -mthumb -mfloat-abi=hard -mfpu=fpv5-sp-d16)
 set (UOS_BOARD_NCPU  2)
@@ -97,15 +97,15 @@ set (UOS_BOARD_DEFINES
 #           is exactly what a glob over src/ produced before this split.
 #
 # Each board's test/<board>/tests.cmake composes them per test.
-set (UOS_BOARD_UART      "${UOS_CORTEXM_ROOT}/test/boards/pico2/glue/uart.cpp")
-set (UOS_BOARD_MULTICORE "${UOS_CORTEXM_ROOT}/test/boards/pico2/glue/multicore.cpp")
-set (UOS_BOARD_PSRAM     "${UOS_CORTEXM_ROOT}/test/boards/pico2/glue/psram.cpp")
-set (UOS_BOARD_ADC       "${UOS_CORTEXM_ROOT}/test/boards/pico2/glue/adc.cpp")
+set (UOS_BOARD_UART      "${CMAKE_SOURCE_DIR}/platforms/cortexm-pico2/glue/uart.cpp")
+set (UOS_BOARD_MULTICORE "${CMAKE_SOURCE_DIR}/platforms/cortexm-pico2/glue/multicore.cpp")
+set (UOS_BOARD_PSRAM     "${CMAKE_SOURCE_DIR}/platforms/cortexm-pico2/glue/psram.cpp")
+set (UOS_BOARD_ADC       "${CMAKE_SOURCE_DIR}/platforms/cortexm-pico2/glue/adc.cpp")
 set (UOS_BOARD_RTOS_GLUE
-     "${UOS_CORTEXM_ROOT}/test/boards/pico2/glue/rtos-glue.cpp"
-     "${UOS_CORTEXM_ROOT}/test/boards/pico2/glue/trace-uart.cpp"
-     # One copy for the whole port; see test/boards/shared/syscalls.c.
-     "${UOS_CORTEXM_ROOT}/test/boards/pico2/../shared/syscalls.c")
+     "${CMAKE_SOURCE_DIR}/platforms/cortexm-pico2/glue/rtos-glue.cpp"
+     "${CMAKE_SOURCE_DIR}/platforms/cortexm-pico2/glue/trace-uart.cpp"
+     # One copy for the whole port; see board-tests/cortexm/syscalls.c.
+     "${CMAKE_SOURCE_DIR}/board-tests/cortexm/syscalls.c")
 
 # The other two memory maps this silicon is built against. They belong to the
 # 16 MB RP2350B boards rather than to this 4 MB one, and they live here
@@ -128,30 +128,30 @@ set (UOS_BOARD_LINKER_PSRAM "${CMAKE_SOURCE_DIR}/platforms/cortexm-pico2/device/
 # tinyusb includes it by plain name, and each test configures a different
 # device class.
 set (UOS_BOARD_USB_INCLUDE
-     "${UOS_CORTEXM_ROOT}/test/boards/pico2/usb/tinyusb"
-     "${UOS_CORTEXM_ROOT}/test/boards/pico2/usb/pico-shim")
+     "${CMAKE_SOURCE_DIR}/platforms/cortexm-pico2/usb/tinyusb"
+     "${CMAKE_SOURCE_DIR}/platforms/cortexm-pico2/usb/pico-shim")
 set (UOS_BOARD_USB_CORE_SOURCES
-     "${UOS_CORTEXM_ROOT}/test/boards/pico2/usb/tinyusb/tusb.c"
-     "${UOS_CORTEXM_ROOT}/test/boards/pico2/usb/tinyusb/common/tusb_fifo.c"
-     "${UOS_CORTEXM_ROOT}/test/boards/pico2/usb/tinyusb/device/usbd.c"
-     "${UOS_CORTEXM_ROOT}/test/boards/pico2/usb/tinyusb/portable/raspberrypi/rp2040/dcd_rp2040.c"
-     "${UOS_CORTEXM_ROOT}/test/boards/pico2/usb/tinyusb/portable/raspberrypi/rp2040/rp2040_usb.c"
-     "${UOS_CORTEXM_ROOT}/test/boards/pico2/usb/pico-shim/pico-shim.c")
+     "${CMAKE_SOURCE_DIR}/platforms/cortexm-pico2/usb/tinyusb/tusb.c"
+     "${CMAKE_SOURCE_DIR}/platforms/cortexm-pico2/usb/tinyusb/common/tusb_fifo.c"
+     "${CMAKE_SOURCE_DIR}/platforms/cortexm-pico2/usb/tinyusb/device/usbd.c"
+     "${CMAKE_SOURCE_DIR}/platforms/cortexm-pico2/usb/tinyusb/portable/raspberrypi/rp2040/dcd_rp2040.c"
+     "${CMAKE_SOURCE_DIR}/platforms/cortexm-pico2/usb/tinyusb/portable/raspberrypi/rp2040/rp2040_usb.c"
+     "${CMAKE_SOURCE_DIR}/platforms/cortexm-pico2/usb/pico-shim/pico-shim.c")
 
-set (UOS_BOARD_USB_CDC_INCLUDE "${UOS_CORTEXM_ROOT}/test/boards/pico2/usb/cdc")
+set (UOS_BOARD_USB_CDC_INCLUDE "${CMAKE_SOURCE_DIR}/platforms/cortexm-pico2/usb/cdc")
 set (UOS_BOARD_USB_CDC_SOURCES
-     "${UOS_CORTEXM_ROOT}/test/boards/pico2/usb/tinyusb/class/cdc/cdc_device.c"
-     "${UOS_CORTEXM_ROOT}/test/boards/pico2/usb/cdc/usb_descriptors.c"
-     "${UOS_CORTEXM_ROOT}/test/boards/pico2/usb/cdc/usb_cdc.c")
+     "${CMAKE_SOURCE_DIR}/platforms/cortexm-pico2/usb/tinyusb/class/cdc/cdc_device.c"
+     "${CMAKE_SOURCE_DIR}/platforms/cortexm-pico2/usb/cdc/usb_descriptors.c"
+     "${CMAKE_SOURCE_DIR}/platforms/cortexm-pico2/usb/cdc/usb_cdc.c")
 
-set (UOS_BOARD_USB_HID_INCLUDE "${UOS_CORTEXM_ROOT}/test/boards/pico2/usb/hid")
+set (UOS_BOARD_USB_HID_INCLUDE "${CMAKE_SOURCE_DIR}/platforms/cortexm-pico2/usb/hid")
 set (UOS_BOARD_USB_HID_SOURCES
-     "${UOS_CORTEXM_ROOT}/test/boards/pico2/usb/tinyusb/class/hid/hid_device.c"
-     "${UOS_CORTEXM_ROOT}/test/boards/pico2/usb/hid/usb_descriptors.c"
-     "${UOS_CORTEXM_ROOT}/test/boards/pico2/usb/hid/usb_hid.c")
+     "${CMAKE_SOURCE_DIR}/platforms/cortexm-pico2/usb/tinyusb/class/hid/hid_device.c"
+     "${CMAKE_SOURCE_DIR}/platforms/cortexm-pico2/usb/hid/usb_descriptors.c"
+     "${CMAKE_SOURCE_DIR}/platforms/cortexm-pico2/usb/hid/usb_hid.c")
 
 # The WS2812 RGB LED driver. One test uses it, so it is glue, not src/.
-set (UOS_BOARD_WS2812 "${UOS_CORTEXM_ROOT}/test/boards/pico2/glue/ws2812.cpp")
+set (UOS_BOARD_WS2812 "${CMAKE_SOURCE_DIR}/platforms/cortexm-pico2/glue/ws2812.cpp")
 
 # The port's test folder for this board (test/<BOARD>/), read by its builder.
 set (BOARD "pico2")

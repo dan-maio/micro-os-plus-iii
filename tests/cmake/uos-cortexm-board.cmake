@@ -4,8 +4,8 @@
 # The board facts are the platform's (tests/platforms/<P>/cmake/board.cmake);
 # this builds the board target from them, as the Cortex-M port's
 # "-board-interface" did when the port still read the board. The board's code
-# is still in the port's test/boards/<b>/ (until the board tests move, step 6);
-# its linker scripts are the platform's (device/linker-scripts/).
+# and its linker scripts are the platform's (include/, src/,
+# device/linker-scripts/).
 #
 # Facts read: UOS_BOARD_SRC_DIR, UOS_BOARD_FLAGS, UOS_BOARD_NCPU,
 # UOS_BOARD_CAPS, UOS_BOARD_LINKER_HW, UOS_BOARD_DEFINES, and optionally
@@ -45,14 +45,14 @@ macro (uos_cortexm_board_library)
         "${UOS_BOARD_SRC_DIR}/src/*.S" "${UOS_BOARD_SRC_DIR}/src/rtos/*.cpp")
 
   # The newlib/OS glue is identical on every board of the port, so there is
-  # one copy of it, in the port's test/boards/shared/. It is inserted where
+  # one copy of it, in the port's board-tests/cortexm/. It is inserted where
   # the glob used to find each board's own src/syscalls.c -- the glob is
   # sorted, so the position is reproducible and link order does not move.
   # Boards that compose their glue PER TEST name it themselves (the RP2xxx
   # ones, whose kernel-less probes must not link it) and are recognised by
   # having set UOS_BOARD_RTOS_GLUE.
   if (NOT DEFINED UOS_BOARD_RTOS_GLUE)
-    set (_uos_syscalls "${UOS_CORTEXM_ROOT}/test/boards/shared/syscalls.c")
+    set (_uos_syscalls "${CMAKE_SOURCE_DIR}/board-tests/cortexm/syscalls.c")
     set (_uos_at -1)
     set (_i 0)
     foreach (_f IN LISTS _board_sources)

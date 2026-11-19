@@ -1,6 +1,6 @@
 # The facts of this board, the platform's since step 4 (they were
 # micro-os-plus-iii-cortexm/test/boards/weactf411/board.cmake). The board's code
-# stays in the port's test/boards/weactf411/ until the board tests move (step 6);
+# is in this platform's folder since step 6;
 # its linker scripts are in ../device/linker-scripts/.
 #
 # -----------------------------------------------------------------------------
@@ -12,7 +12,7 @@
 # devices/ target and not board code.
 # -----------------------------------------------------------------------------
 
-set (UOS_BOARD_SRC_DIR "${UOS_CORTEXM_ROOT}/test/boards/weactf411")
+set (UOS_BOARD_SRC_DIR "${CMAKE_SOURCE_DIR}/platforms/cortexm-weactf411")
 
 set (UOS_BOARD_FLAGS -mcpu=cortex-m4 -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16)
 set (UOS_BOARD_NCPU  1)

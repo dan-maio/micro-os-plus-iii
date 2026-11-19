@@ -67,3 +67,4 @@ tests/platforms/aarch32-luckfox-lyra/tests/*/host/kbd_forward
 __pycache__/
 *.pyc
 *.bak
+tests/platforms/cortexm-*/tests/*/host/kbd_forward

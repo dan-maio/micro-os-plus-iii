@@ -14,7 +14,7 @@ set (
   xpack_dependencies_folders
   "${CMAKE_SOURCE_DIR}/sources/mutex-stress"
   # The one harness suite this board runs; its sources become test::fp-switch,
-  # which the port's board_test_libs() names for test/pico2-rp2350b-psram/
+  # which the port's board_test_libs() names for platforms/cortexm-pico2-rp2350b-psram/tests/
   # fp-switch/.
   "${CMAKE_SOURCE_DIR}/sources/fp-switch"
   "${CMAKE_BINARY_DIR}/xpacks/@micro-os-plus/micro-os-plus-iii-cortexm"

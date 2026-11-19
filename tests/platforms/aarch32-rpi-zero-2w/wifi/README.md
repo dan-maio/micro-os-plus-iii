@@ -12,9 +12,9 @@ a second one owns the SD card, and the tests are small scripts on top.
 | lwIP glue | `src/net.hpp`, `src/net.cpp` | interface `wl0`, DHCP client, ping, TCP echo server on port 7 (the Pi 4 B glue, on `wlan::`) |
 | Bring-up and SD saver | `src/wifi_app.hpp`, `src/wifi_app.cpp` | the scripted bring-up both tests share, and the thread that owns the SD card |
 | Board services | `src/platform.hpp`, `src/platform.cpp` | time from the ARM generic timer, delays, `kprintf`, the RAM copy of the console |
-| SD card on SDHOST | `../../../../drivers/include/sd_sdhost.hpp`, `drivers/src/sd_sdhost.cpp` | a second `sd::SdCard` back end, for the BCM2837's other SD controller |
+| SD card on SDHOST | `drivers/aarch32/include/sd_sdhost.hpp`, `drivers/aarch32/src/sd_sdhost.cpp` in `micro-os-plus-iii-devices-bcm283x` | a second `sd::SdCard` back end, for the BCM2837's other SD controller |
 | lwIP 2.2.1 | `../../../third_party/lwip/` | unmodified sources, BSD licence in `COPYING` |
-| Tests | `../../../rpi-zero-2w/wifi-net/`, `../../../rpi-zero-2w/wifi-tcp-server/` | see below |
+| Tests | `../tests/wifi-net/`, `../tests/wifi-tcp-server/` | see below |
 
 Nothing here is compiled into the other tests: `platforms/aarch32-rpi-zero-2w/tests/tests.cmake` builds these
 sources into the INTERFACE library `aarch32-rpi-zero-2w-wifi`, which only the two Wi-Fi tests

@@ -1,19 +1,69 @@
 # Migration status
 
-**Updated:** 2026-10-23 (the kernel's own critical section, two scheduling
-fixes, `smp` pushed) · **Phase:** commit-only migration executed from scratch
-(343 single-subject commits, local `smp` branches, nothing pushed) and verified
-with the full xPack test run. Five repositories: the kernel (`micro-os-plus-iii`)
-and four architecture ports (`cortexm`, `aarch32`, `aarch64`, `posix-arch`). The
-devices library (`micro-os-plus-iii-devices`) is dissolved into the ports and
-retired.
+**Updated:** 2026-11-19 (the build and test system aligned with upstream,
+steps 1–7) · Ten repositories: the kernel (`micro-os-plus-iii`), four
+architecture ports (`cortexm`, `aarch32`, `aarch64`, `posix-arch`) and five
+device packages (`devices-bcm283x`, `-rk3506`, `-rp2xxx`, `-stm32f4`,
+`-storage`).
 
-This file is the cold-start entry point. Read it, then
-`docs/specs/2026-09-20-micro-os-plus-iii-smp-unification-design.md` for the
-full design and the measurements behind it. The sections after *Today* are
-the migration log, dated where they were measured.
+This file is the cold-start entry point. Read *Today*, then
+[`tests/TESTS-DEVELOPER-GUIDE.md`](tests/TESTS-DEVELOPER-GUIDE.md) and
+[`tests/COMMANDS.md`](tests/COMMANDS.md) for how the tests are built and run
+now, and `docs/specs/2026-09-20-micro-os-plus-iii-smp-unification-design.md`
+for the SMP design and the measurements behind it. **The sections after
+*Today (2026-11-19)* are the migration log, dated where they were measured;
+the layouts, scripts and paths they name (`test_smpl/`, the ports' `test/`
+folders, `hw.sh`, flatfs, `micro-os-plus::devices`) are those of their date.**
 
 ---
+
+## Today (2026-11-19)
+
+The build and test system follows upstream µOS++ IIIe: xpm, CMake, CTest,
+every test in the kernel's `tests/`, no shell script in the chain. Done on
+the branch `align/smp-upstream` in every repository, in seven steps (the
+workspace's `WHY-SMP-BUILD-TEST-DIFFERS.md` §15 has the checklist, each step's
+check notes are in `step*-check/`):
+
+- **The ports and drivers are xPacks.** Each test configuration links its
+  port and device packages into its build folder (`xpm run link-deps`); the
+  drivers left the ports for five device packages.
+- **The board facts, board code and board-only tests** moved from the ports'
+  `test/boards/<board>/` and `test/<board>/` into
+  `tests/platforms/<platform>/` (`cmake/board.cmake`, `include/`, `src/`,
+  `tests/`). The ports' `test/` is empty, as upstream's Cortex-M port.
+- **One builder for every port**, `tests/board-tests/CMakeLists.txt`, in
+  place of the four ports' near-identical `test/CMakeLists.txt`.
+- **The portable tests** (`smp_test0` … `smp_test4`, `smp-mat-test`,
+  `smp-mat-sdcard-test`, `smp-num-test`, `smp-pipeline-test`,
+  `smp-pro-cons-test`, `sd_test`, `clock-test`) are one copy each in
+  `tests/sources/`, `os_main()` only; upstream's suites run on every board
+  from their `test::<suite>` libraries (the per-board `harness-suite`
+  wrappers are gone).
+- **Storage is µOS++ POSIX I/O and the xPack Chan FatFs**: the card as the
+  block device `/dev/sd`, mounted at `/sd/`. flatfs, FatFs R0.15a and the
+  `micro-os-plus::devices*` targets are deleted.
+- **CTest runs everything itself**: QEMU and the host programs directly
+  (`tests/cmake/uos-tests-run.cmake`; `test_smpl/run-qemu.sh` and
+  `run-host.sh` are deleted), the boards through OpenOCD
+  (`uos_tests_add_hwd`, `uos_tests_add_openocd`; the AArch reset as a CTest
+  fixture). The verdict is the `RESULT:` line.
+
+**Verified:** every configuration builds with the same commands as before
+each step (command snapshots of all 40 configurations); every QEMU and host
+test passes (the known flaky `aarch64-rpi4b-smp-shapes-test-qemu` aside);
+on hardware on 2026-11-19, through the boards' former `hw.sh`: Pi 4 B 22/22,
+Lyra 21/21, Pico 2 21/21, Pico 20/20, Pi-Zero RP2350B 12/12 (+ the two USB
+tests on 2026-11-18), Nucleo F411 4/4, WeAct F411 5/5, WeAct F412 5/5, the
+PSRAM board's `fp-switch`.
+
+**Open:** the hardware proof of the OpenOCD route (`-hwd`) on every board;
+then the removal of the boards' `hw.sh`, `test_smpl/run-hw.sh`,
+`test_smpl/no-power-cycle/` and the `-hwsh` twins kept for comparison. The
+Zero 2 W and Pi 3 B were last run on hardware before the board code moved
+(2026-11-18). Known intermittent: `usb_test` occasionally loses the debug link
+at USB start-up on the Zero 2 W (likely the supply).
+
 
 ## Today (2026-10-23)
 
@@ -450,7 +500,7 @@ that failed first where one could be written.
 - **One test framework.** Everything is registered and run through the xPack
   harness in `micro-os-plus-iii-smp.git/tests/`: 22 platforms, 70
   configurations (35 debug + 35 release). How to use it is
-  [`tests/STEPS.md`](tests/STEPS.md); every test, what it does, its scheduling
+  [`history/STEPS.md`](history/STEPS.md); every test, what it does, its scheduling
   mode and each board's probe is [`tests/TESTS-CATALOG.md`](tests/TESTS-CATALOG.md).
 - **Boards and applications.** aarch32: `rpi-zero-2w` 15, `rpi3b` 15,
   `luckfox-lyra` 19. aarch64: `rpi-zero-2w` 15, `rpi3b` 15. cortexm:
@@ -526,7 +576,7 @@ Luckfox Lyra B (RK3506, 3× Cortex-A7): 19 targets build, and both ports still
 pass their QEMU suites (11/1/0 each) after the restructure it required. What
 that second board changed, and the seven portability defects it exposed in
 shared code, are written up in
-[`aarch32-second-board.md`](aarch32-second-board.md).
+[`history/aarch32-second-board.md`](history/aarch32-second-board.md).
 
 **The Lyra is a hardware-only board**, decided and closed. QEMU models none of
 the RK3506's own blocks, so an emulated Lyra would be a generic Cortex-A7
@@ -561,7 +611,7 @@ up in [`cortexm-port.md`](cortexm-port.md).
 ├── micro-os-plus-iii-smp/        kernel + shared build rules + test runners
 │   ├── src/ include/             the kernel, upstream path-for-path
 │   ├── port/smp-common/          os-decls.h, shared by both ARM ports
-│   ├── test_smpl/                the three runners -- see test-smpl.md
+│   ├── test_smpl/                the three runners -- see history/test-smpl.md
 │   │   ├── run-qemu.sh           the shared QEMU suite runner
 │   │   ├── run-host.sh           the same, for the POSIX host
 │   │   └── run-hw.sh             the shared hardware session runner
@@ -609,7 +659,7 @@ up in [`cortexm-port.md`](cortexm-port.md).
 Outside `src/` and `include/` — which are the ISA and nothing else — an
 architecture project is all `test/`: the boards, their tests and their build
 trees. How that is laid out and how to run it is
-[`tests-in-aarch32-aarch64.md`](tests-in-aarch32-aarch64.md).
+[`history/tests-in-aarch32-aarch64.md`](history/tests-in-aarch32-aarch64.md).
 ```
 
 | | |
@@ -884,7 +934,7 @@ architecture-specific ports (not target-specific), six repositories,
 architecture projects independent and *outside* the main repo, devices in
 their own repo, `cortexm` and `posix-arch` both to become SMP.
 
-## Next step
+## Next step (as it stood in 2026-10)
 
 **Step 2 is done.** *Gate:* all 24 targets build **(met, both ports)**; QEMU
 suites pass **(met, 11/1/0 both ports)**; hardware tests pass on the Pi
@@ -1068,7 +1118,7 @@ wrong, not the idea.
   the klock owner still `0xffffffff` is this.
 - **A USB gadget thread on the RP2350 must be pinned at construction**
   (`th_cpu_affinity`), not by `cpu_affinity()` afterwards; see
-  `cortexm/test/boards/pico2/usb/README-tinyusb.md`. Late pinning is a race:
+  `tests/platforms/cortexm-pico2/usb/README-tinyusb.md`. Late pinning is a race:
   it passes, then a later run fails to enumerate.
 - **On the Lyra, semihosting during USB traffic loses the debug link.** Each
   trap halts the core; the USB tests are built `UOS_CONSOLE_UART_ONLY` and
@@ -1129,10 +1179,12 @@ wrong, not the idea.
   two separate binaries. `usb_test` on AArch32 reproduced a defect that had
   already been fixed, purely because only the AArch64 target had been rebuilt;
   the symptom was indistinguishable from the original bug.
-- **A hardware run is one test per power cycle.** It is `load_image` into RAM
-  over the previous test's leftovers, and the Pi has no SRST — the Cortex-A53
-  debug target has no reset method a script can drive. `run-hw.sh` refuses a
-  suite for this reason.
+- **An AArch hardware run needs a reset first.** It is `load_image` into RAM
+  over the previous test's leftovers, and neither the Pi nor the Lyra has an
+  SRST the probe can drive. So each `-hwd` test has a reset fixture
+  (`<test>-hwd-reset`: the Pi's PM watchdog, the RK3506 global reset) in its
+  own OpenOCD session; with it the tests run back to back. If the reset
+  session cannot reach the board, power-cycle it.
 - **A hardware budget is not the test's own duration.** It is dominated by
   semihosting traps, which scale with how much a test prints. `smp_test4`
   reaches its verdict at t=9597 ms of target time and still needs more than
@@ -1140,8 +1192,7 @@ wrong, not the idea.
 - **`Invalid ACK (0) in DAP response` is not a firmware fault.** The debug link
   gave up; once it is gone nothing services the semihosting traps, so every
   core halts inside one and it reads like a hang. Drop the JTAG clock with
-  `UOS_HW_ADAPTER_KHZ=1000` and check the supply. The runner reports this as
-  DEBUG LINK LOST.
+  `UOS_HW_ADAPTER_KHZ=1000` and check the supply.
 - **QEMU suites must run one at a time.** Running two four-core suites
   concurrently, or alongside a build, starves a vCPU: `smp_test2` stalled with
   three workers finished and the fourth frozen mid-loop. On an idle host the

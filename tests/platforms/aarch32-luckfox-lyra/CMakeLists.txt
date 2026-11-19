@@ -2,13 +2,13 @@
 # Test executables — µOS++ III AArch32 on the Luckfox Lyra B (RK3506).
 #
 # The Lyra is HARDWARE ONLY: its board.cmake sets no UOS_BOARD_LINKER_QEMU, so
-# the port's builder emits one image per test, `<app>-hwd`, and there is no
+# the tests' builder emits one image per test, `<app>-hwd`, and there is no
 # emulated suite. This platform reuses that builder, so every test the port has
 # appears here, and registers each as `<platform>-<app>-hwd`.
 #
-# hwd tests are NOT run by a plain `ctest`: they need the board, one test per
-# power cycle. They carry the `hwd` label; run the whole emulated set with
-# `ctest -LE hwd`, or one test explicitly by name.
+# hwd tests need the board: they carry the `hwd` label, which the
+# configuration's `test` action skips (`ctest -LE "hwd|hwsh"`), and run one at
+# a time (RUN_SERIAL); a reset fixture precedes each, so no power cycle.
 # -----------------------------------------------------------------------------
 
 message (VERBOSE "Processing 'tests/platforms/${PLATFORM_NAME}'...")
@@ -17,13 +17,13 @@ message (VERBOSE "Processing 'tests/platforms/${PLATFORM_NAME}'...")
 include ("cmake/platform-library.cmake")
 
 # The board facts and micro-os-plus::board come from cmake/platform-library.cmake
-# (cmake/board.cmake); the port's builder below reads them.
+# (cmake/board.cmake); the tests' builder below reads them.
 
 # -----------------------------------------------------------------------------
-# Build the port's tests by reusing the port's builder. The binary dir ends in
-# `test`, which is what the board's hw.sh expects ($BUILD/test/<app>-hwd).
+# Build the board's tests with the tests' builder (board-tests/); the images
+# land in port-tests/test/.
 # The board tests, built by the tests' own builder (board-tests/) from the
-# board's test folder (still in the port until the tests move into tests/).
+# board's test folder (this platform's tests/).
 # The portable tests this board runs (tests/sources/).
 set (UOS_TESTS_SOURCES smp_test0 smp_test1 smp_test2 smp_test3 smp_test4
      smp-num-test smp-pipeline-test smp-pro-cons-test smp-mat-test sd_test

@@ -6,7 +6,7 @@
 # host threads -- so its builder emits one image per test, `<app>-host`, and
 # CTest runs each one itself (tests/cmake/uos-tests-run.cmake).
 #
-# As on the AArch32 platforms, the tests are not re-listed: the port's builder
+# As on the AArch32 platforms, the tests are not re-listed: the tests' builder
 # is add_subdirectory()'d and the targets it produced are registered, one CTest
 # case per test.
 # -----------------------------------------------------------------------------
@@ -18,12 +18,12 @@ include ("cmake/platform-library.cmake")
 include ("${CMAKE_SOURCE_DIR}/cmake/uos-tests-run.cmake")
 
 # The board facts (BOARD, UOS_BOARD_*) and micro-os-plus::board are set in
-# cmake/platform-library.cmake, above; the port's builder reads them.
+# cmake/platform-library.cmake, above; the tests' builder reads them.
 
 # -----------------------------------------------------------------------------
-# Build every port test by reusing the port's builder (<app>-host).
+# Build every test with the tests' builder (board-tests/; <app>-host).
 # The board tests, built by the tests' own builder (board-tests/) from the
-# board's test folder (still in the port until the tests move into tests/).
+# board's test folder (this platform's tests/).
 # The portable tests this board runs (tests/sources/).
 set (UOS_TESTS_SOURCES smp_test0 smp_test1 smp_test2 smp_test3 smp_test4
      smp-num-test smp-pipeline-test smp-pro-cons-test smp-mat-test

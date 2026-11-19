@@ -1,13 +1,15 @@
 # The µOS++ IIIe Tests / xPack System
 
-> **Current layout.** The SMP development and test framework is unified in
-> `micro-os-plus/micro-os-plus-iii` on branch `smp`, alongside sibling
-> architecture repositories `micro-os-plus-iii-{posix-arch,cortexm,aarch32,aarch64}`.
-> The former `micro-os-plus-iii-devices` is dissolved into the ports
-> (`drivers/`, `soc/<chip>/`) since 2026-10-06. For the step-by-step guide see
-> [`STEPS.md`](STEPS.md); for every test, board, and probe see
-> [`TESTS-CATALOG.md`](TESTS-CATALOG.md); for how the `smp` branches were built
-> see [`xpack-dev-smp.md`](../smp-integration/xpack-dev-smp.md) Parts II and III.
+> **Current layout (2026-11).** Every test is in the kernel's `tests/`; the
+> architecture ports `micro-os-plus-iii-{posix-arch,cortexm,aarch32,aarch64}`
+> and the device packages `micro-os-plus-iii-devices-{bcm283x,rk3506,rp2xxx,stm32f4,storage}`
+> are xPack dependencies, linked into each build folder (`xpm run link-deps`).
+> This document describes upstream's framework, which the SMP fork follows;
+> what the fork adds (the board platforms, the tests' builder
+> `tests/board-tests/`, the hardware runs by CTest through OpenOCD) is in
+> [`TESTS-DEVELOPER-GUIDE.md`](TESTS-DEVELOPER-GUIDE.md); every test, board
+> and probe is in [`TESTS-CATALOG.md`](TESTS-CATALOG.md); the commands are in
+> [`COMMANDS.md`](COMMANDS.md).
 
 > A structured, reproducible and extensible test harness for
 > `@micro-os-plus/micro-os-plus-iii`, built on top of **xpm**, **xPacks**,
@@ -112,20 +114,26 @@ micro-os-plus-iii/                 # unified repo (branch smp)
     ├── package.json               # the xPack "tests" package: the matrix
     ├── CMakeLists.txt             # top-level test build entry point
     ├── cmake/
-    │   ├── tests-main.cmake       # common build flow (generated)
+    │   ├── tests-main.cmake       # common build flow (generated, then edited)
     │   ├── common-options.cmake   # warnings, C11/C++20, common flags
-    │   └── global-definitions.cmake # ENABLE_*_TEST switches
+    │   ├── global-definitions.cmake # ENABLE_*_TEST switches
+    │   ├── uos-tests-run.cmake    # how CTest runs QEMU, host and board tests
+    │   ├── uos-hwd.tcl, uos-hwd-reset.cmake # the AArch board runs
+    │   └── uos-aarch-board.cmake, uos-cortexm-board.cmake # micro-os-plus::board
+    ├── board-tests/               # the board tests' builder, for every port
     ├── sources/                   # platform-agnostic test sources
     │   ├── rtos-apis/             #   test::rtos-apis
     │   ├── mutex-stress/          #   test::mutex-stress
     │   ├── cmsis-os-validator/    #   test::cmsis-os-validator
     │   ├── fp-switch/             #   test::fp-switch
+    │   ├── smp_test0 … smp_test4, smp-*-test, sd_test, clock-test
+    │   │                          #   the portable SMP tests (os_main() only)
     │   ├── instrumentation/       #   (instrumentation support)
     │   └── blinky/                #   (simple demo/led test)
     ├── platforms/                 # one folder per supported platform (22)
     │   ├── native/                #   host process (gcc / clang)
-    │   ├── aarch32-*/ aarch64-*/  #   the ARM ports' boards (QEMU + hwd)
-    │   ├── cortexm-*/             #   the Cortex-M port's boards (hwd; some qemu)
+    │   ├── aarch32-*/ aarch64-*/  #   the AArch boards: facts, code, own tests (QEMU + hwd)
+    │   ├── cortexm-*/             #   the Cortex-M boards: facts, code, own tests (hwd; some qemu)
     │   ├── pico2-1cpu/ 2xcortex-m33/ # generic M33 core in QEMU (1 and 2 CPUs)
     │   ├── qemu-cortex-m0/        #   QEMU mps2-an385 (M3 machine, M0 code)
     │   ├── qemu-cortex-m3/        #   QEMU mps2-an385
@@ -136,6 +144,7 @@ micro-os-plus-iii/                 # unified repo (branch smp)
     │   ├── nucleo-f767zi/         #   STM32F767, Cortex-M7F, ST-Link
     │   └── nucleo-h743zi/         #   STM32H743, Cortex-M7F, ST-Link
     ├── device-qemu-cortexm/       # device package for the QEMU boards
+    ├── third_party/lwip/          # lwIP 2.2.1, for the network tests
     ├── xpacks/                    # installed/linked dependencies (tools)
     ├── build/                     # per-configuration build trees (ignored)
     └── deprecated/                # legacy tests, kept for history
@@ -153,8 +162,11 @@ tests/platforms/<platform>/
 ├── cmake/
 │   ├── definitions.cmake        # PLATFORM / DEVICE / linker-script names
 │   ├── dependencies-folders.cmake # which subdirs to add_subdirectory()
+│   ├── board.cmake              # (board platforms) the board facts
 │   └── platform-library.cmake   # the micro-os-plus::platform interface lib
-└── device/ or stm32*cubemx/     # device support (STM32 variants)
+├── device/ or stm32*cubemx/     # device support (STM32 variants)
+├── src/                         # (board platforms) the board code
+└── tests/                       # (board platforms) the board-only tests
 ```
 
 ---
@@ -399,18 +411,17 @@ from build-helper templates). In order it:
 include("cmake/common-options.cmake")                    # micro-os-plus::common-options
 include("platforms/${PLATFORM_NAME}/cmake/definitions.cmake")
 include("platforms/${PLATFORM_NAME}/cmake/dependencies-folders.cmake")
+# The port and device packages listed there are linked into
+# build/<config>/xpacks/@micro-os-plus/ (xpm run link-deps); a missing one
+# stops the configure with the command to run.
 xpack_add_dependencies_subdirectories("${xpack_dependencies_folders}" "xpacks-bin")
-# Select the library under test from PLATFORM_NAME: the aarch32/aarch64/native/
-# cortexm/posix-arch port, or (fallback) the kernel one level above.
-if(PLATFORM_NAME MATCHES "^aarch32")    # ... aarch64, native, cortexm|qemu-cortex, pico2|2xcortex
-  add_subdirectory("${UOS_AARCH32_DIR}" "port-bin")
-else()
-  add_subdirectory(".." "top-bin")                        # the plain kernel
-endif()
+add_subdirectory(".." "top-bin")                          # the kernel
 add_subdirectory("platforms/${PLATFORM_NAME}" "platform-bin")  # executables + tests
 ```
 
-(`tests/cmake/tests-main.cmake:41-119`.)
+The port is a dependency like any other (upstream's Cortex-M port is used
+the same way); the board platforms then add the tests' builder,
+`tests/board-tests/`.
 
 ### 7.2 `common-options` — the shared compile/link interface
 
@@ -528,8 +539,9 @@ micro-os-plus::platform         # platform glue
 
 then registers it with CTest:
 
-- **native** (`tests/platforms/native/CMakeLists.txt:75`):
-  `add_test(NAME "rtos-apis-test" COMMAND rtos-apis-test)`
+- **native** (upstream's; in this fork the `native` platform is a board
+  platform and builds its suites through the tests' builder, as
+  `native-<suite>-host`): `add_test(NAME "rtos-apis-test" COMMAND rtos-apis-test)`
 - **QEMU** (`tests/platforms/qemu-cortex-m7f/CMakeLists.txt:37-45`):
   ```cmake
   add_test(NAME "${PLATFORM_NAME}-rtos-apis-test" COMMAND
@@ -546,6 +558,12 @@ then registers it with CTest:
     -c "program rtos-apis-test.elf verify" -c "arm semihosting enable"
     -c "arm semihosting_cmdline rtos-apis-test" -c "reset")
   ```
+
+The board platforms of this fork (`aarch32-*`, `aarch64-*`, `cortexm-*`,
+`native`) register theirs with `uos_tests_add_qemu`, `uos_tests_add_host`,
+`uos_tests_add_hwd` and `uos_tests_add_openocd`
+(`tests/cmake/uos-tests-run.cmake`), the same `add_test` underneath; see
+[`TESTS-DEVELOPER-GUIDE.md`](TESTS-DEVELOPER-GUIDE.md) §5–§7.
 
 This is the single most important design point: **CTest does not care whether
 the "program under test" is a host process, an emulator or a debug probe.** It
@@ -1583,6 +1601,8 @@ Rules:
 | Library under test | `CMakeLists.txt` (`micro-os-plus::iii`) |
 | Test sources | `tests/sources/*/CMakeLists.txt` |
 | Platform glue | `tests/platforms/*/cmake/*.cmake`, `tests/platforms/*/CMakeLists.txt` |
+| Board tests' builder | `tests/board-tests/CMakeLists.txt` |
+| How CTest runs a test | `tests/cmake/uos-tests-run.cmake`, `uos-hwd.tcl`, `uos-hwd-reset.cmake` |
 | QEMU device package | `tests/device-qemu-cortexm/CMakeLists.txt` |
 | CI | `.github/workflows/ci.yml` |
 | Shared CMake functions & toolchains | `@micro-os-plus/build-helper` xPack |

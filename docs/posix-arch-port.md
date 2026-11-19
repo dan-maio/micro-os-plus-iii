@@ -48,8 +48,8 @@ interleaving to appear will appear.
 ## 1. What it is
 
 ```
-micro-os-plus-iii-posix-arch/
-├── CMakeLists.txt                          board discovery, the port target
+micro-os-plus-iii-posix-arch/                the port
+├── CMakeLists.txt                          the port target
 ├── include/
 │   ├── cmsis-plus/rtos/port/
 │   │   ├── os-c-decls.h        93 lines    types; the thread context
@@ -65,44 +65,45 @@ micro-os-plus-iii-posix-arch/
 │   ├── free-store.cpp         133 lines    the application heap
 │   ├── board-contract.cpp      43 lines    no code; `#error` if a board lies
 │   └── diag/trace-posix.cpp    80 lines    carried from upstream v1.0.1
-└── test/
-    ├── CMakeLists.txt                      one loop over test/<board>/*/
-    ├── run.sh                              dispatcher; BOARD picks the board
-    ├── boards/native/
-    │   ├── board.cmake                     every fact about this board
-    │   ├── include/{uart,led,timer_arm,smp}.hpp
-    │   ├── src/{heap,smp}.cpp
-    │   └── run.sh
-    └── native/                             this board's 15 applications
-        ├── include/{test-console,test-smp-boot}.hpp
-        ├── src/test-smp-boot.cpp           shared support, one copy
-        ├── tests.cmake                     the knobs a listing cannot express
-        ├── smp_test0 … smp_test4
-        ├── smp-mat-test  smp-num-test  smp-pipeline-test  smp-pro-cons-test
-        ├── flatfs-test  mutex-ceiling-test regression tests for two fixes
-        ├── mutex-stress  rtos-apis         the OS_NCPU=1 legs
-        └── smp-mutex-stress  smp-rtos-apis the same two upstream tests at OS_NCPU
+├── drivers/include/sd.hpp, soc/native/     the SD card as a host file
+└── test/trace-stderr, test/trace-stdout    upstream's two trace tests
+
+micro-os-plus-iii/tests/platforms/native/   the board, in the kernel's tests
+├── CMakeLists.txt                          the tests this board runs
+├── cmake/platform-library.cmake            the board facts, micro-os-plus::board
+├── include/{uart,led,timer_arm,smp,reference-clock}.hpp, cmsis-plus/platform.h
+├── src/{heap,smp,platform-support}.cpp
+└── tests/                                  the board-only tests
+    ├── include/{test-console,test-smp-boot}.hpp
+    ├── src/test-smp-boot.cpp               shared support, one copy
+    ├── tests.cmake                         the knobs a listing cannot express
+    ├── mutex-ceiling-test                  regression test for a fix
+    └── smp-mutex-stress  smp-rtos-apis     upstream's two tests at OS_NCPU
 ```
 
-Roughly 2,300 lines of port and board code. One board. Fifteen test
-applications, plus the harness's `cmsis-os-validator`, which the xPack
-harness's `native` platform builds on its own.
+The tests themselves are the kernel's, as upstream keeps them: the board
+runs the portable tests of `tests/sources/` (`smp_test0` … `smp_test4`,
+`smp-mat-test`, `smp-num-test`, `smp-pipeline-test`, `smp-pro-cons-test`,
+`clock-test`), upstream's suites `mutex-stress` and `rtos-apis` at
+`OS_NCPU=1`, the three board tests above, and `cmsis-os-validator`, which the
+platform builds on its own: 16 CTest cases, all `native-<test>-host`.
+
+Roughly 2,300 lines of port and board code. One board.
 
 | board | "silicon" | CPUs | tests | verdict |
 |---|---|---|---|---|
-| `native` | the host kernel | 4, `-DNCPU=` | 15 (+ `cmsis-os-validator` in the harness) | 16 passed / 0 skipped / 0 failed in the harness (`native-cmake-{gcc,sys}-{debug,release}`) |
+| `native` | the host kernel | 4, `-DNCPU=` | 16 | 16 passed / 0 skipped / 0 failed (`native-cmake-sys-{debug,release}`, 2026-11-18) |
 
 The measurements further down ("11 passed", the sanitizer runs) were taken
 with the first eleven applications, before `smp-mutex-stress` and
 `smp-rtos-apis` were added; they are kept as they were measured.
 
-The port depends on the kernel (`micro-os-plus-iii`, branch `smp`; formerly
-`micro-os-plus-iii-smp`), holds no copy of it, and the kernel does not know the
-port exists. The device layer that used to be the separate
-`micro-os-plus-iii-devices` repository is now part of the port: the neutral
-drivers are in `drivers/` and the host-file SD back-end is in `soc/native/`
-(dissolved on 2026-10-06, xpack-dev-smp.md §14). That one-way dependency is why the kernel tree stays
-merge-clean against upstream.
+The port depends on the kernel (`micro-os-plus-iii`), holds no copy of it,
+and the kernel's sources do not know the port exists; only the kernel's
+`tests/` name it, as an xPack dependency linked into the build folder
+(`xpm run link-deps`). The host-file SD back-end is in the port's
+`soc/native/`; the card as a posix-io block device, under Chan FatFs, comes
+from `micro-os-plus-iii-devices-storage`.
 
 ### Where it came from
 
@@ -1565,7 +1566,7 @@ signal and a core file is still produced.
 ### Turning that into a line number
 
 ```sh
-addr2line -f -C -i -e test/build/test/smp_test2-host 0x1a8c6 0x172dd
+addr2line -f -C -i -e $B/platform-bin/port-tests/smp_test2-host 0x1a8c6 0x172dd
 ```
 
 `-i` matters: almost everything is inlined at `-O2`, and without it you get the
@@ -1579,25 +1580,26 @@ resolved nothing. It costs one `dladdr()` at startup.
 
 ## 13. The board
 
-`test/boards/native/` is thin, and honestly so. On the BCM2837 the equivalent
-files own the spin table, the mailbox doorbell and the cache maintenance around
-them, because releasing a core is a silicon act. Here the silicon *is* the host
-kernel, so the act belongs to the port (`host_cpu`) and the board only names
-it — the same division of labour, applied honestly rather than copied.
+`tests/platforms/native/` is thin, and honestly so. On the BCM2837 the
+equivalent files own the spin table, the mailbox doorbell and the cache
+maintenance around them, because releasing a core is a silicon act. Here the
+silicon *is* the host kernel, so the act belongs to the port (`host_cpu`) and
+the board only names it — the same division of labour, applied honestly
+rather than copied.
 
-### `board.cmake`
+### The board facts
+
+In `cmake/platform-library.cmake`:
 
 ```cmake
-set (UOS_BOARD_SRC_DIR "${CMAKE_CURRENT_LIST_DIR}")
-set (UOS_BOARD_FLAGS   "")                 # no -mcpu: the host targets the host
-
+set (BOARD "native" CACHE STRING "The port's test folder for this board")
 set (NCPU 4 CACHE STRING "Host threads acting as CPUs")
 set (UOS_BOARD_NCPU ${NCPU})
-
-set (UOS_BOARD_CAPS    smp sdcard led)     # NOT usb-device
-set (UOS_BOARD_LIBS    "")
-set (UOS_BOARD_DEVICES micro-os-plus::devices-hostfile)
-set (UOS_BOARD_DEFINES "PORT_GREETING=\"µOS++ POSIX synthetic host (host threads as CPUs)\"")
+set (UOS_BOARD_CAPS smp sdcard led)                  # NOT usb-device
+set (UOS_BOARD_SD_POSIX micro-os-plus::devices-hostfile-sd
+                        micro-os-plus::devices-storage-posix)
+set (UOS_BOARD_SRC_DIR "${CMAKE_SOURCE_DIR}/platforms/native")
+# micro-os-plus::board: include/, src/*.cpp (not *support.cpp), PORT_GREETING
 ```
 
 Two board facts the silicon boards have and this one has not, and the absence
@@ -1605,20 +1607,19 @@ Two board facts the silicon boards have and this one has not, and the absence
 
 - `UOS_BOARD_LINKER_HW` — the host toolchain links with its own script.
 - `UOS_BOARD_LINKER_QEMU` — the host **is** the machine; there is nothing to
-  emulate. A test therefore builds **one** image, the way the hardware-only
-  Luckfox Lyra does, for the mirror-image reason.
+  emulate. A test therefore builds **one** image (`-host`), the way the
+  hardware-only Luckfox Lyra does, for the mirror-image reason.
 
 `NCPU` is the one board fact on this machine that can honestly be changed from
 the command line, because the "silicon" is a thread count.
 
 `sdcard` is claimed because the host-file back-end *is* a block device the SD
 tests can reach — not because the machine has a slot. `usb-device` is not
-claimed: nothing here can be a USB gadget, and claiming it would make
-`usb_test` appear and fail.
+claimed: nothing here can be a USB gadget.
 
-### The four headers
+### The headers
 
-They exist so the carried tests compile **unchanged**. A test names
+They exist so the portable tests compile **unchanged**. A test names
 `uart::uart1` and must not have to know whether that is a PL011 or a pipe.
 
 | header | what it is here | note |
@@ -1627,90 +1628,63 @@ They exist so the carried tests compile **unchanged**. A test names
 | `led.hpp` | `[LED on]` / `[LED off]` | printed **only on change**, so a 1 Hz blink is two lines a second |
 | `timer_arm.hpp` | `CLOCK_MONOTONIC` at 1 GHz | the stand-in for `CNTPCT`; `init()`/`start_1ms()` are no-ops because the port owns the tick |
 | `smp.hpp` | `start_secondary_cores()`, `g_core_stage[]` | same names, same stage numbers as the ARM boards |
+| `reference-clock.h` | `CLOCK_MONOTONIC` | `clock-test`'s independent clock |
 
 `led.hpp` prints rather than pretending, and the comment says why: this project
 has already been bitten once by a blinking test driving GPIO16 on a board whose
-LED is GPIO29 — nothing lit, and nobody noticed. Output a runner can read
+LED is GPIO29 — nothing lit, and nobody noticed. Output a test run can read
 cannot fail that way.
 
-`uart.hpp` also supplies `PORT_BANNER_ISA`, so a carried test's banner reads
+`uart.hpp` also supplies `PORT_BANNER_ISA`, so a test's banner reads
 `(x86-64)` instead of naming an ARM part.
 
 ### The SD card is a file
 
-Two of the carried tests reach a block device.
-`drivers/include/sd.hpp` (formerly in `micro-os-plus-iii-devices`) dispatches on a define and its
-comment states the contract: a new back-end arrives as a **new file** and a
-**new target**, defining `sd::SdCard` with the same eight methods and the same
-failure vocabulary.
+Two of the tests reach the card. On every board a storage test
+(`UOS_TESTS_STORAGE`: here `smp-num-test` and `smp-pipeline-test`) gets the
+card as the posix-io block device `/dev/sd`, Chan FatFs on it, mounted at
+`/sd/` before `os_main()` (`tests/board-tests/portable-test-storage.cpp`).
+What differs per board is the driver set behind `/dev/sd`
+(`UOS_BOARD_SD_POSIX`); here it is the port's host-file back-end:
 
 ```
-  (default)            Arasan SDHCI @ 0x3F300000   (BCM2837)  -- sd.cpp
-  SD_BACKEND_DWMMC     Synopsys DW-MMC @ 0xFF480000 (RK3506)  -- soc/rk3506/
-  SD_BACKEND_HOSTFILE  an image file on the host    (POSIX)   -- soc/native/
+  (default)            Arasan SDHCI @ 0x3F300000   (BCM2837)  -- devices-bcm283x
+  SD_BACKEND_DWMMC     Synopsys DW-MMC @ 0xFF480000 (RK3506)  -- devices-rk3506
+  SD_BACKEND_HOSTFILE  an image file on the host    (POSIX)   -- this port's soc/native/
 ```
 
 `soc/native/src/sd_hostfile.cpp` is `pread`/`pwrite` on a file: 512-byte
-sectors, a sector count read once at `init()`, range-checked transfers. Two
-environment variables:
+sectors, a sector count read once at `init()`, range-checked transfers. The
+file is `UOS_SD_IMAGE` (`UOS_SD_SECTORS` sizes a new one). CTest gives each
+storage test a fresh image with a boot card's layout (MBR + FAT32,
+`tests/board-tests/sd-image.py`) through a fixture, and deletes it after the
+run.
 
-| variable | default | |
-|---|---|---|
-| `UOS_SD_IMAGE` | `disk.img` | the backing file; created if missing |
-| `UOS_SD_SECTORS` | `65536` | 32 MiB; an existing image grows, never shrinks |
+The BCM2837 and RK3506 back-ends are unchanged, which is the whole point:
+`smp-num-test` and `smp-pipeline-test` are the same `tests/sources/` code on
+the host and on every board.
 
-FatFs is deliberately **absent** from the `devices-hostfile` target. The two
-tests take their `!HW_BUILD` branch, which formats a flatfs volume;
-the FatFs branch mounts a board's real boot partition, which a host file is
-not. Linking `ff.c` anyway would be weight nothing exercises.
-
-The image is never deleted, so a run can be examined afterwards with any
-ordinary tool — a genuine advantage of this back-end over the two real ones,
-not a compromise.
-
-The BCM2837 and RK3506 back-ends are byte-for-byte unchanged, which is the
-whole point: `smp-num-test` and `smp-pipeline-test` run natively with **no edit
-to either test**.
-
-### The board's two sources
+### The board's sources
 
 - `src/heap.cpp` — the 32 MiB heap block and its two labels (§11).
 - `src/smp.cpp` — `g_core_stage[OS_NCPU]` and the one-line
   `start_secondary_cores()`.
+- `src/platform-support.cpp` — the start-up of the portable tests and suites:
+  the secondary CPUs, then `os_main()`.
 
 ---
 
 ## 14. The build
 
-### Layout and dependency resolution
+### Where things come from
 
-```cmake
-get_filename_component (_uos_siblings "${CMAKE_CURRENT_SOURCE_DIR}/.." ABSOLUTE)
-set (UOS_SMP_DIR "${_uos_siblings}/micro-os-plus-iii" CACHE PATH …)
-# else micro-os-plus-iii-smp, each also with a .git suffix
-```
-
-The drivers and the SD back-end are in the port itself (`drivers/`,
-`soc/native/`), so only the kernel is a sibling. Clone the two repositories
-side by side and it works; override the kernel with `-DUOS_SMP_DIR=` to build
-against a working copy elsewhere. A missing dependency produces a
-`FATAL_ERROR` that tells you the clone command, not a stack of CMake noise.
-
-### Boards are discovered, not listed
-
-```cmake
-file (GLOB _board_decls CONFIGURE_DEPENDS "test/boards/*/board.cmake")
-```
-
-Every directory under `test/boards/` holding a `board.cmake` is a board, and
-that file is the only place its facts are written. Nothing in the port's
-`CMakeLists.txt` knows any board's name; `-DBOARD=` with an unknown name lists
-the ones that exist.
-
-The port then *requires* four variables (`UOS_BOARD_SRC_DIR`, `UOS_BOARD_NCPU`,
-`UOS_BOARD_CAPS`, `UOS_BOARD_DEFINES`) and checks that a board declaring the
-`sdcard` or `usb-device` capability also names a `UOS_BOARD_DEVICES` to provide
-it. `UOS_BOARD_LINKER_HW` is deliberately **not** required.
+The port is an xPack: `xpm link` once in its folder, then
+`xpm run link-deps --config native-cmake-<toolchain>-<debug|release>` in the
+kernel's `tests/` links it into the build folder
+(`build/<config>/xpacks/@micro-os-plus/micro-os-plus-iii-posix-arch`), with
+`micro-os-plus-iii-devices-storage`. The platform names both in
+`cmake/dependencies-folders.cmake`; one that is not linked stops the configure
+with the command to run.
 
 ### The port target
 
@@ -1718,92 +1692,95 @@ it. `UOS_BOARD_LINKER_HW` is deliberately **not** required.
 add_library (micro-os-plus-iii-posix-arch-interface INTERFACE)
 target_sources (… INTERFACE
       src/rtos/os-core.cpp src/host_cpu.cpp src/exception_handler.cpp
-      src/free-store.cpp   src/diag/trace-posix.cpp src/board-contract.cpp
-      ${_board_sources})
-target_compile_definitions (… INTERFACE _XOPEN_SOURCE=700 _GNU_SOURCE ${UOS_BOARD_DEFINES})
-target_link_libraries (… INTERFACE micro-os-plus::iii pthread rt ${UOS_BOARD_LIBS})
+      src/free-store.cpp   src/diag/trace-posix.cpp src/board-contract.cpp)
+target_compile_definitions (… INTERFACE _XOPEN_SOURCE=700 _GNU_SOURCE)
+target_link_libraries (… INTERFACE micro-os-plus::iii pthread rt)
 add_library (micro-os-plus::posix-arch ALIAS …)
 ```
 
 An INTERFACE library, so every application compiles its own copy of the port
 with its own `OS_NCPU` — which is what makes per-test CPU counts possible.
+The board (`micro-os-plus::board`) is the platform's.
 
-### The test loop
+### The tests' builder
 
-`test/CMakeLists.txt` is the same loop as the three cross-compiled projects,
-with one difference and it is a difference in the machine rather than in the
-method: **one variant, `host`**, because a test *is* an executable.
+`tests/board-tests/CMakeLists.txt` is the same builder for every port, with one
+difference and it is a difference in the machine rather than in the method:
+**one variant, `host`**, because a test *is* an executable. The platform tells
+it what to build:
 
-It is deliberately **not** a `HW_BUILD`. That define means "use the board's real
-FAT32 boot partition"; the SD tests' other branch is flatfs over a plain image
-file, which is exactly what a host-file back-end is. Claiming `HW_BUILD` here
-would silently point the SD tests at a partition that does not exist.
+```cmake
+set (UOS_TESTS_PORT posix)
+set (UOS_TESTS_SOURCES  smp_test0 ... smp-pro-cons-test clock-test)
+set (UOS_TESTS_PORTABLE smp_test0 ... smp-pro-cons-test clock-test)
+set (UOS_TESTS_STORAGE  smp-num-test smp-pipeline-test)
+set (UOS_TESTS_SUITES   mutex-stress rtos-apis)
+set (UOS_TESTS_BOARD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/tests")
+add_subdirectory ("${CMAKE_SOURCE_DIR}/board-tests" "port-tests")
+```
 
-The same six per-test hooks as the other ports, with the same defaults and the
-same meanings, so a test can be carried between ports without its build rules
+The per-test hooks are the same as on the other ports, with the same defaults
+and meanings, so a test can move between ports without its build rules
 changing meaning:
 
 | hook | what it answers |
 |---|---|
 | `board_test_defines(app)` | extra `-D` for this test |
-| `board_test_sources(app)` | extra sources |
-| `board_test_includes(app)` | extra include directories |
+| `board_test_sources(app)`, `board_test_includes(app)` | extra sources, include folders |
+| `board_test_libs(app)` | extra libraries |
 | `board_test_linker(app)` | (no-op here — a host executable has no script) |
 | `board_test_options(app)` | compile options on the test's **own** sources |
 | `board_test_ncpu(app)` | how many CPUs **one** test runs on |
-| `BOARD_TEST_NEED_DEVICES` | link `UOS_BOARD_DEVICES` |
-| `BOARD_TEST_SELF_CONTAINED` | do **not** add `test/<board>/src/*.cpp` |
+| `board_test_sd_posix(app)` | the card's driver set of a storage test |
+| `BOARD_TEST_SELF_CONTAINED` | do **not** add the board's `tests/src/*.cpp` |
 | `BOARD_TEST_NO_KERNEL` | (unused here) |
 
-`test/native/tests.cmake` uses three of them:
+`tests/platforms/native/tests.cmake` runs upstream's two suites at one CPU,
+with their own start-up, and gives `rtos-apis` a bigger heap and
+`smp-mat-test` a bigger matrix:
 
 ```cmake
-set (BOARD_TEST_NEED_DEVICES smp-num-test smp-pipeline-test flatfs-test)
-
 function (board_test_ncpu _app _out)
-  if (_app STREQUAL "mutex-stress")
+  if (_app STREQUAL "mutex-stress" OR _app STREQUAL "rtos-apis")
     set (${_out} 1 PARENT_SCOPE)
   else ()
     set (${_out} "${UOS_BOARD_NCPU}" PARENT_SCOPE)
   endif ()
 endfunction ()
 
-set (BOARD_TEST_SELF_CONTAINED mutex-stress)
+set (BOARD_TEST_SELF_CONTAINED mutex-stress rtos-apis)
 ```
 
-`uos_add_app()` turns `NCPU` into defines:
-
-```cmake
-target_compile_definitions (${_name} PRIVATE OS_NCPU=${A_NCPU})
-if (A_NCPU GREATER 1)
-  target_compile_definitions (${_name} PRIVATE OS_USE_SMP_SCHEDULER=1)
-endif ()
-```
-
-so one build tree holds nine four-CPU tests and one single-CPU test, each with
-its own copy of the kernel and the port.
+The builder turns the CPU count into defines (`OS_NCPU=<n>`, and
+`OS_USE_SMP_SCHEDULER=1` above one), so one build tree holds four-CPU tests
+and single-CPU tests, each with its own copy of the kernel and the port.
 
 ### Commands
 
 ```sh
-cd micro-os-plus-iii-posix-arch
-cmake -S . -B test/build -G Ninja -DBOARD=native -DCMAKE_BUILD_TYPE=Release
-cmake --build test/build -j8
+cd micro-os-plus-iii/tests
+xpm run test-native-cmake-sys        # debug and release, the system compiler
+# or one configuration:
+xpm run prepare --config native-cmake-sys-debug
+xpm run build   --config native-cmake-sys-debug
+xpm run test    --config native-cmake-sys-debug
 ```
 
-No toolchain file: the host compiler targets the host. `-DNCPU=<n>` changes the
-board's CPU count.
+No toolchain file for `-sys`: the host compiler targets the host. The
+`native-cmake-gccNN-*` and `-clangNN-*` configurations use the pinned xPack
+compilers. `-D NCPU=<n>` on `prepare` changes the board's CPU count.
 
 ---
 
 ## 15. The tests
 
-Fifteen applications. Nine are the SMP object tests carried from the ARM boards
-— **not rewritten, not adapted**: the same `main.cpp`, compiled against the
-same `uart.hpp`/`led.hpp`/`smp.hpp`/`timer_arm.hpp` API. Two are regression
-tests added for the 2026-09-26 fixes (`flatfs-test`, `mutex-ceiling-test`), and
-four are upstream's own: `mutex-stress` and `rtos-apis` at `OS_NCPU=1`, and
-`smp-mutex-stress` and `smp-rtos-apis` at `OS_NCPU` (§17).
+Sixteen cases. Ten are the portable tests of `tests/sources/` that every
+board runs — **the same `main.cpp`** on the host and on silicon, compiled
+against the same `uart.hpp`/`led.hpp`/`smp.hpp`/`timer_arm.hpp` API. One is a
+regression test for a 2026-09-26 fix (`mutex-ceiling-test`), four are
+upstream's own: `mutex-stress` and `rtos-apis` at `OS_NCPU=1`, and
+`smp-mutex-stress` and `smp-rtos-apis` at `OS_NCPU` (§17), and the last is
+the CMSIS-OS validator.
 
 | test | CPUs | what it exercises | runtime |
 |---|---|---|---|
@@ -1814,9 +1791,8 @@ four are upstream's own: `mutex-stress` and `rtos-apis` at `OS_NCPU=1`, and
 | `smp_test4` | 4 | **no-affinity load balancing**: 8 workers, per-CPU tallies | ~10 s |
 | `smp-mat-test` | 4 | parallel block linear solver, N=120 B=20, vs. a classical solver | ~2 s |
 | `smp-pro-cons-test` | 4 | **every kernel object**: 12 threads, pool, queue, semaphores, mutex, condvar, event flags, timer, sysclock, yield/suspend/resume | ~5 s |
-| `smp-num-test` | 4 | UART + LED + **SD** + FPU; writes `num.txt` to a flatfs volume | ~60 s |
+| `smp-num-test` | 4 | UART + LED + **SD** + FPU; writes `num.txt` to the card (`/sd/`, FAT) | ~60 s |
 | `smp-pipeline-test` | 4 | 13 threads, shared queues, **SD persistence**, `yield()` stress | ~90 s |
-| `flatfs-test` | 4 | flatfs `append_file()` to a file created empty (the extent underflow, fixed 2026-09-26) | <1 s |
 | `mutex-ceiling-test` | 4 | a protect-ceiling `EINVAL` leaves the mutex unowned (fixed 2026-09-26) | <1 s |
 | `mutex-stress` | **1** | 10 threads on one mutex; fairness/uniformity statistics | ~15 s |
 | `rtos-apis` | **1** | upstream's API sweep: the C++ API, the C API, ISO threads, CMSIS-RTOS v1, the memory resources and posix-io | ~1 s |
@@ -1917,19 +1893,11 @@ must fall through to an idle blink. On the host there is no "without it" — a
 test that idled for ever would have to be killed by the runner and could report
 nothing — so the native copy calls it unconditionally, like the other eight.
 
-**`smp-num-test`** and **`smp-pipeline-test`** — the SD pair. They format a
-flatfs volume on `sd::SdCard`, write to it from several CPUs and read it back:
-
-```
-Initialising SD card via SDHCI @0x3F300000...
-  SD card ready: 65536 sectors (~32 MiB)
-  flatfs volume formatted.
-```
-
-(The "SDHCI @0x3F300000" is the carried test's own text; the back-end behind it
-is a file.) These two are the reason the device layer (then
-`micro-os-plus-iii-devices`, now the port's `soc/native/`) gained a third
-back-end, and they run with **no edit at all**.
+**`smp-num-test`** and **`smp-pipeline-test`** — the SD pair. They find the
+card mounted at `/sd/` (FAT on a fresh boot-card image), write to it from
+several CPUs through POSIX I/O and read it back. They are the reason the
+device layer gained a third back-end (the port's `soc/native/`), and they run
+with **no edit at all**.
 
 Their per-core distribution is lopsided — `Produced by Core: c0=3275 c1=0 c2=0
 c3=0` in the pipeline test — and that is honest rather than broken: those
@@ -1939,14 +1907,14 @@ shape.
 
 **`mutex-stress`**, **`rtos-apis`** — §17.
 
-### What is not carried
+### What is not run here
 
-Three tests that need real hardware and would test the host rather than the
-kernel:
+Three portable or board tests that need real hardware and would test the host
+rather than the kernel:
 
 | test | why not |
 |---|---|
-| `sd_test` | wants a seeded FAT32 **boot partition**, not a formattable image |
+| `sd_test` | wants a card seeded from outside, as the boards' boot card is |
 | `smp-mat-sdcard-test` | the same card, as a 4 GiB working set |
 | `usb_test` | USB device mode; the board does not claim `usb-device` |
 
@@ -1955,52 +1923,23 @@ kernel:
 ## 16. Running them
 
 ```sh
-BOARD=native test/run.sh              # the whole suite
-BOARD=native test/run.sh smp_test2    # one test, echoed to this terminal too
+cd micro-os-plus-iii/tests/build/native-cmake-sys-debug
+ctest                                          # the whole suite
+ctest -R '^native-smp_test2-host$' -V          # one test, its output shown
+ctest -N                                       # the names
 ```
 
-`test/run.sh` is a dispatcher and nothing else — the sibling of the ARM ports'
-`test/qemu.sh`. It contains no board names: it hands off to
-`test/boards/<id>/run.sh`, so adding a board adds a directory. An unknown name
-gets the available boards listed rather than a wrong branch taken.
-
-The board's runner is three lines of facts over the shared runner:
-
-```sh
-UOS_RUN_ONLY="${1:-}" exec "$SMP_DIR/test_smpl/run-host.sh" "$BUILD/test"
-```
-
-`test_smpl/run-host.sh` is `run-qemu.sh` with the emulator taken out: the same
-timeout table, the same log directory, the same PASS / SKIP / FAIL / TIMEOUT /
-NO-RESULT verdicts read from the `RESULT:` line each test prints, the same
-summary line and the same exit status. It gives each SD test its own image
-under the log directory so runs do not share a volume.
+CTest starts each test program directly (`uos_tests_add_host` in
+`tests/cmake/uos-tests-run.cmake`): the time limit per test, the verdict from
+the `RESULT:` line each test prints (PASS, FAIL, SKIP; a run that never ends
+is a timeout), and for the storage tests a fresh card image from a fixture
+(`<test>-sd-make` before, `<test>-sd-remove` after). Logs:
+`ctest --output-on-failure`, `--output-log`, or `Testing/Temporary/LastTest.log`.
 
 | env | |
 |---|---|
-| `BOARD` | which board (default `native`) |
-| `BUILD` | the CMake build directory (default `test/build`) |
-| `UOS_RUN_ONLY` | one test; set by passing an argument |
-| `UOS_SMP_DIR` | where the kernel repo is, if not a sibling |
-
-Logs land in `<build>/test/.host-logs/<app>.log`, and SD images beside them as
-`<app>.disk.img`.
-
-```
-mutex-stress             PASS
-rtos-apis                PASS
-smp-mat-test             PASS
-smp-num-test             PASS
-smp-pipeline-test        PASS
-smp-pro-cons-test        PASS
-smp_test0                PASS
-smp_test1                PASS
-smp_test2                PASS
-smp_test3                PASS
-smp_test4                PASS
-
-host suite: 11 passed, 0 skipped, 0 failed
-```
+| `UOS_SD_IMAGE` | the card image (set by CTest for the storage tests) |
+| `UOS_SD_SECTORS` | the size of a new image, if a test creates one |
 
 ### The verdict is the exit status
 
@@ -2024,8 +1963,8 @@ in the teardown.
 
 **…but `_exit()` does not flush stdio either.** Most tests here print through
 `uart::uart1`, which is `write(2)` and therefore already on its way out; a test
-carried from upstream's suite prints with `printf()`, and to a pipe — which is
-how the runner captures it — stdout is fully buffered. Without the flush its
+from upstream's suite prints with `printf()`, and to a pipe — which is
+how CTest captures it — stdout is fully buffered. Without the flush its
 entire output, verdict included, is discarded at the exit. Found exactly that
 way: `mutex-stress` ran, passed, and printed nothing at all.
 
@@ -2033,7 +1972,7 @@ way: `mutex-stress` ran, passed, and printed nothing at all.
 
 ## 17. `OS_NCPU=1`
 
-The port is dual-branch on `OS_USE_SMP_SCHEDULER`, which `uos_add_app()`
+The port is dual-branch on `OS_USE_SMP_SCHEDULER`, which the tests' builder
 derives from `NCPU GREATER 1`. This is the same arrangement `cortexm` uses to
 run its three STM32 boards at `OS_NCPU=1` off upstream's single-core core
 (`src/rtos/os-core.cpp`), and it is
@@ -2257,16 +2196,24 @@ on the first day the port ran four CPUs.
 
 ## 19. Tips, tricks and traps
 
+The recipes below work in a configuration's build folder; with
+
+```sh
+B=micro-os-plus-iii/tests/build/native-cmake-sys-release   # after prepare + build
+```
+
+the test programs are `$B/platform-bin/port-tests/<test>-host`. A `-D` given
+to `cmake $B` stays in that folder's cache: set it back when done.
+
 ### Reproducing a race
 
 ```sh
-# 1. Turn the CPU count up. -DNCPU=8 on a 4-core laptop oversubscribes, which
+# 1. Turn the CPU count up. NCPU=8 on a 4-core laptop oversubscribes, which
 #    lengthens every window in the port and the kernel.
-cmake -S . -B /tmp/b8 -G Ninja -DBOARD=native -DNCPU=8 -DCMAKE_BUILD_TYPE=Release
-cmake --build /tmp/b8 -j8
+cmake -D NCPU=8 $B && cmake --build $B
 
 # 2. Run it many times and count. Intermittent means "count it", not "look at it".
-cd /tmp/b8/test
+cd $B/platform-bin/port-tests
 pass=0; fail=0
 for i in $(seq 1 50); do
   if timeout 60 ./smp_test2-host >/dev/null 2>&1; then pass=$((pass+1));
@@ -2291,7 +2238,7 @@ Other knobs that change the interleaving without changing the code:
 
 ```sh
 # the report prints:  pc 0x…8C6 (static 0x000000000001A8C6)
-addr2line -f -C -i -e test/build/test/smp_test2-host 0x1a8c6
+addr2line -f -C -i -e $B/platform-bin/port-tests/smp_test2-host 0x1a8c6
 ```
 
 - `-i` is essential at `-O2`; without it inlined frames are invisible.
@@ -2397,13 +2344,15 @@ QEMU suite runs starves both. One suite at a time.
 
 ### Adding something
 
-**A new test**: create `test/native/<name>/` with at least one `.cpp`. That is
-all — the loop globs directories. Add a line to `tests.cmake` only if it needs
-a knob.
+**A new test**: a portable one goes in `tests/sources/<name>/` and in the
+platform's `UOS_TESTS_SOURCES` / `UOS_TESTS_PORTABLE`; a host-only one is a
+folder `tests/platforms/native/tests/<name>/` with at least one `.cpp`, found
+by the builder's glob. Add a line to `tests.cmake` only if it needs a knob.
 
-**A new board** (say, macOS): create `test/boards/<id>/` with a `board.cmake`,
-the four headers, `src/{heap,smp}.cpp` and a `run.sh`, plus `test/<id>/` for its
-applications. Nothing in the port's `CMakeLists.txt` changes. The work is in
+**A new board** (say, macOS): a new platform `tests/platforms/<id>/` next to
+`native/` (its facts, the headers, `src/{heap,smp,platform-support}.cpp`,
+`tests/`) and a configuration pair in `tests/package.json`. Nothing in the
+port's `CMakeLists.txt` changes. The work is in
 `host_cpu.cpp`: `SIGEV_THREAD_ID` does not exist on macOS, so the tick has to
 become a `kqueue` timer or a dispatch source, and `swapcontext` is deprecated
 there.
@@ -2460,11 +2409,16 @@ measurement rather than an intention: **the whole suite was built and run under
 each of the three sanitizers**, and this section is what came back.
 
 ```sh
-cmake -S . -B build-asan -G Ninja -DBOARD=native \
-      -DCMAKE_BUILD_TYPE=RelWithDebInfo -DUOS_SANITIZE=address
-cmake --build build-asan -j8
-BUILD=$PWD/build-asan ./test/run.sh
+cd micro-os-plus-iii/tests/build/native-cmake-sys-debug
+cmake -D UOS_SANITIZE=address .      # the port's cache option
+cmake --build .
+ctest
+cmake -D UOS_SANITIZE= .             # back to a plain build
 ```
+
+(The measurements below were taken with the port's former stand-alone test
+build, before the tests moved into the kernel's `tests/`; the option and its
+effect are the same.)
 
 `UOS_SANITIZE` is a cache string, so `address`, `undefined`,
 `address,undefined` and `thread` all work. It is applied to
@@ -2624,9 +2578,8 @@ every implementation's layout.
 So `vptr` is the one check to turn off, and there is a switch for it:
 
 ```sh
-cmake -S . -B build-ubsan -G Ninja -DBOARD=native \
-      -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-      -DUOS_SANITIZE=undefined -DUOS_SANITIZE_NO_VPTR=ON
+cmake -D CMAKE_BUILD_TYPE=RelWithDebInfo \
+      -D UOS_SANITIZE=undefined -D UOS_SANITIZE_NO_VPTR=ON $B
 ```
 
 → 11/11 pass, **0 reports**. Everything else UBSan checks — signed overflow,
@@ -2849,28 +2802,23 @@ async-signal-safe, and this lock is taken from signal handlers.
 | `src/free-store.cpp` | 133 | `os_startup_initialize_free_store()` and the weak hooks |
 | `src/board-contract.cpp` | 43 | `#error`s only |
 | `src/diag/trace-posix.cpp` | 80 | upstream, unchanged |
-| `test/boards/native/src/heap.cpp` | 58 | 32 MiB `.bss` block, two ELF labels |
-| `test/boards/native/src/smp.cpp` | 32 | `g_core_stage[]`, `start_secondary_cores()` |
+| `tests/platforms/native/src/heap.cpp` (kernel) | 58 | 32 MiB `.bss` block, two ELF labels |
+| `tests/platforms/native/src/smp.cpp` (kernel) | 32 | `g_core_stage[]`, `start_secondary_cores()` |
 
 ### Environment variables
 
 | variable | default | used by |
 |---|---|---|
-| `BOARD` | `native` | `test/run.sh` |
-| `BUILD` | `test/build` | `test/boards/native/run.sh` |
-| `UOS_RUN_ONLY` | — | `test_smpl/run-host.sh` |
-| `UOS_SMP_DIR` | the sibling | the board runner, CMake |
-| `UOS_SD_IMAGE` | `disk.img` | the host-file SD back-end |
+| `UOS_SD_IMAGE` | `disk.img` (CTest sets it per storage test) | the host-file SD back-end |
 | `UOS_SD_SECTORS` | `65536` (32 MiB) | the host-file SD back-end |
 
 ### CMake options
 
 | option | default | |
 |---|---|---|
-| `-DBOARD=` | `native` | must name a `test/boards/<id>/board.cmake` |
-| `-DNCPU=` | `4` | host threads acting as CPUs |
-| `-DUOS_SMP_DIR=` | sibling | the kernel working copy |
-| `-DCMAKE_BUILD_TYPE=` | — | `Release` for the suite; `Debug` shifts the windows |
+| `-D NCPU=` | `4` | host threads acting as CPUs (on `prepare`) |
+| `-D UOS_SANITIZE=` | — | `address`, `undefined`, `address,undefined`, `thread` |
+| `CMAKE_BUILD_TYPE` | per configuration | `Release` for `-release`; `Debug` shifts the windows |
 
 ### Signals
 
@@ -2885,27 +2833,28 @@ async-signal-safe, and this lock is taken from signal handlers.
 | | |
 |---|---|
 | port | `micro-os-plus-iii-posix-arch` |
-| kernel | `micro-os-plus-iii` (branch `smp`) |
+| kernel | `micro-os-plus-iii` |
+| the board and its tests | `micro-os-plus-iii/tests/platforms/native/` |
 | drivers | `micro-os-plus-iii-posix-arch/drivers/` |
 | the SD back-end | `micro-os-plus-iii-posix-arch/soc/native/` |
-| the shared runner | `micro-os-plus-iii/test_smpl/run-host.sh` |
+| how CTest runs a test | `micro-os-plus-iii/tests/cmake/uos-tests-run.cmake` |
 | the xpm gate | `xpm run test-native-cmake` in `micro-os-plus-iii/tests` |
 | the design decision | `docs/specs/2026-09-20-…-unification-design.md` §7.6, D12 |
-| the sibling ports | [`cortexm-port.md`](cortexm-port.md), [`tests-in-aarch32-aarch64.md`](tests-in-aarch32-aarch64.md) |
+| the sibling ports | [`cortexm-port.md`](cortexm-port.md), [`history/tests-in-aarch32-aarch64.md`](history/tests-in-aarch32-aarch64.md) |
 
 ---
 
 ## 24. Worked examples
 
 Everything below is complete and compiles as written, against this port at
-`OS_NCPU=4`. Paths are relative to `micro-os-plus-iii-posix-arch/`.
+`OS_NCPU=4`. Paths are relative to the kernel's `tests/platforms/native/`.
 
 ### 24.1 The smallest application that runs
 
-Create one directory; that is the whole build change.
+Create one folder; that is the whole build change.
 
 ```
-test/native/hello/main.cpp
+tests/hello/main.cpp
 ```
 
 ```cpp
@@ -2930,7 +2879,7 @@ using namespace os::rtos;
 
 extern "C" {
 
-// Provided by the board: test/boards/native/src/heap.cpp.
+// Provided by the board: src/heap.cpp.
 extern char __heap_start[];
 extern char __heap_end[];
 
@@ -2991,13 +2940,13 @@ int os_main (int, char*[])
 }
 ```
 
-Build and run it — no CMake edit at all, because the loop globs directories:
+Build and run it — no CMake edit at all, because the builder globs folders:
 
 ```console
-$ cmake -S . -B test/build -G Ninja -DBOARD=native -DCMAKE_BUILD_TYPE=Release
--- µOS++ III POSIX tests: 11 targets, board=native, OS_NCPU=4, …
-$ cmake --build test/build -j8
-$ BOARD=native test/run.sh hello
+$ cd micro-os-plus-iii/tests
+$ xpm run prepare --config native-cmake-sys-debug
+$ xpm run build --config native-cmake-sys-debug
+$ cd build/native-cmake-sys-debug && ctest -R '^native-hello-host$' -V
 hello
 rtos::memory::init_once_default_resource()
 malloc_memory_resource() @0x562f7c069b00 malloc
@@ -3189,7 +3138,7 @@ static void* busy (void*)
 ```
 
 ```console
-$ ./test/build/test/mytest-host | grep 'busy on core' | sort | uniq -c
+$ $B/platform-bin/port-tests/mytest-host | grep 'busy on core' | sort | uniq -c
      40   busy on core 0
      40   busy on core 1
      40   busy on core 2
@@ -3217,67 +3166,48 @@ and it is the deferred publish of §7 working ten thousand times a second.
 #### Where the helpers come from
 
 `smp_install_boot_threads()` and `test_wait_secondaries()` come from
-`test/native/src/test-smp-boot.cpp`, which the build adds to every test on the
-board automatically — one copy, not one per test. That file is byte-identical
+`tests/src/test-smp-boot.cpp`, which the builder adds to every board test
+automatically — one copy, not one per test. That file is byte-identical
 in purpose to the ARM boards' copy; its only POSIX-specific line is the idle
 body's `port::scheduler::wait_for_interrupt()`, which is the kernel's own port
 API and is `sigsuspend()` here, `dsb sy; wfi` on ARMv8-A.
 
 ### 24.4 Using the SD card
 
-`sd::SdCard` is the same class on all three back-ends. Nothing in an
-application selects one — the board's `UOS_BOARD_DEVICES` does.
+A test that uses the card is a storage test: listed in the platform's
+`UOS_TESTS_STORAGE` (a portable test) or added to it in `tests/tests.cmake`
+(a board test). The builder then gives it the card as the posix-io block
+device `/dev/sd`, Chan FatFs, and the mount at `/sd/` (a portable test gets
+it before `os_main()`; a board test calls `uos_test_storage_start()` from
+`uos-test-storage.h`). The test uses POSIX I/O only, the same on the host and
+on every board:
 
 ```cpp
-#include <sd.hpp>          // dispatches on SD_BACKEND_*; here: soc/native
-#include <flatfs.hpp>
+#include <cmsis-plus/posix-io/io.h>
+#include <cmsis-plus/posix-io/file-system.h>
+#include <fcntl.h>
 
-namespace {
-  sd::SdCard    g_card;
-  flatfs::Fs    g_fs;
-  std::uint8_t  g_sector[512];
-}
-
-bool storage_init ()
+bool
+write_log (const char* text, std::size_t n)
 {
-  if (!g_card.init ())
-    {
-      uart::uart1 << "SD init failed: " << g_card.error () << "\n";
-      return false;
-    }
-
-  uart::uart1 << "SD ready: " << g_card.sector_count ()
-              << " sectors (~" << (g_card.capacity_bytes () >> 20) << " MiB)\n";
-
-  // HW_BUILD is not defined on this port (§14), so the tests take this branch:
-  // format a flatfs volume on the raw device rather than mounting a FAT32
-  // boot partition that a host file does not have.
-  if (!g_fs.format (g_card))
-    return false;
-
-  return true;
+  os::posix::io* f
+      = os::posix::open ("/sd/tests/mytest.txt", O_WRONLY | O_CREAT | O_APPEND);
+  if (f == nullptr)
+    return false;                      // errno says why
+  const bool ok = f->write (text, n) == static_cast<ssize_t> (n);
+  f->close ();
+  return ok;
 }
 ```
 
-and to select the file it lives in:
+Under CTest the card is a fresh image with a boot card's layout, made by a
+fixture before the test and deleted after it. To keep one and look at it, run
+the program by hand with your own image:
 
 ```console
-$ UOS_SD_IMAGE=/tmp/card.img UOS_SD_SECTORS=131072 ./test/build/test/mytest-host
-```
-
-Declare the dependency once, in `test/native/tests.cmake`:
-
-```cmake
-set (BOARD_TEST_NEED_DEVICES smp-num-test smp-pipeline-test mytest)
-```
-
-which links `UOS_BOARD_DEVICES` — `micro-os-plus::devices-hostfile` — for those
-tests only. The image is created if missing and never deleted, so after the run:
-
-```console
-$ ls -l /tmp/card.img
--rw-r--r-- 1 dan dan 67108864 … /tmp/card.img
-$ xxd -l 64 /tmp/card.img
+$ python3 ../../board-tests/sd-image.py /tmp/card.img
+$ UOS_SD_IMAGE=/tmp/card.img build/native-cmake-sys-debug/platform-bin/port-tests/mytest-host
+$ mdir -i /tmp/card.img@@1M ::tests          # mtools; the FAT partition starts at 1 MiB
 ```
 
 That is a real advantage of this back-end over the two silicon ones, not a
@@ -3286,14 +3216,15 @@ tools.
 
 ### 24.5 A test that runs at a different CPU count
 
-`board_test_ncpu()` is per test, and `uos_add_app()` turns it into both
+`board_test_ncpu()` is per test, and the builder turns it into both
 `OS_NCPU` and `OS_USE_SMP_SCHEDULER`. To add a single-core test beside the
 four-core ones:
 
 ```cmake
-# test/native/tests.cmake
+# tests/tests.cmake
 function (board_test_ncpu _app _out)
-  if (_app STREQUAL "mutex-stress" OR _app STREQUAL "mytest-sc")
+  if (_app STREQUAL "mutex-stress" OR _app STREQUAL "rtos-apis"
+      OR _app STREQUAL "mytest-sc")
     set (${_out} 1 PARENT_SCOPE)              # non-SMP kernel branch
   elseif (_app STREQUAL "mytest-16")
     set (${_out} 16 PARENT_SCOPE)             # oversubscribe on purpose
@@ -3305,17 +3236,17 @@ endfunction ()
 # A single-core test must not get the board's SMP boot helper: that file
 # installs per-core idle threads through scheduler::os_idle_thread_core[],
 # which does not exist without OS_USE_SMP_SCHEDULER.
-set (BOARD_TEST_SELF_CONTAINED mutex-stress mytest-sc)
+set (BOARD_TEST_SELF_CONTAINED mutex-stress rtos-apis mytest-sc)
 ```
 
 Verify it reached the compiler rather than trusting the CMake:
 
 ```console
-$ grep -o 'OS_NCPU=[0-9]*' test/build/build.ninja | sort | uniq -c
+$ grep -o 'OS_NCPU=[0-9]*' $B/build.ninja | sort | uniq -c
      47 OS_NCPU=1
     427 OS_NCPU=4
 $ grep -c OS_USE_SMP_SCHEDULER \
-      test/build/test/CMakeFiles/mutex-stress-host.dir/*.d 2>/dev/null
+      $B/platform-bin/port-tests/CMakeFiles/mutex-stress-host.dir/*.d 2>/dev/null
 0
 ```
 
@@ -3347,10 +3278,8 @@ claim point was shown to be sound.
 ```
 
 ```console
-$ cmake -S . -B /tmp/tw -G Ninja -DBOARD=native -DCMAKE_BUILD_TYPE=Release \
-        -DCMAKE_CXX_FLAGS=-DUOS_SMP_TRIPWIRE
-$ cmake --build /tmp/tw -j8
-$ cd /tmp/tw/test
+$ cmake -D CMAKE_CXX_FLAGS=-DUOS_SMP_TRIPWIRE $B && cmake --build $B
+$ cd $B/platform-bin/port-tests
 $ fired=0; for i in $(seq 1 50); do ./smp_test2-host >/dev/null 2>&1
   [ $? -eq 4 ] && fired=$((fired+1)); done; echo "tripwire fired $fired/50"
 tripwire fired 0/50
@@ -3373,15 +3302,15 @@ crashes" into "21 out of 25", and then into "0 out of 25".
 #!/usr/bin/env bash
 # fail-rate <app> [runs] [ncpu]
 app="${1:?}"; runs="${2:-25}"; ncpu="${3:-4}"
-build="/tmp/fr-$ncpu"
+B="${B:?set B to a native configuration's build folder}"
 
-cmake -S . -B "$build" -G Ninja -DBOARD=native -DNCPU="$ncpu" \
-      -DCMAKE_BUILD_TYPE=Release >/dev/null
-cmake --build "$build" -j8 >/dev/null
+cmake -D NCPU="$ncpu" "$B" >/dev/null
+cmake --build "$B" >/dev/null
+build="$B/platform-bin/port-tests"
 
 pass=0; fail=0
 for i in $(seq 1 "$runs"); do
-  if timeout 120 "$build/test/$app-host" >"/tmp/$app.$i.log" 2>&1
+  if timeout 120 "$build/$app-host" >"/tmp/$app.$i.log" 2>&1
   then pass=$((pass+1)); rm -f "/tmp/$app.$i.log"
   else fail=$((fail+1)); fi
 done
@@ -3403,7 +3332,7 @@ deleted so the directory holds only what matters.
 The complete recipe, from the report in §12.
 
 ```console
-$ ./test/build/test/smp_test2-host
+$ $B/platform-bin/port-tests/smp_test2-host
 !!! FATAL EXCEPTION on CPU 1 -- signal Segmentation fault at 0x…C2,
                                pc 0x000055AF745AA8C6 (static 0x000000000001A8C6)
   cpu0: idle
@@ -3421,7 +3350,7 @@ $ ./test/build/test/smp_test2-host
 ```
 
 ```console
-$ addr2line -f -C -i -e test/build/test/smp_test2-host 0x1a8c6 0x172dd 0x17695
+$ addr2line -f -C -i -e $B/platform-bin/port-tests/smp_test2-host 0x1a8c6 0x172dd 0x17695
 os::rtos::thread::priority_inherited(unsigned char)
 os::rtos::mutex::internal_try_lock_(os::rtos::thread*)
 os::rtos::mutex::lock()
@@ -3431,7 +3360,7 @@ and, when the line is not enough, the instruction itself:
 
 ```console
 $ objdump -d --start-address=0x1a8c0 --stop-address=0x1a8d0 \
-          test/build/test/smp_test2-host
+          $B/platform-bin/port-tests/smp_test2-host
    1a8c6:  40 38 b3 c2 00 00 00   cmp  %sil,0xc2(%rbx)
 ```
 
@@ -3449,33 +3378,20 @@ Three things to remember:
 
 ### 24.9 A second host board
 
-The directory structure is ready; the work is in `host_cpu.cpp`. A macOS board
-would be:
+The layout is ready; the work is in `host_cpu.cpp`. A macOS board would be a
+new platform beside `native`, in the kernel's `tests/platforms/`:
 
 ```
-test/boards/macos/
-├── board.cmake                 # a copy of native's, with its own PORT_GREETING
-├── include/{uart,led,timer_arm,smp}.hpp    # identical: write(2), CLOCK_MONOTONIC
-├── src/{heap,smp}.cpp                      # identical except the .section syntax
-└── run.sh                                  # identical
-test/macos/                     # its applications
+tests/platforms/macos/
+├── CMakeLists.txt              # native's: the UOS_TESTS_* lists, uos_tests_add_host
+├── cmake/                      # native's, with its own PORT_GREETING
+├── include/{uart,led,timer_arm,smp,reference-clock}.hpp   # identical
+├── src/{heap,smp,platform-support}.cpp     # identical except the .section syntax
+└── tests/                      # its own tests, if any
 ```
 
-`board.cmake` in full:
-
-```cmake
-set (UOS_BOARD_SRC_DIR "${CMAKE_CURRENT_LIST_DIR}")
-set (UOS_BOARD_FLAGS   "")
-set (NCPU 4 CACHE STRING "Host threads acting as CPUs")
-set (UOS_BOARD_NCPU    ${NCPU})
-set (UOS_BOARD_CAPS    smp sdcard led)
-set (UOS_BOARD_LIBS    "")
-set (UOS_BOARD_DEVICES micro-os-plus::devices-hostfile)
-set (UOS_BOARD_DEFINES "PORT_GREETING=\"µOS++ macOS synthetic host\"")
-```
-
-and that is all CMake needs — the board is discovered by the presence of the
-file. What actually has to be written:
+plus a configuration pair `macos-cmake-<toolchain>-<debug|release>` in
+`tests/package.json`. What actually has to be written:
 
 | what | why |
 |---|---|

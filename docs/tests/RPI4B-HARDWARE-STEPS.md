@@ -1,10 +1,10 @@
 # Raspberry Pi 4 B — running one test on the board, step by step
 
 This page runs one µOS++ test on a Raspberry Pi 4 B (BCM2711, 4× Cortex-A72)
-through OpenOCD, by hand, for the 64-bit (AArch64) port. It does exactly what
-the test scripts do (`micro-os-plus-iii-aarch64/test/boards/rpi4b/hw.sh`, which
-calls `micro-os-plus-iii/test_smpl/run-hw.sh`), written out as plain commands:
-reset, load, run, watch, end.
+through OpenOCD, by hand, for the 64-bit (AArch64) port. It does what CTest
+does for a `-hwd` test (the reset fixture, `tests/cmake/uos-hwd-reset.cmake`,
+then `tests/cmake/uos-hwd.tcl`), written out as plain commands: reset, load,
+run, watch, end.
 
 The probe is a Raspberry Pi **debugprobe** (a Pico) used as a **CMSIS-DAP v2**
 adapter in **JTAG** mode, through OpenOCD (xPack 0.12.0-7.1). The Pico runs an
@@ -40,7 +40,7 @@ firmware (see "Load speed" below).
 | JTAG | the Pi's GPIO 22–27 (ALT4: TRST, RTCK, TDO, TCK, TDI, TMS), enabled by `enable_jtag_gpio=1` in `config.txt` |
 | Probe | Pico debugprobe, USB `2e8a:000c`, CMSIS-DAP v2, firmware 2.0.0 |
 | Console | the Pi's PL011 UART (GPIO 14/15), 115200 8N1, here on a CH340 adapter at `/dev/ttyUSB0` |
-| SD card | the boot card: firmware, `config.txt` and a `kernel8.img`. The test's `config.txt` is `micro-os-plus-iii-aarch64/test/boards/rpi4b/config.txt` |
+| SD card | the boot card: firmware, `config.txt` and a `kernel8.img`. The test's `config.txt` is `micro-os-plus-iii/tests/platforms/aarch64-rpi4b/config.txt` |
 
 The hwd tests that use the SD card (`sd_test`, `smp-mat-sdcard-test`,
 `smp-num-test`, `smp-pipeline-test`) mount the card's **existing FAT32 boot
@@ -50,11 +50,11 @@ and never touch the boot files.
 ## Step 0 — set the paths
 
 ```sh
-W=/home/dan/Desktop/micro-os-plu-iii-smp-pr-github
+W=<workspace>
 OCD_DIR=$HOME/.local/xPacks/@xpack-dev-tools/openocd/0.12.0-7.1/.content
 OCD=$OCD_DIR/bin/openocd
 SCRIPTS=$OCD_DIR/openocd/scripts
-BOARD=$W/micro-os-plu-iii-aarch64/test/boards/rpi4b
+BOARD=$W/micro-os-plus-iii/tests/platforms/aarch64-rpi4b
 CFG=$BOARD/openocd-cmsis-dap-rpi4b.cfg
 C=aarch64-rpi4b-cmake-gcc-debug
 TESTS=$W/micro-os-plus-iii/tests
@@ -65,7 +65,8 @@ ELF_DIR=$TESTS/build/$C/platform-bin/port-tests/test
 
 ```sh
 cd $TESTS
-xpm run install --config $C     # first time only
+xpm run install   --config $C   # first time only
+xpm run link-deps --config $C   # first time only
 xpm run prepare --config $C
 xpm run build   --config $C
 ```
@@ -188,8 +189,8 @@ sleep 10
 
 ## Step 6 — load the test and start it
 
-Write the session's commands to a file (this is what the runner generates, in
-`$ELF_DIR/.hw-logs/<app>.cfg`):
+Write the session's commands to a file (what `tests/cmake/uos-hwd.tcl` does
+for the CTest run):
 
 ```sh
 cat > /tmp/run-$APP.cfg <<CFG
@@ -246,7 +247,7 @@ cpsr: 0x000003c9 pc: 0x200
 
 One pair of `JTAG-DP STICKY ERROR` / `Failed to read memory` lines per core,
 always the same four addresses. They are harmless: the test is not affected,
-and the runner ignores exactly these (`UOS_HW_IGNORE_ERRORS` in `hw.sh`).
+and the test's verdict does not depend on them (it is the `RESULT` line).
 
 | Address | Core | Register |
 |---|---|---|
@@ -345,44 +346,24 @@ export PATH=$PWD/build/$C/xpacks/.bin:$PATH
 ctest --test-dir build/$C -R '^aarch64-rpi4b-smp-mat-test-hwd$' -V
 ```
 
-Or through xpm, which builds first:
-
-```sh
-xpm run test-smp-mat-test-hwd --config $C
-```
-
 All hwd tests, one after another (each one resets the board first):
 
 ```sh
-xpm run test-hwd --config $C          # prepare + build, then ctest -V -L hwd
+ctest --test-dir build/$C -L hwd
 ```
 
-The port's script directly, without CTest:
-
-```sh
-$BOARD/hw.sh list                      # what is built, with time limits
-BUILD=$TESTS/build/$C/platform-bin/port-tests $BOARD/hw.sh smp-mat-test 1800
-```
-
-Files the runner leaves in `$ELF_DIR/.hw-logs/`:
-
-| File | What |
-|---|---|
-| `<app>.reset.log` | OpenOCD output of the reset session (step 4) |
-| `<app>.cfg` | the commands of step 6 |
-| `<app>.log` | OpenOCD output of the test session (steps 6–7) |
-
-Settings (environment variables) the scripts take:
+CTest does not build: `xpm run build --config $C` first. The settings a run
+reads from the environment:
 
 | Variable | Default | What |
 |---|---|---|
-| `UOS_HW_RESET_WAIT` | 10 | seconds between the watchdog reset and the connect |
-| `UOS_HW_CORES` | `0` | cores that are halted, loaded through and resumed |
-| `UOS_HW_SEMIHOST_CORES` | `0 1 2 3` | cores with semihosting enabled (without halting them) |
 | `UOS_HW_ADAPTER_KHZ` | (config: 4000) | JTAG clock, set after `init`; 15000 tested with the PIO probe firmware (see "Load speed") |
-| `UOS_HW_PRELOAD` | the two watchdog writes | the reset commands of step 4 |
-| `UOS_HW_IGNORE_ERRORS` | `JTAG-DP STICKY ERROR\|Failed to read memory at 0x80[4-7][0-9a-f]+$` | `Error:` lines that do not end the run |
-| `OPENOCD` | newest xPack OpenOCD | the OpenOCD binary |
+| `UOS_HW_ADAPTER_SERIAL` | — | which CMSIS-DAP, when several are connected |
+
+The rest — the entry `0x80000`, core 0 halted and resumed, semihosting on
+cores 0–3, the watchdog reset and its 10 s wait, the time limit — is in
+`tests/platforms/aarch64-rpi4b/CMakeLists.txt` (`uos_tests_add_hwd`). The
+OpenOCD output is in CTest's (`-V`, or `Testing/Temporary/LastTest.log`).
 
 ## From VS Code
 

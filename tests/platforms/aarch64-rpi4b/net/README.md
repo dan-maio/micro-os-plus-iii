@@ -11,8 +11,8 @@ glue, the same thread layout, an Ethernet controller instead of a radio.
 | Board services | `src/platform.hpp`, `src/platform.cpp` | time from the ARM generic timer, delays, cache maintenance, `kprintf` |
 | lwIP configuration | `src/lwipopts.h`, `src/arch/cc.h` | raw API, no OS layer (`NO_SYS=1`), IPv4, ARP, DHCP, DNS, ICMP, UDP, TCP |
 | Start-up | `src/eth_startup.hpp` | the µOS++ start-up every rpi4b test carries, included once per test |
-| lwIP 2.2.1 | `../../../third_party/lwip/` (the kernel tests' `third_party/lwip/`) | unmodified sources (`core`, `core/ipv4`, `netif`), BSD licence in `COPYING` |
-| Tests | `../../../rpi4b/eth-net/`, `../../../rpi4b/eth-tcp-server/` | see below |
+| lwIP 2.2.1 | `../../../third_party/lwip/` | unmodified sources (`core`, `core/ipv4`, `netif`), BSD licence in `COPYING` |
+| Tests | `../tests/eth-net/`, `../tests/eth-tcp-server/` | see below |
 
 Nothing here is compiled into the other tests: `platforms/aarch64-rpi4b/tests/tests.cmake` builds these sources
 into the INTERFACE library `aarch64-rpi4b-eth`, which only the two Ethernet tests link.

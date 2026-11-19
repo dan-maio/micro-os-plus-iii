@@ -3,7 +3,7 @@
 #
 # micro-os-plus::platform is the port plus the kernel's optional groups the
 # board's tests and the harness suites need. The port's own tests link
-# micro-os-plus::cortexm directly (through the port's builder); the harness
+# micro-os-plus::cortexm directly (through the tests' builder); the harness
 # suites link this.
 # -----------------------------------------------------------------------------
 

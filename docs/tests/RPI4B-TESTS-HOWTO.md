@@ -1,71 +1,40 @@
 # RPi 4B tests — build, run, clean (µOS++ III, AArch64)
 
-Every command here was run on fresh clones in `/tmp` (2026-10-13): one from GitHub and one from the local bare repos in `~/Downloads/GIT`.
-Nothing depends on the folder you clone into; see §8.
+The Raspberry Pi 4 B (BCM2711, 4× Cortex-A72) is the platform
+`tests/platforms/aarch64-rpi4b/` of the kernel's test project. Its board
+code and board-only tests are there; the portable tests are in
+`tests/sources/`. CTest builds and runs everything: QEMU (`raspi4b`) and the
+board through OpenOCD.
 
 ## 0. Prerequisites (once per PC)
 
 | Need | Command / note |
 |---|---|
-| `git`, Node.js + `npm` | from the distribution (tested: git 2.56, node 25.8, npm 11.11) |
-| `xpm` | `npm install -g xpm@latest` (tested: 0.23.3) |
+| `git`, Node.js + `npm` | from the distribution |
+| `xpm` | `npm install -g xpm@latest` |
 | internet | the first `xpm install` downloads CMake, Ninja, GCC and QEMU into `~/.local/xPacks` |
 | **OpenOCD, for `-hwd` only** | `xpm install -g @xpack-dev-tools/openocd@0.12.0-7.1` |
 | probe, for `-hwd` only | CMSIS-DAP JTAG probe with user access (udev); a USB-serial on the Pi UART (GPIO14/15) |
 
-The rpi4b configurations do **not** install OpenOCD. The board runner uses the newest OpenOCD in `~/.local/xPacks/@xpack-dev-tools/openocd/`, otherwise `openocd` from `PATH`, or the binary named in `OPENOCD` (§6). Without one of these, every `-hwd` test fails. All board runs in §8 used 0.12.0-7.1.
+The hardware tests use the newest OpenOCD in
+`~/.local/xPacks/@xpack-dev-tools/openocd/`, otherwise `openocd` from `PATH`
+(`UOS_TESTS_OPENOCD` in the build folder's cache says which).
 
-## 1. Get the sources (any folder)
+## 1. Get the sources
 
-### 1a. From GitHub (`github.com/dan-maio`)
-
-```sh
-W=/any/folder                      # e.g. ~/Work, /tmp/rpi4b-verify
-mkdir -p "$W" && cd "$W"
-for r in micro-os-plus-iii micro-os-plus-iii-aarch64 micro-os-plus-iii-aarch32 \
-         micro-os-plus-iii-cortexm micro-os-plus-iii-posix-arch; do
-  git clone -b smp https://github.com/dan-maio/$r.git $r
-done
-cd "$W/micro-os-plus-iii/tests"
-npm install                        # once per clone
-xpm install                        # once per clone: CMake, Ninja, build-helper
-```
-
-- On GitHub the devices drivers are already absorbed: `micro-os-plus-iii-aarch64/drivers/{src,include,fatfs}` are real folders. So there is no devices clone.
-
-### 1b. From the local bare repos (`~/Downloads/GIT`)
-
-```sh
-W=/any/folder                      # e.g. /tmp/rpi4b-local
-G=~/Downloads/GIT
-mkdir -p "$W" && cd "$W"
-git clone -b smp $G/micro-os-plus-iii-smp.git micro-os-plus-iii
-for r in aarch64 aarch32 cortexm posix-arch; do
-  git clone -b smp $G/micro-os-plus-iii-$r.git micro-os-plus-iii-$r
-done
-git clone -b master $G/micro-os-plus-iii-devices.git micro-os-plus-iii-devices   # required here
-cd "$W/micro-os-plus-iii/tests"
-npm install
-xpm install
-```
-
-- **`micro-os-plus-iii-devices` is required here.** The local aarch64 port has three committed symlinks, `drivers/{src,include,fatfs} -> ../../micro-os-plus-iii-devices/…`.
-- Without the devices clone, `prepare` fails with `Cannot find source file: …/micro-os-plus-iii-aarch64/drivers/src/sd.cpp`, nothing builds, and every test fails.
-- Note the names: the smp repo is `micro-os-plus-iii-smp.git`, and it is cloned as `micro-os-plus-iii`.
-
-**Both ways**
-
-- Use a folder path without spaces (paths with spaces were not tested with CMake).
-- The repositories must sit **side by side** in `$W`. CMake finds the ports as `../../micro-os-plus-iii-<port>`, with or without a `.git` suffix.
-- Everything after this section is the same for both.
+The workspace layout and the one-time `xpm link` of each package are in
+[`COMMANDS.md`](COMMANDS.md) §1–§2. The Pi 4 B needs the kernel, the AArch64
+port and the device packages `micro-os-plus-iii-devices-bcm283x` and
+`micro-os-plus-iii-devices-storage`.
 
 ## 2. Names
 
 | Item | Value |
 |---|---|
-| Run all commands from | `$W/micro-os-plus-iii/tests` |
-| Test sources | `$W/micro-os-plus-iii-aarch64/test/rpi4b/<test>/` |
-| Board files (OpenOCD cfg, `hw.sh`) | `$W/micro-os-plus-iii-aarch64/test/boards/rpi4b/` |
+| Run all commands from | `<workspace>/micro-os-plus-iii/tests` |
+| Board files (code, OpenOCD cfg, `config.txt`) | `tests/platforms/aarch64-rpi4b/` |
+| Board-only tests | `tests/platforms/aarch64-rpi4b/tests/<test>/` |
+| Portable tests | `tests/sources/<test>/` |
 | Configurations `C` | `aarch64-rpi4b-cmake-gcc-debug` (Debug), `aarch64-rpi4b-cmake-gcc-release` (MinSizeRel) |
 | Build folder | `build/$C/` (one per configuration) |
 | Images | `build/$C/platform-bin/port-tests/test/<test>-hwd.elf`, `<test>-qemu.elf` |
@@ -76,49 +45,58 @@ xpm install
 - `-qemu` runs in QEMU (`raspi4b`); needs no board.
 - `-hwd` runs on the board: OpenOCD over the CMSIS-DAP JTAG probe, with no GDB.
 
-**Tests:** `smp_test0` … `smp_test4`, `smp_mem_test`, `smp_mem_inter_test`, `smp-mat-test`,
-`smp-mat-sdcard-test`, `smp-num-test`, `smp-pipeline-test`, `smp-pro-cons-test`,
-`sd_test`, `cmsis-os-validator`, `mutex-stress`, `rtos-apis`, `smp-list-storage-test`,
-`smp-shapes-test`, `clock-test`, `eth-net`, `eth-tcp-server`.
+**Tests (22):** `smp_test0` … `smp_test4`, `smp-mat-test`,
+`smp-mat-sdcard-test`, `smp-num-test`, `smp-pipeline-test`,
+`smp-pro-cons-test`, `sd_test`, `clock-test`, `cmsis-os-validator`,
+`mutex-stress`, `rtos-apis` (portable), and the board's own `smp_mem_test`,
+`smp_mem_inter_test`, `smp-list-storage-test`, `smp-shapes-test`, `eth-net`,
+`eth-tcp-server`, `usb_big_test`.
 
-The last two are the C++ versions of tests first written for the Zig port, check for check:
-`smp-list-storage-test` is a generic intrusive list with its nodes on thread stacks, in `.data` and
-on the heap, under thread churn on the 4 cores (UART only); `smp-shapes-test` is a list of
-polymorphic shapes (an abstract C++ base class and four derived ones, built and destroyed by
-threads on the 4 cores), with a logger thread writing every line to the UART and to
-`tests/shapes.log` on the SD card, read back and CRC-checked. Both passed on the board on
-2026-10-22 (35 s and 125 s).
+`smp-list-storage-test` and `smp-shapes-test` are the C++ versions of tests
+first written for the Zig port, check for check: `smp-list-storage-test` is a
+generic intrusive list with its nodes on thread stacks, in `.data` and on the
+heap, under thread churn on the 4 cores (UART only); `smp-shapes-test` is a
+list of polymorphic shapes (an abstract C++ base class and four derived ones,
+built and destroyed by threads on the 4 cores), with a logger thread writing
+every line to the UART and to `tests/shapes.log` on the SD card, read back
+and CRC-checked.
 
-`clock-test` checks the kernel's clocks against the BCM2711 System Timer (1 MHz): 5000 ticks of
-`sysclock`, and `hrclock` over them, keep its time; `hrclock.sleep_until (now () + 100 ms)` lasts
-100 ms (+1 tick) on core 0 and on core 1; and a thread on core 1 wakes promptly after core 0's
-tick. It guards the clock fixes of 2026-10-22: the tick re-armed on an absolute grid
-(`timer_arm::rearm_1ms()`, `CNTP_CVAL += period`; re-arming one period from *now* in the
-interrupt lost the handler's latency every tick), `hrclock.now()` counted from core 0's tick
-origin (`timer_arm::hr_base()`; it was the raw counter since power-on, while its sleeps count
-from the tick's start), and the counter's frequency calibrated once instead of by every core.
-On the board: 5000 ticks = 5 000 000 µs, the 100 ms sleep 101.0 ms on both cores (11 s). The
-same test exists for the Pico 2 and for the Zero 2 W and Pi 3 B of both ports.
+`clock-test` checks the kernel's clocks against the BCM2711 System Timer
+(1 MHz): 5000 ticks of `sysclock`, and `hrclock` over them, keep its time;
+`hrclock.sleep_until (now () + 100 ms)` lasts 100 ms (+1 tick) on core 0 and
+on core 1; and a thread on core 1 wakes promptly after core 0's tick. It
+guards the clock fixes of 2026-10-22: the tick re-armed on an absolute grid
+(`timer_arm::rearm_1ms()`, `CNTP_CVAL += period`; re-arming one period from
+*now* in the interrupt lost the handler's latency every tick), `hrclock.now()`
+counted from core 0's tick origin (`timer_arm::hr_base()`), and the counter's
+frequency calibrated once instead of by every core. On the board: 5000 ticks
+= 5 000 000 µs, the 100 ms sleep 101.0 ms on both cores.
 
-`eth-net` and `eth-tcp-server` are the Ethernet tests (added 2026-11-12), the wired counterparts
-of the Mango Pi MQ-Pro `wifi-net` tests. They bring their network stack with them: a polled
-driver for the BCM2711's GENET v5 controller and its BCM54213PE PHY, lwIP 2.2.1 without an OS
-layer, and the glue between them, under `test/boards/rpi4b/net/`; lwIP itself is in
-`test/third_party/lwip/`. One thread owns the controller and lwIP and polls every 2 ms; a second
-thread owns the SD card, so the link stays serviced while a file is written. Both need the board
-on a network (a cable to a router with DHCP, or a static address, §5a); their `-qemu` images
-only report `RESULT: SKIP`. The driver, the threads and the options are described in
-`micro-os-plus-iii-aarch64/test/boards/rpi4b/net/README.md`.
+`eth-net` and `eth-tcp-server` are the Ethernet tests, the wired
+counterparts of the Zero 2 W's Wi-Fi tests. They bring their network stack
+with them: a polled driver for the BCM2711's GENET v5 controller and its
+BCM54213PE PHY, lwIP 2.2.1 without an OS layer, and the glue between them, in
+the platform's `net/`; lwIP itself is in `tests/third_party/lwip/`. One
+thread owns the controller and lwIP and polls every 2 ms; a second thread
+owns the SD card, so the link stays serviced while a file is written. Both
+need the board on a network (a cable to a router with DHCP, or a static
+address, §5a); their `-qemu` images only report `RESULT: SKIP`. The driver,
+the threads and the options are described in the platform's `net/README.md`.
 
-- `eth-net`: controller and PHY, link, DHCP, four ICMP echoes to the gateway, and the run's log
-  written to `tests/ETHNET.LOG` on the SD card and read back.
-- `eth-tcp-server`: the same bring-up, then a TCP echo server on port 7. What a client sends is
-  echoed, kept, and written to `tests/ETHRX.BIN` on the SD card and read back; the board prints
-  the size and the CRC-32 of what it received. It needs a client: `eth-tcp-host.py`, next to the
-  test.
+- `eth-net`: controller and PHY, link, DHCP, four ICMP echoes to the gateway,
+  and the run's log written to `tests/ETHNET.LOG` on the SD card and read
+  back.
+- `eth-tcp-server`: the same bring-up, then a TCP echo server on port 7. What
+  a client sends is echoed, kept, and written to `tests/ETHRX.BIN` on the SD
+  card and read back; the board prints the size and the CRC-32 of what it
+  received. It needs a client: `eth-tcp-host.py`, next to the test.
+
+`usb_big_test` is the DWC2 USB gadget on the USB-C port; its README
+(`tests/platforms/aarch64-rpi4b/tests/usb_big_test/README.md`) has the host
+tool.
 
 ```sh
-cd "$W/micro-os-plus-iii/tests"
+cd <workspace>/micro-os-plus-iii/tests
 C=aarch64-rpi4b-cmake-gcc-debug        # or aarch64-rpi4b-cmake-gcc-release
 T=smp_mem_test                         # the test of your choice
 ```
@@ -126,13 +104,14 @@ T=smp_mem_test                         # the test of your choice
 ## 3. First time for a configuration (in this order)
 
 ```sh
-xpm install --config $C          # pinned aarch64 GCC 15.2.1 and QEMU 9.2.4 -> build/$C/xpacks (not OpenOCD, §0)
-xpm run prepare --config $C      # CMake configure; finds the test folders
+xpm run install   --config $C    # the pinned aarch64 GCC and QEMU -> build/$C/xpacks
+xpm run link-deps --config $C    # the port and the device packages -> build/$C/xpacks
+xpm run prepare   --config $C    # CMake configure; finds the test folders
 ```
 
-- Debug and release are separate folders, so each needs both steps.
-- Use `xpm install --config $C`, **not** `xpm run install`. The action adds an `xpm link @micro-os-plus/micro-os-plus-iii-aarch64` step, which nothing uses: CMake takes the port from the sibling folder. That step fails when the machine has a stale global link in `~/.local/xPacks` (`error: broken link …`). See `docs/tests/XPM-LINK-VS-SIBLING-LAYOUT.md` §3.4.
-- Never `rm -rf build/$C`, because it holds the pinned toolchain.
+- Debug and release are separate folders, so each needs all three steps.
+- Never `rm -rf build/$C`: it holds the pinned toolchain and the cache with
+  your `-D` settings.
 
 ## 4. Build
 
@@ -140,64 +119,61 @@ xpm run prepare --config $C      # CMake configure; finds the test folders
 |---|---|
 | all images of the configuration | `xpm run build --config $C` |
 | one image only | `PATH="$PWD/build/$C/xpacks/.bin:$PATH" cmake --build build/$C --target $T-hwd` (or `$T-qemu`) |
-| list the test cases | `PATH="$PWD/build/$C/xpacks/.bin:$PATH" ctest --test-dir build/$C -N` |
+| list the test cases | `ctest --test-dir build/$C -N` |
 
 After you add or rename a test folder, run `xpm run prepare --config $C` again.
 
 ## 5. Run
 
-**One test on the board.** One at a time, with the UART terminal open:
+**One test on the board**, with the UART terminal open:
 
 ```sh
-UOS_HW_ADAPTER_KHZ=15000 xpm run test-$T-hwd --config $C
+UOS_HW_ADAPTER_KHZ=15000 ctest --test-dir build/$C -R "^aarch64-rpi4b-$T-hwd\$" --output-on-failure
 ```
 
-This runs prepare and build, then `ctest -V -R aarch64-rpi4b-$T-hwd`.
-To run without rebuilding:
-
-```sh
-PATH="$PWD/build/$C/xpacks/.bin:$PATH" UOS_HW_ADAPTER_KHZ=15000 \
-ctest --test-dir build/$C -V -R aarch64-rpi4b-$T-hwd
-```
+CTest first runs `aarch64-rpi4b-$T-hwd-reset` (the watchdog reset, then 10 s
+for the firmware to boot), then the test. Build first: CTest does not build.
 
 **One test in QEMU:**
 
 ```sh
-xpm run test-$T-qemu --config $C
+ctest --test-dir build/$C -R "^aarch64-rpi4b-$T-qemu\$" --output-on-failure
 ```
 
 **Sets:**
 
 | Goal | Command |
 |---|---|
-| all QEMU tests (does not build) | `xpm run test --config $C` (= `ctest -V -LE hwd`) |
-| all board tests, back to back (**not verified**, see §8) | `UOS_HW_ADAPTER_KHZ=15000 xpm run test-hwd --config $C` |
+| all QEMU tests (does not build) | `xpm run test --config $C` (= `ctest -V -LE "hwd\|hwsh"`) |
+| all board tests, back to back | `UOS_HW_ADAPTER_KHZ=15000 ctest --test-dir build/$C -L hwd` |
 
 ## 5a. The Ethernet tests
 
 `eth-net` runs like any other board test, with the Ethernet cable plugged in:
 
 ```sh
-UOS_HW_ADAPTER_KHZ=15000 xpm run test-eth-net-hwd --config $C
+UOS_HW_ADAPTER_KHZ=15000 ctest --test-dir build/$C -R '^aarch64-rpi4b-eth-net-hwd$' -V
 ```
 
 `eth-tcp-server` waits 60 s for a client after it prints
-`[TEST] TCP server ready at <address>:7` on the UART. Start it, then run the client from a second
-terminal with that address:
+`[TEST] TCP server ready at <address>:7` on the UART. Start it, then run the
+client from a second terminal with that address:
 
 ```sh
-UOS_HW_ADAPTER_KHZ=15000 xpm run test-eth-tcp-server-hwd --config $C
+UOS_HW_ADAPTER_KHZ=15000 ctest --test-dir build/$C -R '^aarch64-rpi4b-eth-tcp-server-hwd$' -V
 
-# second terminal, while the test waits
-"$W/micro-os-plus-iii-aarch64/test/rpi4b/eth-tcp-server/eth-tcp-host.py" 192.168.1.191 --size 1048576
+# second terminal, while the test waits (from the kernel's tests/)
+platforms/aarch64-rpi4b/tests/eth-tcp-server/eth-tcp-host.py 192.168.1.191 --size 1048576
 ```
 
-The client sends a pattern, checks that every byte comes back, and prints the size and CRC-32
-it sent; the board's `received <n> bytes, CRC-32 <crc>` line must show the same two numbers.
-With `--serial /dev/ttyACM1` instead of an address the client reads the address and the board's
-CRC from the console itself; use that only when no terminal is open on the port.
+The client sends a pattern, checks that every byte comes back, and prints the
+size and CRC-32 it sent; the board's `received <n> bytes, CRC-32 <crc>` line
+must show the same two numbers. With `--serial <port>` instead of an address
+the client reads the address and the board's CRC from the console itself; use
+that only when no terminal is open on the port.
 
-Options, given to CMake at configure time (`cmake -S . -B build/$C -D NAME=value`):
+Options, given at configure time
+(`xpm run prepare --config $C`, then `cmake -D NAME=value build/$C`):
 
 | Option | Default | Meaning |
 |---|---|---|
@@ -206,45 +182,61 @@ Options, given to CMake at configure time (`cmake -S . -B build/$C -D NAME=value
 | `ETH_TEST_PEER` | empty | a second host for `eth-net` to ping |
 | `ETH_TCP_WAIT_S` | `60` | seconds `eth-tcp-server` waits for a client |
 
-When a test fails before the network is up, its `RESULT: FAIL (...)` line says where it stopped:
-no controller or PHY, no link (with the PHY's status registers for the gigabit attempt and for
-the 10/100 retry that follows after 7 s), or no DHCP lease (with the frame counters). Without a
-link the driver also sends one frame to itself through the MAC and through the PHY and prints
-`loopback self-test: MAC ok, PHY ok` on the UART, which separates a controller fault from a
-cable fault.
+When a test fails before the network is up, its `RESULT: FAIL (...)` line
+says where it stopped: no controller or PHY, no link (with the PHY's status
+registers for the gigabit attempt and for the 10/100 retry that follows after
+7 s), or no DHCP lease (with the frame counters). Without a link the driver
+also sends one frame to itself through the MAC and through the PHY and prints
+`loopback self-test: MAC ok, PHY ok` on the UART, which separates a controller
+fault from a cable fault.
 
 ## 6. Board settings
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `UOS_HW_ADAPTER_KHZ` | `4000` | JTAG TCK after connect; `10000`–`15000` tested with the PIO probe firmware |
-| `UOS_HW_RESET_WAIT` | `10` | seconds after the watchdog reset, for the firmware to boot and re-enable JTAG |
-| `OPENOCD` | newest xPack, else `PATH` | the OpenOCD binary to use, e.g. `~/.local/xPacks/@xpack-dev-tools/openocd/0.12.0-7.1/.content/bin/openocd` |
+| `UOS_HW_ADAPTER_KHZ` | `4000` (the config's) | JTAG TCK after connect; `10000`–`15000` tested with the PIO probe firmware |
+| `UOS_HW_ADAPTER_SERIAL` | — | which CMSIS-DAP, when several are connected |
 
-What one `-hwd` run does:
+What one `-hwd` run does (`tests/platforms/aarch64-rpi4b/CMakeLists.txt`,
+`tests/cmake/uos-hwd.tcl`):
 
-1. Resets the board through the BCM2711 watchdog, so no power cycle is needed between tests.
-2. Waits `UOS_HW_RESET_WAIT` seconds.
-3. Connects at 4 MHz, then switches to `UOS_HW_ADAPTER_KHZ`.
-4. Loads the image at `0x80000` and starts core 0. The kernel releases cores 1–3.
-5. Waits for `RESULT: PASS|FAIL` over semihosting.
+1. The reset fixture: resets the board through the BCM2711 watchdog, so no
+   power cycle is needed between tests, and waits 10 s for the firmware.
+2. Connects, then switches to `UOS_HW_ADAPTER_KHZ`.
+3. Halts core 0, enables semihosting on all four cores and the board's
+   HDE hook, loads the image at `0x80000` and starts core 0. The kernel
+   releases cores 1–3.
+4. The test's `RESULT: PASS|FAIL` over semihosting is the verdict; its
+   semihosting exit ends OpenOCD.
 
-The full console goes to the UART only (GPIO14/15, 115200 8N1).
-When it connects, four `Failed to read memory at 0x80{4..7}10088` errors appear. They are normal.
+The full console goes to the UART only (GPIO14/15, 115200 8N1). When it
+connects, four `Failed to read memory at 0x80{4..7}10088` errors appear. They
+are normal.
 
 ## 7. Clean
 
 | Goal | Command |
 |---|---|
-| remove the build outputs (keeps toolchain and CMake config) | `xpm run clean --config $C` |
-| force a fresh CMake configure | `rm build/$C/CMakeCache.txt && xpm run prepare --config $C` |
+| remove the build outputs (keeps toolchain and CMake cache) | `xpm run clean --config $C` |
+| configure again | `xpm run prepare --config $C` |
 
 **Results**
 
 - **Pass:** `RESULT: PASS`, followed by `100% tests passed`.
 - **Fail:** `RESULT: FAIL` or a timeout. Read the `ctest -V` output, then the UART.
 
-## 8. Verification (GitHub clone in `/tmp/rpi4b-verify`, 2026-10-13)
+The latest results: QEMU 22/22 but the known flaky `smp-shapes-test`
+(baseline), and 22/22 on the board on 2026-11-19 (through the former `hw.sh`
+route; the OpenOCD route from CTest is not yet proven on the board).
+
+## 8. Earlier verification (2026-10/11, before the alignment)
+
+> **History.** The runs below used the layout and commands of that time: the
+> tests and board files in `micro-os-plus-iii-aarch64/test/`, the sibling
+> folder layout, the per-test `xpm run test-<test>-hwd` actions and the board's
+> `hw.sh`. They are kept as the record of what was verified then.
+
+### First run: GitHub clone in `/tmp/rpi4b-verify`, 2026-10-13
 
 The five repositories were cloned from `github.com/dan-maio` (branch `smp`) into `/tmp`, with no link to any other workspace.
 

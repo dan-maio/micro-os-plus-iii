@@ -6,7 +6,7 @@
 # tests-main.cmake. The board is the port's own `weactf412`.
 #
 # HARDWARE ONLY: this board is programmed over its ST-Link and run on the desk,
-# so the board declares no UOS_BOARD_LINKER_QEMU and the port's builder emits
+# so the board declares no UOS_BOARD_LINKER_QEMU and the tests' builder emits
 # `hwd` alone.
 # -----------------------------------------------------------------------------
 

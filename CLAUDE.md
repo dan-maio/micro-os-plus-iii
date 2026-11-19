@@ -183,17 +183,34 @@ for example `native-cmake-clang17-release` or
   `tests/device-qemu-cortexm/`)
 - `nucleo-f411re`, `nucleo-f767zi`, `nucleo-h743zi`,
   `raspberrypi-pico` - physical boards (manual)
+- `pico2-1cpu`, `2xcortex-m33` - the generic Cortex-M33 core on QEMU
+  (one and two CPUs)
+- the SMP fork's board platforms: `aarch32-rpi-zero-2w`, `aarch32-rpi3b`,
+  `aarch32-luckfox-lyra`, `aarch64-rpi-zero-2w`, `aarch64-rpi3b`,
+  `aarch64-rpi4b`, `cortexm-pico`, `cortexm-pico2`, `cortexm-pico2-pizero`,
+  `cortexm-pico2-rp2350b-psram`, `cortexm-nucleof411`, `cortexm-weactf411`,
+  `cortexm-weactf412` (and `native`): each holds the board facts
+  (`cmake/board.cmake`), the board code (`include/`, `src/`) and its own tests
+  (`tests/`); `tests/board-tests/CMakeLists.txt` builds them (`-qemu`,
+  `-hwd`, `-host` images), and `tests/cmake/uos-tests-run.cmake` registers
+  how CTest runs them (QEMU, the host, OpenOCD for the boards)
 
 Each platform's `cmake/dependencies-folders.cmake` lists the folders
-added to the build, including the port, which is resolved from
-`build/<config>/xpacks/@micro-os-plus/micro-os-plus-iii-<port>`.
+added to the build, including the port and the device packages, which are
+resolved from `build/<config>/xpacks/@micro-os-plus/micro-os-plus-iii-<name>`.
+The board tests' guide is `docs/tests/TESTS-DEVELOPER-GUIDE.md`.
 
 ### Test applications (`tests/sources/`)
 
 - `rtos-apis` - exercises the RTOS C++ API, the C API and the ISO C++ API
 - `mutex-stress` - several threads competing for one mutex
 - `cmsis-os-validator` - the Arm CMSIS RTOS validator
+- `fp-switch` - FPU registers across preemptive switches
 - `blinky`, `instrumentation` - board/instrumentation demos
+- the SMP fork's portable tests (`os_main()` only, run by every board
+  platform that lists them): `smp_test0` … `smp_test4`, `smp-mat-test`,
+  `smp-mat-sdcard-test`, `smp-num-test`, `smp-pipeline-test`,
+  `smp-pro-cons-test`, `sd_test`, `clock-test`
 
 `tests/deprecated/` is old material and is not built.
 
@@ -204,9 +221,10 @@ central xPacks store. To develop the core and a port together, link the
 sibling repositories:
 
 ```sh
-# Register the sibling repos as linkable packages (once)
-xpm link -C ../micro-os-plus-iii-posix-arch.git
-xpm link -C ../micro-os-plus-iii-cortexm.git
+# Register the local repos as linkable packages (once), e.g.
+xpm link -C ../posix-arch/micro-os-plus-iii-posix-arch
+xpm link -C ../cortexm/micro-os-plus-iii-cortexm
+# (and the other ports and the micro-os-plus-iii-devices-* packages)
 
 # Link them into the per-configuration xpacks folders
 xpm run link-deps-all -C tests

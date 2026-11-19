@@ -6,8 +6,8 @@
 # `hwd` for the probe -- and this platform registers the targets it produced,
 # one CTest case per (test, variant).
 #
-# CTest runs QEMU itself (tests/cmake/uos-tests-run.cmake); the hwd cases
-# still go through the board's hw.sh (run-hw.sh) until step 7. The names carry
+# CTest runs QEMU and, for the hwd cases, OpenOCD itself
+# (tests/cmake/uos-tests-run.cmake). The names carry
 # the variant: `<platform>-<app>-qemu` and `<platform>-<app>-hwd`.
 # -----------------------------------------------------------------------------
 
@@ -18,14 +18,14 @@ include ("cmake/platform-library.cmake")
 include ("${CMAKE_SOURCE_DIR}/cmake/uos-tests-run.cmake")
 
 # The board facts and micro-os-plus::board come from cmake/platform-library.cmake
-# (cmake/board.cmake); the port's builder below reads them.
+# (cmake/board.cmake); the tests' builder below reads them.
 
 # -----------------------------------------------------------------------------
-# Build the port's tests by reusing the port's builder. It emits, per test
+# Build the board's tests with the tests' builder (board-tests/). It emits, per test
 # directory, <app>-qemu and <app>-hwd (this board has both linker scripts),
 # plus the AArch64->AArch32 QEMU boot shim (target `qemu-shim`).
 # The board tests, built by the tests' own builder (board-tests/) from the
-# board's test folder (still in the port until the tests move into tests/).
+# board's test folder (this platform's tests/).
 # The portable tests this board runs (tests/sources/).
 set (UOS_TESTS_SOURCES smp_test0 smp_test1 smp_test2 smp_test3 smp_test4
      smp-num-test smp-pipeline-test smp-pro-cons-test smp-mat-test sd_test

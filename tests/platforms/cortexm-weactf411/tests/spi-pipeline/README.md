@@ -21,9 +21,9 @@ reach for.
 
 | | |
 |---|---|
-| The board it runs on | `platforms/cortexm-weactf411/` in this repository (BSP, linker script, `openocd.cfg`, `hw.sh`) |
-| The kernel | `micro-os-plus-iii-smp.git` |
-| The Cortex-M port | this repository, `micro-os-plus-iii-cortexm.git` |
+| The board it runs on | `tests/platforms/cortexm-weactf411/` in the kernel's repository (BSP, linker script, `openocd.cfg`) |
+| The kernel | `micro-os-plus-iii` (this repository; the test is in `tests/platforms/cortexm-weactf411/tests/spi-pipeline/`) |
+| The Cortex-M port | `micro-os-plus-iii-cortexm` |
 | The Rust original | `micro-os-plus-iii-cortexm-weactf411-rust/examples/spi-pipeline`, in the predecessor tree |
 | The spec + its fixes | `docs/Rust/weact-spi.md`, in the predecessor tree (`luckfox_lyra_micro-os`) |
 
@@ -81,10 +81,10 @@ From the board, `platforms/cortexm-weactf411/`:
 | `src/flash.cpp`, `include/flash.hpp` | W25Q SPI NOR driver |
 | `src/flatfs.cpp`, `include/flatfs.hpp` | the archive: `Partition`, `Writer`, CRC-32 (shared with the BSP) |
 | `src/os-hooks.c` | the clock boot |
-| `openocd.cfg`, `hw.sh` | the probe (a CMSIS-DAP DAPLink) and the port's own runner |
+| `openocd.cfg` | the probe (a CMSIS-DAP DAPLink); CTest runs OpenOCD with it (`cortexm-weactf411-spi-pipeline-hwd`) |
 
-The harness builds the application from this folder: the port's test builder
-makes one application per directory, and `tests.cmake` adds what it needs.
+The tests' builder (`tests/board-tests/CMakeLists.txt`) makes one application
+per folder of the platform's `tests/`, and `tests.cmake` adds what it needs.
 
 ---
 
@@ -358,24 +358,27 @@ RAM disk. The transcript says which one ran on its first lines.
 
 ### Under QEMU
 
-The harness registers **no** QEMU case for this board: `boards/weactf411/board.cmake`
-sets no `UOS_BOARD_LINKER_QEMU`, so the board gets `hwd` cases only. The
+The tests register **no** QEMU case for this board: the platform
+(`tests/platforms/cortexm-weactf411/CMakeLists.txt`) has no QEMU linker script,
+so it gets `hwd` cases only. The
 fall-backs above (the `polled` transport, the RAM store, the HSI clock) are
 still in the code; the QEMU column under *Measuring it* is the predecessor's
 measurement.
 
 ### On the board
 
-From `micro-os-plus-iii/tests`, with the board on its DAPLink probe:
+In the built configuration, with the board on its DAPLink probe:
 
 ```sh
-xpm run test-spi-pipeline-hwd --config cortexm-weactf411-cmake-gcc-debug
+cd micro-os-plus-iii/tests/build/cortexm-weactf411-cmake-gcc-debug
+ctest -R '^cortexm-weactf411-spi-pipeline-hwd$' --output-on-failure
 ```
 
-The transcript is on the board's **UART** (USART1, 115200 8N1); the harness's
-log (`build/<config>/.hw-logs/`) holds OpenOCD and the semihosting output:
-the CRC witness lines (the `CRC0`/`CRC1`/`OK` triplet), which is why the
-runner enables semihosting before `reset run`. Expect `SPI transport dma`,
+The transcript is on the board's **UART** (USART1, 115200 8N1); CTest's
+output (and `Testing/Temporary/LastTest.log`) holds OpenOCD and the
+semihosting output: the CRC witness lines (the `CRC0`/`CRC1`/`OK` triplet),
+which is why the board's OpenOCD commands enable semihosting before
+`reset run`. Expect `SPI transport dma`,
 `JEDEC 0xef …`, the partition layout, eight clean iterations and
 `RESULT: PASS`. Capture the UART to a file and check it:
 

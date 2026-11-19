@@ -1,5 +1,7 @@
 # The µOS++ test framework, step by step
 
+> **History.** This document describes the test layout, scripts and commands before the 2026-11 alignment with upstream µOS++ IIIe (steps 1-7 of WHY-SMP-BUILD-TEST-DIFFERS.md): `test/<board>/` folders in the ports, `hw.sh` / `run-hw.sh`, flatfs and FatFs R0.15a. It is kept as a record; for the current layout see `docs/tests/TESTS-DEVELOPER-GUIDE.md` and `docs/tests/COMMANDS.md`.
+
 This guide explains how to install the test framework, build it, run the
 tests, and add new ones. Each step says **what** you do and **how** you do
 it. Every command here was checked against the code.
@@ -335,7 +337,7 @@ Then follow section 3 with `install → prepare → build → test`.
 There are **22 platforms** and **70 configurations** (35 debug + 35 release;
 `native` has one configuration per compiler). The numbers below are the debug
 case counts from `ctest -N`. What every test does, its scheduling mode and the
-probe each board uses are in [`TESTS-CATALOG.md`](TESTS-CATALOG.md).
+probe each board uses are in [`TESTS-CATALOG.md`](../tests/TESTS-CATALOG.md).
 
 | Platform | Tests | Emulated / host | Hardware |
 |---|---|---|---|

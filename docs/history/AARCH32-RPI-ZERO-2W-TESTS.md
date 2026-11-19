@@ -1,5 +1,7 @@
 # Integrating the µOS++ Test Harness for AArch32 / Raspberry Pi Zero 2 W
 
+> **History.** This document describes the test layout, scripts and commands before the 2026-11 alignment with upstream µOS++ IIIe (steps 1-7 of WHY-SMP-BUILD-TEST-DIFFERS.md): `test/<board>/` folders in the ports, `hw.sh` / `run-hw.sh`, flatfs and FatFs R0.15a. It is kept as a record; for the current layout see `docs/tests/TESTS-DEVELOPER-GUIDE.md` and `docs/tests/COMMANDS.md`.
+
 > **Earlier layout — read as history.** This document describes an earlier
 > harness layout. The SMP kernel and test harness are now unified in
 > `micro-os-plus-iii` (branch `smp`) alongside the sibling ports
@@ -10,7 +12,7 @@
 > `micro-os-plus-iii/tests`: `xpm run install-all`, then `xpm run test-all`
 > (native + cortex + `test-smp-cmake`). For the current framework see
 > [`STEPS.md`](STEPS.md); for every test, board and probe see
-> [`TESTS-CATALOG.md`](TESTS-CATALOG.md); for how the `smp` branches were
+> [`TESTS-CATALOG.md`](../tests/TESTS-CATALOG.md); for how the `smp` branches were
 > built, commit by commit, see
 > [`xpack-dev-smp.md`](../smp-integration/xpack-dev-smp.md) Parts II and III.
 > The code is the truth where they disagree.

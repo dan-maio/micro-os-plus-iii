@@ -1,5 +1,7 @@
 # How the tests are organised and run in `aarch32` / `aarch64`
 
+> **History.** This document describes the test layout, scripts and commands before the 2026-11 alignment with upstream µOS++ IIIe (steps 1-7 of WHY-SMP-BUILD-TEST-DIFFERS.md): `test/<board>/` folders in the ports, `hw.sh` / `run-hw.sh`, flatfs and FatFs R0.15a. It is kept as a record; for the current layout see `docs/tests/TESTS-DEVELOPER-GUIDE.md` and `docs/tests/COMMANDS.md`.
+
 Every board owns its tests.
 
 That is the whole design, and everything below follows from it. There is no
@@ -43,7 +45,7 @@ names no test and no board.
 
 The Pi boards build every application in two variants, so 30 targets each;
 the Lyra is hardware-only (§3), so 19. What each test does is in
-[`tests/TESTS-CATALOG.md`](tests/TESTS-CATALOG.md).
+[`tests/TESTS-CATALOG.md`](../tests/TESTS-CATALOG.md).
 
 ### Why `rpi3b` has its own `test/` but not its own `src/`
 
@@ -174,7 +176,7 @@ Every application is built once per variant, from the same sources:
 > board about CPU count, memory map and compile options. Two of its six boards,
 > `pico2` and `pico2-rp2350b-psram`, also build `-qemu` images for the few
 > tests QEMU's generic Cortex-M can run; the other four are hardware-only. See
-> [`cortexm-port.md`](cortexm-port.md).
+> [`cortexm-port.md`](../cortexm-port.md).
 >
 > **The POSIX port carries the same loop and the same six hooks** with one
 > difference, and it is a difference in the machine rather than in the method:
@@ -184,7 +186,7 @@ Every application is built once per variant, from the same sources:
 > board's real FAT32 boot partition", while the SD tests' other branch is
 > flatfs over a plain image file, which is exactly what a host-file back-end
 > is. Its dispatcher is `test/run.sh` rather than `qemu.sh`/`hw.sh`. See
-> [`posix-arch-port.md`](posix-arch-port.md).
+> [`posix-arch-port.md`](../posix-arch-port.md).
 
 **How many variants is the board's decision, not this file's.** A board that
 sets `UOS_BOARD_LINKER_QEMU` gets both; a board that leaves it unset gets

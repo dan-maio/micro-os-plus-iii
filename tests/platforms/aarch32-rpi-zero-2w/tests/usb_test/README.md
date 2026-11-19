@@ -30,10 +30,10 @@ service thread:
 | Thread | Core | Job |
 |---|---|---|
 | `usb`   | 0 (pinned) | `usb_dwc2::service_thread_body()` — the ISR-driven service loop and the command loop. Blocks in `ep_read`/`ep_write`. |
-| `sd`    | any | the **only** thread that touches the card, the FatFs volume or the flatfs volume. Owns the mount; serves `put`/`get`/`list` requests. |
+| `sd`    | any | the **only** thread that touches the card (through µOS++ POSIX I/O, the FAT volume at `/sd/`). Owns the mount; serves `put`/`get`/`list` requests. |
 | `uart`  | any | the **only** writer of the PL011 console: drains a message queue of file chunks and status lines. |
 | `semi`  | any | the **only** writer of the ARM semihosting channel: same queue discipline. |
-| `led`   | any | blinks the user LED: a burst of 3 blinks, each 40 ms lit then 40 ms dark, then a 300 ms dark gap, repeating. On the Zero 2 W that is the onboard green ACT LED (`LED_PIN=29`, the Makefile default); `make LED_PIN=16` drives header pin 36 instead, for an externally wired LED. The pattern is tunable with `LED_BLINKS`, `LED_ON_MS`, `LED_OFF_MS` and `LED_GAP_MS`. |
+| `led`   | any | blinks the user LED: a burst of 3 blinks, each 40 ms lit then 40 ms dark, then a 300 ms dark gap, repeating. On the Zero 2 W that is the onboard green ACT LED (`LED_PIN=29`, the board's default); `LED_PIN=16` drives header pin 36 instead, for an externally wired LED. The pattern is set by `LED_BLINKS`, `LED_ON_MS`, `LED_OFF_MS` and `LED_GAP_MS` in the platform's `tests/tests.cmake` (`board_test_defines`). |
 | `w0`,`w1` | any | unpinned load generators; keep every core scheduling and produce the per-core SMP tally. |
 
 `uart.hpp` is a polled driver with no locking, so exactly one thread writes it;
@@ -49,25 +49,14 @@ service thread's first `arm_ep0_setup()` was the original enumeration hang.
 
 ## Where the files go
 
-**On hardware (`make HW=1`, which is what `hw.sh` builds), the microSD is the
-BOOT card**: an MBR plus a FAT32 partition carrying `config.txt` and
-`kernel7.img`/`kernel8.img` at its root. So the app **mounts** that partition
-and never formats it, and every file it writes lives under `tests/`. Nothing at
-the FAT root is ever touched.
-
-`flatfs` must not be used on a boot card at all: its superblock is LBA 0, which
-on that card is the MBR. It is used only for the QEMU builds, where a dedicated
-raw `disk.img` is attached and flatfs owns the whole device.
-
-FatFs is built with `FF_USE_LFN = 0` (there is no `ffunicode.c` in the tree),
-so the volume only accepts 8.3 names. Host names are folded to 8.3 — the same
-way for `put`, `get` and `list`, so a GET issued with the original host name
-still finds the file — and the console prints the mapping rather than renaming
-the file behind your back:
-
-```
-stored: send_file.py -> tests/SEND_F~1.PY (8.3)
-```
+**On hardware the microSD is the BOOT card**: an MBR plus a FAT32 partition
+carrying `config.txt` and `kernel7.img`/`kernel8.img` at its root. The test is
+a storage test (`UOS_TESTS_STORAGE` in the platform's `tests/tests.cmake`): the
+builder links the board's SD driver, µOS++ POSIX I/O and Chan FatFs, and
+mounts that partition at `/sd/` before the test starts. The app never formats
+it, and every file it writes lives under `/sd/tests/`; nothing at the FAT root
+is ever touched. FatFs has long file names (`FF_USE_LFN 1`), so the host's
+names are kept as they are.
 
 With no card, or an unmountable one, the app falls back to `RamUartSink`: the
 file is kept in a 128 KiB RAM buffer and still streamed to both consoles.
@@ -98,8 +87,8 @@ RESULT: SKIP (no USB device mode)
 ```
 
 ```bash
-# from the harness's tests/ folder:
-xpm run test-usb_test-qemu --config aarch32-rpi-zero-2w-cmake-gcc-debug
+# in the configuration's build folder, tests/build/aarch32-rpi-zero-2w-cmake-gcc-debug/:
+ctest -R '^aarch32-rpi-zero-2w-usb_test-qemu$' --output-on-failure
 ```
 
 The run also exercises the VideoCore mailbox (`USB power domain: on`), and —
@@ -108,14 +97,16 @@ because no disk image is attached — the `RamUartSink` selection path.
 ## Running on hardware
 
 ```bash
-# from the harness's tests/ folder (board attached; one power cycle):
-xpm run test-usb_test-hwd --config aarch32-rpi-zero-2w-cmake-gcc-debug
-# then, on the host, drive it with the port's app:
-python3 platforms/aarch32-rpi-zero-2w/tests/usb_test/send_file.py myfile.bin --get
+# in tests/build/aarch32-rpi-zero-2w-cmake-gcc-debug/ (board and probe attached):
+ctest -R '^aarch32-rpi-zero-2w-usb_test-hwd$' --output-on-failure
+# then, on the host, while it runs, drive it with the test's app:
+python3 <kernel>/tests/platforms/aarch32-rpi-zero-2w/tests/usb_test/send_file.py myfile.bin --get --terminate
 ```
 
-`hw.sh` builds and loads the image over JTAG; its console is the OpenOCD log.
-On the host, while it runs:
+CTest resets the board, loads the image through OpenOCD and reads the test's
+verdict from its semihosting output; the UART carries the console. `--terminate`
+ends the run (without it the board waits for more commands until the test's
+time limit). On the host, while it runs:
 
 ```bash
 lsusb -d 1d6b:0104
@@ -164,7 +155,7 @@ python3 host_xfer.py --sizes 512,1024 --name z.bin     # the ZLP-sensitive sizes
 ```
 
 The 512 and 1024 cases exercise the zero-length-packet rule, the 0-byte case
-the empty transfer, and 65536/1048576 multi-block `flatfs` writes. The device
+the empty transfer, and 65536/1048576 multi-block FAT writes. The device
 prints `RESULT: PASS` only when no CRC mismatch occurred, at least one command
 was served, and all but at most one core was active during the run
 (the SMP tally). A `100 MiB` run with no `!!! CORRUPT CONTEXT FRAME !!!` from

@@ -111,13 +111,20 @@ device never enumerates.
 
 ## Run
 
-Both tests run on the board only (`-hwd`), through the harness, from
-`micro-os-plus-iii/tests`:
+Both tests run on the board only (`-hwd`), as CTest cases, in the built
+configuration (`micro-os-plus-iii/tests/build/cortexm-pico2-cmake-gcc-debug/`):
 
 ```sh
-xpm run test-smp-test-usb-cdc-acm-hwd --config cortexm-pico2-cmake-gcc-debug
-xpm run test-smp-test-usb-hid-hwd     --config cortexm-pico2-cmake-gcc-debug
+ctest -R '^cortexm-pico2-smp-test-usb-cdc-acm-hwd$' --output-on-failure
+ctest -R '^cortexm-pico2-smp-test-usb-hid-hwd$'     --output-on-failure
 ```
+
+While a test runs, drive it from the host: the CDC port is a new
+`/dev/ttyACM*` (pick it by its USB IDs, `cafe:4013`, or its name in
+`/dev/serial/by-id/`), opened once and kept open (the board ignores input
+while DTR is low); type a line, then Escape. The HID test takes keyboard
+reports (the test's `kbd_forward` host tool, or reports written to the
+device's OUT endpoint); Escape ends it.
 
 (`cortexm-pico2-pizero-cmake-gcc-debug` for the Pi-Zero board.) Enumeration
 needs the board's **own USB port** cabled to the host; the CMSIS-DAP debug
@@ -182,6 +189,6 @@ Both tests passed on the `pico` on 2026-10-13 (CDC as `/dev/ttyACM1`, HID
 with `kbd_forward`), through the JTAGprobe over SWD at 15 MHz:
 
 ```sh
-xpm run test-smp-test-usb-cdc-acm-hwd --config cortexm-pico-cmake-gcc-debug
-xpm run test-smp-test-usb-hid-hwd     --config cortexm-pico-cmake-gcc-debug
+ctest -R '^cortexm-pico-smp-test-usb-cdc-acm-hwd$' --output-on-failure
+ctest -R '^cortexm-pico-smp-test-usb-hid-hwd$'     --output-on-failure
 ```

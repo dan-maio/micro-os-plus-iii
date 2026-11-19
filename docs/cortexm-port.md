@@ -24,53 +24,60 @@ micro-os-plus-iii-cortexm/
 ├── src/rtos/os-core-rp2350.cpp       the same, plus the SMP branch
 ├── src/semihosting-exit.cpp          strong _Exit() through SYS_EXIT
 ├── src/libc/getentropy.c             getentropy() for libstdc++
-├── soc/stm32f4xx/  soc/rp2350/       the SoC support (formerly micro-os-plus-iii-devices),
-│                                     targets soc-stm32f411xe, soc-stm32f412rx, soc-rp2350
-└── test/
-    ├── CMakeLists.txt  hw.sh  qemu.sh
-    ├── boards/<id>/     board.cmake, include/, src/, linker.ld,
-    │                    openocd.cfg, hw.sh   (pico2, pico also: glue/, usb/)
-    └── <id>/            that board's test applications
+└── test/                             empty (.gitkeep), as upstream's
+
+micro-os-plus-iii-devices-rp2xxx/     soc/rp2350, soc/rp2040: soc-rp2350, soc-rp2040
+micro-os-plus-iii-devices-stm32f4/    soc/stm32f4xx: soc-stm32f411xe, soc-stm32f412rx
+
+micro-os-plus-iii/tests/platforms/cortexm-<id>/   each board, in the kernel's tests
+├── CMakeLists.txt       the tests it builds and how OpenOCD runs them
+├── cmake/               definitions, the linked packages, board.cmake
+├── include/, src/       the board code (pico2, pico also: glue/, usb/, qemu/)
+├── device/              the linker scripts
+├── openocd.cfg          the probe and the target
+└── tests/               the board's own tests, tests.cmake
 ```
+
+The boards' shared helpers (`hw_result.hpp`, `debug-host.h`, `syscalls.c`,
+the common test end) are in the kernel's `tests/board-tests/cortexm/`.
 
 | board | part | CPUs | tests |
 |---|---|---|---|
-| `nucleof411` | STM32F411RE, Cortex-M4F | 1 | 4 — `mos-test1` + the 3 harness suites (QEMU `netduinoplus2`, hwd) |
-| `weactf411` | STM32F411CE, Cortex-M4F | 1 | 5 — `mos-test1`, `spi-pipeline` + the 3 suites (QEMU `netduinoplus2`, hwd) |
-| `weactf412` | STM32F412RE, Cortex-M4F | 1 | 5 — `mos-test1`, `uart-test1` + the 3 suites (hwd only; QEMU Netduino SRAM 128K < 256K) |
-| `pico2` | RP2350, 2× Cortex-M33, 4 MB flash | **2** | 26 — 12 port tests + 4 suites (6 QEMU `mps2-an500`, 16 hwd, 4 ram) |
-| `pico2-rp2350b-psram` | RP2350B, 16 MB flash + 8 MB PSRAM | **2** | 16 — 14 port tests (2 QEMU `mps2-an500`, 14 hwd) |
+| `nucleof411` | STM32F411RE, Cortex-M4F | 1 | 4 hwd — `mos-test1` + the 3 suites |
+| `weactf411` | STM32F411CE, Cortex-M4F | 1 | 5 hwd — `mos-test1`, `spi-pipeline` + the 3 suites |
+| `weactf412` | STM32F412RE, Cortex-M4F | 1 | 5 hwd — `mos-test1`, `uart-test1` + the 3 suites |
+| `pico2` | RP2350, 2× Cortex-M33, 4 MB flash | **2** | 27 — 6 QEMU (`mps2-an500`), 21 hwd (4 of them `-ram`) |
+| `pico2-rp2350b-psram` | RP2350B, 16 MB flash + 8 MB PSRAM | **2** | 18 — 3 QEMU (`mps2-an500`), 15 hwd |
 | `pico2-pizero` | RP2350B, 16 MB flash, Pi-Zero form factor | **2** | 14 — hwd only |
-| `pico` | RP2040, 2× Cortex-M0+, 2 MB flash, 264 KB SRAM | **2** | 26 — 12 port tests + 4 suites (6 QEMU `mps2-an385`, 16 hwd, 4 ram) |
+| `pico` | RP2040, 2× Cortex-M0+, 2 MB flash, 264 KB SRAM | **2** | 26 — 6 QEMU (`mps2-an385`), 20 hwd (4 of them `-ram`) |
 
-`nucleof411` and `weactf411` execute cleanly under QEMU with machine `netduinoplus2`
-(`-M netduinoplus2 -cpu cortex-m4 -nographic -semihosting`), passing 4/4 and 5/5
-tests respectively. `weactf412` is hardware-only because the Netduino Plus 2
-machine emulates only 128 KB of SRAM while STM32F412 requires 256 KB (`_estack`
-at `0x20040000`), and `uart-test1` uses DMA2 Stream 7 (`DMA2_Stream7`) which is
-not emulated.
+The three STM32 boards are hardware-only (their platforms register no QEMU
+case). The F412 could not run on QEMU's `netduinoplus2` in any case: it
+emulates 128 KB of SRAM where the STM32F412 needs 256 KB (`_estack` at
+`0x20040000`), and `uart-test1`'s DMA2 Stream 7 is not emulated.
 
 On RP2350, `pico2` and `pico2-rp2350b-psram` build `-qemu` images on `mps2-an500 -cpu cortex-m7`
-(`pico2`: `smp-test1`, `sc-test-ko` and the four suites; `pico2-rp2350b-psram`:
-`smp-test1`, `sc-test-ko`). `pico2` also provides pure-RAM resident test targets
+(`pico2`: `smp-test1`, `sc-test-ko`, `rtos-apis`, `mutex-stress`,
+`cmsis-os-validator`, `fp-switch`; `pico2-rp2350b-psram`: `smp-test1`,
+`sc-test-ko`, `fp-switch`). `pico2` also provides pure-RAM resident test targets
 (`smp-mat-test-ram`, `rtos-apis-ram`, `mutex-stress-ram`, `cmsis-os-validator-ram`).
 `pico` (RP2040) builds the same six `-qemu` images on `mps2-an385 -cpu cortex-m3`
 (the generic M0 core, single-core) and the same four pure-RAM targets.
 What each test does is in [`tests/TESTS-CATALOG.md`](tests/TESTS-CATALOG.md).
 
-**Verified on 2026-10-06** (rebuilt `smp` branches, xpack-dev-smp.md Part III),
-through `xpm run test-smp-cmake` in `micro-os-plus-iii/tests`, `ctest -LE hwd`,
-debug and release: `2xcortex-m33` 4/4, `pico2-1cpu` 4/4, `cortexm-pico2` 6/6,
-`cortexm-pico2-rp2350b-psram` 3/3; and `xpm run test-cortex-cmake` 3/3 on each
-of `qemu-cortex-m0/m3/m4f/m7f` (gcc and clang, debug and release). The
-`hwd` tests and the hardware-only platforms (`cortexm-pico2-pizero`,
-`cortexm-nucleof411`, `cortexm-weactf411`, `cortexm-weactf412`) were built, not
-run.
+**Verified on 2026-11-18/19**, after the board code and tests moved into the
+kernel's `tests/`: every QEMU case, debug and release (`cortexm-pico2` 6/6,
+`cortexm-pico` 6/6, `cortexm-pico2-rp2350b-psram` 3/3, `2xcortex-m33` 4/4,
+`pico2-1cpu` 4/4, `qemu-cortex-m0/m3/m4f/m7f` 3/3 each), and on the boards:
+Pico 2 21/21, Pico 20/20, Nucleo F411 4/4, WeAct F411 5/5, WeAct F412 5/5,
+Pi-Zero RP2350B 14/14, the PSRAM board's automatic tests. The hardware runs
+went through the boards' former `hw.sh`; the OpenOCD route from CTest is not
+yet proven on the boards.
 
 The port also exports **generic QEMU cores** beside the board ones:
 `micro-os-plus::cortexm-qemu-m0`, `-m3`, `-m4f` and `-m7` (with
 `micro-os-plus::cortexm-qemu` aliasing the M7 core), plus
-`micro-os-plus::cortexm-qemu-m33`. The harness's `qemu-cortex-*`, `pico2-1cpu`
+`micro-os-plus::cortexm-qemu-m33`. The tests' `qemu-cortex-*`, `pico2-1cpu`
 and `2xcortex-m33` platforms link them with the generic device in
 `tests/device-qemu-cortexm`, at `OS_NCPU=1` (or `2` for `2xcortex-m33`).
 
@@ -115,13 +122,13 @@ place of the UART and the LED), and `smp-test-mini-a-usb-cdc-acm_agy` —
 ### The RP2040 board
 
 `pico` (Raspberry Pi Pico) is the `pico2` set brought one generation back,
-with no Pico SDK. It has its own board code in `test/boards/pico/` — the
+with no Pico SDK. It has its own board code in `tests/platforms/cortexm-pico/` — the
 RP2040 has its own register map, a 256-byte flash second stage (`boot2.S`,
 copied as data) before the vector table at `0x10000100`, 26 IRQs, a 125 MHz
-clock tree and 264 KB of SRAM — and its own SoC target, `soc/rp2040`
-(`micro-os-plus::soc-rp2040`). Its USB reuses pico2's TinyUSB, `cdc/` and
+clock tree and 264 KB of SRAM — and its own SoC target, `soc/rp2040` in
+`micro-os-plus-iii-devices-rp2xxx` (`micro-os-plus::soc-rp2040`). Its USB reuses pico2's TinyUSB, `cdc/` and
 `hid/`, with only the address-, reset- and IRQ-carrying shim files of its own
-(`test/boards/pico/usb/pico-shim/`, searched first; RP2040-E2 on).
+(`usb/pico-shim/`, searched first; RP2040-E2 on).
 
 | | `pico` |
 |---|---|
@@ -131,7 +138,8 @@ clock tree and 264 KB of SRAM — and its own SoC target, `soc/rp2040`
 | IPI | SIO FIFO, `SIO_IRQ_PROC0` (15) / `SIO_IRQ_PROC1` (16) |
 | probe | JTAGprobe `0x2e8a:0x000c`, SWD @15000 (`UOS_HW_ADAPTER_KHZ`) |
 
-Its tests are `test/pico/`, copied from `test/pico2/` and adapted: the RP2040
+Its tests are `tests/platforms/cortexm-pico/tests/`, copied from the Pico 2's
+and adapted: the RP2040
 TIMER, reset bits and UART divisors, `exc-test` without UsageFault,
 `smp-mat-test` at N = 80, B = 20, the onboard LED in place of the WS2812.
 All 26 cases passed on 2026-10-13 (debug); in release, the 6 QEMU and the 18
@@ -177,7 +185,7 @@ The SMP `SysTick_Handler()` on core 0 runs the ticks TIMER0 says are due since
 that origin -- usually one, several after interrupts were masked (SysTick
 latches one pending interrupt only, and lost 3-10 ms at the start-up), none
 when SysTick runs a little fast -- so the kernel's clocks follow TIMER0 (fixed
-on 2026-10-22; `test/pico2/clock-test` checks it on the board).
+on 2026-10-22; the Pico 2's `clock-test` checks it on the board).
 `clock_highres::start()` ensures the timer peripheral is unreset and
 configured. On generic Cortex-M and M33 (`include/`, `include-m33/`),
 `has_hardware_counter()` returns `false`, safely retaining the SysTick phase
@@ -292,7 +300,7 @@ Who takes what, and why:
 
 A glob over `src/` linked both copies and failed on duplicate definitions —
 `uart::init()`, `uart::put_char()`, `HardFault_Handler`. Each board's
-`test/<board>/tests.cmake` composes them per test through the
+`tests/tests.cmake` composes them per test through the
 `board_test_sources()` hook, which is the same hook the Lyra uses for the same
 reason.
 
@@ -369,23 +377,27 @@ test loop refuses the request rather than quietly linking a kernel.
 
 ## 6. Running them
 
-OpenOCD only. No GDB anywhere in this path, and nothing redirected.
+OpenOCD only, started by CTest. No GDB anywhere in this path, and nothing
+redirected. In the configuration's build folder (`tests/build/<config>/`):
 
 ```sh
-BOARD=nucleof411           ./test/hw.sh            # list what is built
-BOARD=nucleof411           ./test/hw.sh mos-test1
-BOARD=pico2                ./test/hw.sh smp-test2
-BOARD=pico2-rp2350b-psram  ./test/hw.sh smp-mat-test
-BOARD=pico2-pizero         ./test/hw.sh sc-test-ko
-BOARD=pico                 ./test/hw.sh smp-test2
+ctest -R '^cortexm-nucleof411-mos-test1-hwd$' --output-on-failure
+ctest -R '^cortexm-pico2-smp-test2-hwd$' --output-on-failure
+ctest -L hwd                                   # every hardware test of the board
+ctest -L qemu                                  # the emulated ones
 ```
 
-The STM32 boards: program, `arm semihosting enable`, `reset run`. Semihosting
+Each platform's `CMakeLists.txt` lists the OpenOCD commands of its run
+(`uos_tests_add_openocd`, `tests/cmake/uos-tests-run.cmake`); the test's
+semihosting exit ends OpenOCD and its `RESULT` line is the verdict.
+
+The STM32 boards: `init`, `reset halt`, program, `arm semihosting enable`,
+`reset run`. Semihosting
 must be enabled **before** the image runs — `os::trace::printf()` issues
 `BKPT 0xAB`, which faults if the debugger is not listening for it.
 
 The three RP2350 boards are different in two ways, both learned on the board
-and both carried in each `hw.sh`:
+and both in each platform's OpenOCD commands:
 
 - **`reset init`, not `reset`.** A bare reset does not re-run the RP2350
   bootrom/XIP setup, so the freshly programmed image never boots.
@@ -401,9 +413,11 @@ and both carried in each `hw.sh`:
 `Failed to select multidrop rp2040.dap1` once core 1 is launched; it
 re-examines the core and the run goes on.
 
-They trace over their own UART, not semihosting, so OpenOCD exits once both
-cores are running and the console is the board's serial port — on whichever
-pins that board wires it to.
+Their console is their own UART, on whichever pins the board wires it to;
+the run never opens it. The verdict also goes through semihosting, and the
+test's exit ends OpenOCD. The `-ram` tests (Pico, Pico 2) load the image into
+SRAM instead of programming the flash, verify it, start core 1 in the boot
+ROM and core 0 from the image's vector table (VTOR, SP, PC).
 
 ---
 
@@ -430,7 +444,7 @@ Verified in the linked image:
   .word 0x00020023        <- ADP_Stopped_RunTimeError
 ```
 
-In `test/boards/shared/hw_result.hpp`, tests report the verdict and exit using
+In `tests/board-tests/cortexm/hw_result.hpp` (the kernel's), tests report the verdict and exit using
 `std::_Exit(0)` rather than `std::exit(0)`. In a multi-threaded RTOS environment,
 `std::exit()` invokes `atexit` callbacks and executes C++ static object
 destructors while threads remain active. When static intrusive containers (such
@@ -441,7 +455,7 @@ the semihosting exit breakpoint.
 
 The Cortex-M0+ (ARMv6-M) cannot read `DHCSR` from software, so on
 `__ARM_ARCH_6M__` `src/semihosting-exit.cpp` and
-`test/boards/shared/debug-host.h` skip the "debugger attached" check; the
+`tests/board-tests/cortexm/debug-host.h` skip the "debugger attached" check; the
 M4 and M33 builds are unchanged.
 
 
@@ -449,12 +463,9 @@ M4 and M33 builds are unchanged.
 
 ## 8. What is not done
 
-- **Hardware results are not recorded here.** When this section was first
-  written nothing had run on a board. Since then every board has a `-hwd`
-  runner (`test/boards/<id>/hw.sh`, with the `hw_result` verdict), and the
-  git history of `micro-os-plus-iii-cortexm` shows tests adjusted on
-  hardware (e.g. the HID test's Escape-to-PASS). This document does not keep
-  a per-test hardware record.
+- **A per-test hardware record is not kept here.** The latest results per
+  board are in §1 and in [`tests/TESTS-CATALOG.md`](tests/TESTS-CATALOG.md)
+  §10.
 - **`sc-test-ko` is the pair's missing half, and it *is* carried.** Together
   with `smp-test-ko` it is the same ten kernel objects run single-core and
   cross-core, which makes it the closest thing this port has to a regression

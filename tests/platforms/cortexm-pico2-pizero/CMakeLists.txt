@@ -6,8 +6,9 @@
 # and the board is built ARMv8-M -- so the builder emits `hwd` alone and this
 # platform registers what it produced, named `<platform>-<app>-hwd`.
 #
-# hwd tests are NOT run by a plain `ctest`: they need the board, one test per
-# power cycle. They carry the `hwd` label.
+# hwd tests need the board: they carry the `hwd` label, which the
+# configuration's `test` action skips (`ctest -LE "hwd|hwsh"`), and run one at
+# a time (RUN_SERIAL); OpenOCD programs and resets the board for each.
 # -----------------------------------------------------------------------------
 
 message (VERBOSE "Processing 'tests/platforms/${PLATFORM_NAME}'...")
@@ -16,12 +17,12 @@ message (VERBOSE "Processing 'tests/platforms/${PLATFORM_NAME}'...")
 include ("cmake/platform-library.cmake")
 
 # The board facts and micro-os-plus::board come from cmake/platform-library.cmake
-# (cmake/board.cmake); the port's builder below reads them.
+# (cmake/board.cmake); the tests' builder below reads them.
 
-# Build the port's tests by reusing the port's builder. The binary dir ends in
-# `test`, which is what the board's hw.sh expects ($BUILD/test/<app>-hwd).
+# Build the board's tests with the tests' builder (board-tests/); the images
+# land in port-tests/test/.
 # The board tests, built by the tests' own builder (board-tests/) from the
-# board's test folder (still in the port until the tests move into tests/).
+# board's test folder (this platform's tests/).
 set (UOS_TESTS_PORT cortexm)
 # The board-only tests: this platform's tests/ (tests.cmake, include/, src/,
 # one folder per test).

@@ -18,7 +18,7 @@
 # UOS_BOARD_LIBS.
 #
 # A macro, not a function: the facts it checks and completes stay visible to
-# the port's test builder, which the platform adds next.
+# the tests' builder, which the platform adds next.
 # -----------------------------------------------------------------------------
 
 include_guard (GLOBAL)

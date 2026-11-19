@@ -1,5 +1,7 @@
 # Comparative Analysis: µOS++ IIIe Test Framework
 
+> **History.** This document describes the test layout, scripts and commands before the 2026-11 alignment with upstream µOS++ IIIe (steps 1-7 of WHY-SMP-BUILD-TEST-DIFFERS.md): `test/<board>/` folders in the ports, `hw.sh` / `run-hw.sh`, flatfs and FatFs R0.15a. It is kept as a record; for the current layout see `docs/tests/TESTS-DEVELOPER-GUIDE.md` and `docs/tests/COMMANDS.md`.
+
 *`xpack-development` (Standard Single-Core) vs. `smp` (Multi-Core Unified Harness)*
 
 ---

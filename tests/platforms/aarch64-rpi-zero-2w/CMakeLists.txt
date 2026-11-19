@@ -17,12 +17,12 @@ include ("cmake/platform-library.cmake")
 include ("${CMAKE_SOURCE_DIR}/cmake/uos-tests-run.cmake")
 
 # The board facts and micro-os-plus::board come from cmake/platform-library.cmake
-# (cmake/board.cmake); the port's builder below reads them.
+# (cmake/board.cmake); the tests' builder below reads them.
 
 # -----------------------------------------------------------------------------
-# Build every port test (qemu + hwd) by reusing the port's builder.
+# Build every test (qemu + hwd) with the tests' builder (board-tests/).
 # The board tests, built by the tests' own builder (board-tests/) from the
-# board's test folder (still in the port until the tests move into tests/).
+# board's test folder (this platform's tests/).
 # The portable tests this board runs (tests/sources/).
 set (UOS_TESTS_SOURCES smp_test0 smp_test1 smp_test2 smp_test3 smp_test4
      smp-num-test smp-pipeline-test smp-pro-cons-test smp-mat-test sd_test

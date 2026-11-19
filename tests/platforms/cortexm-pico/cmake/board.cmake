@@ -33,7 +33,7 @@
 #                 image (src/boot2.S); the vector table follows it.
 #
 # The probe is the JTAGprobe (CMSIS-DAP v2), over SWD -- the RP2040 has no
-# JTAG -- at 15 MHz by default (openocd.cfg, hw.sh).
+# JTAG -- at 15 MHz by default (openocd.cfg; UOS_HW_ADAPTER_KHZ in CMakeLists.txt).
 # -----------------------------------------------------------------------------
 
 set (UOS_BOARD_SRC_DIR "${CMAKE_SOURCE_DIR}/platforms/cortexm-pico")

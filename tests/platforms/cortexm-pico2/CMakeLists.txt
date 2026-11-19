@@ -6,12 +6,13 @@
 # the board can run emulated, `-qemu`, and this platform registers what it
 # produced, named `<platform>-<app>-<variant>`.
 #
-# hwd tests are NOT run by a plain `ctest`: they need the board, one test per
-# power cycle. They carry the `hwd` label.
+# hwd tests need the board: they carry the `hwd` label, which the
+# configuration's `test` action skips (`ctest -LE "hwd|hwsh"`), and run one at
+# a time (RUN_SERIAL); OpenOCD programs and resets the board for each.
 #
 # The `qemu` images end themselves: each test prints a RESULT line and, under
 # QEMU_BUILD, exits through the strong semihosting _Exit() (see the port's
-# platforms/cortexm-pico2/tests/include/hw_result.hpp), so CTest reads a real exit code and needs
+# board-tests/cortexm/hw_result.hpp), so CTest reads a real exit code and needs
 # no runner script.
 # -----------------------------------------------------------------------------
 
@@ -21,12 +22,12 @@ message (VERBOSE "Processing 'tests/platforms/${PLATFORM_NAME}'...")
 include ("cmake/platform-library.cmake")
 
 # The board facts and micro-os-plus::board come from cmake/platform-library.cmake
-# (cmake/board.cmake); the port's builder below reads them.
+# (cmake/board.cmake); the tests' builder below reads them.
 
-# Build the port's tests by reusing the port's builder. The binary dir ends in
-# `test`, which is what the board's hw.sh expects ($BUILD/test/<app>-hwd).
+# Build the board's tests with the tests' builder (board-tests/); the images
+# land in port-tests/test/.
 # The board tests, built by the tests' own builder (board-tests/) from the
-# board's test folder (still in the port until the tests move into tests/).
+# board's test folder (this platform's tests/).
 set (UOS_TESTS_PORT cortexm)
 # Upstream's suites (tests/sources/<suite>/), on the platform's start-up
 # (board-tests/cortexm/test-end.cpp, include/test-end-console.h), with the

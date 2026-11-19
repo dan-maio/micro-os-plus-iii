@@ -261,8 +261,8 @@ kernel.
 | Kernel | `micro-os-plus-iii/src/rtos`, `include/cmsis-plus/rtos` | Threads, scheduler, clocks, timers, mutexes, condition variables, semaphores, queues, event flags, memory pools, the C API |
 | Port contract | `micro-os-plus-iii/port/smp-common` and each port's `include/cmsis-plus/rtos/port` | Type widths, IRQ-state representation, per-CPU arrays and the spinlock structures |
 | Port implementation | each port's `include/cmsis-plus/rtos/port/os-inlines.h` and `src/rtos/os-core.cpp` | Core id, IRQ mask, atomic operations, kernel lock, context-switch entry, secondary-core start |
-| Board | each port's `test/boards/<board>` | Memory map, MMU, interrupt controller routing, timer rate, core-release mechanism, UART, LED, SD, USB |
-| Application | `test/<board>/<test>` or the user's `main` | Threads, affinities, priorities, synchronisation, the boot call sequence |
+| Board | the kernel's `tests/platforms/<platform>/` (`cmake/board.cmake`, `include/`, `src/`) | Memory map, MMU, interrupt controller routing, timer rate, core-release mechanism, UART, LED, SD, USB |
+| Application | `tests/sources/<test>/`, `tests/platforms/<platform>/tests/<test>/` or the user's `main` | Threads, affinities, priorities, synchronisation, the boot call sequence |
 
 The important consequence is that **there are two files called
 `src/rtos/os-core.cpp` in every image**, and both are compiled:
@@ -358,7 +358,7 @@ facts too, and the compile-time contract requires them.
 
 ## 3.3 An example
 
-`micro-os-plus-iii-aarch64/test/boards/rpi4b/board.cmake` says:
+`micro-os-plus-iii/tests/platforms/aarch64-rpi4b/cmake/board.cmake` says:
 
 ```cmake
 set (UOS_BOARD_NCPU  4)
@@ -369,7 +369,7 @@ set (UOS_BOARD_DEFINES
      ...)
 ```
 
-and `uos_add_app()` turns that into `OS_NCPU=4` and
+and the tests' builder (`tests/board-tests/`) turns that into `OS_NCPU=4` and
 `OS_USE_SMP_SCHEDULER=1` for every application on that board. Nothing in the
 application source mentions either macro; the test sources include
 `<smp.hpp>` and use `OS_NCPU` as a constant.
@@ -1616,8 +1616,9 @@ ctest -N                       # list the tests
 ctest -R '^aarch64-rpi4b-smp_test2-qemu$' --output-on-failure
 ```
 
-A hardware run uses the same build plus the board's `hw.sh` (OpenOCD, a
-CMSIS-DAP probe, a serial console). The test's verdict is the `RESULT: PASS`
+A hardware run is a CTest case too, `ctest -R '^aarch64-rpi4b-smp_test2-hwd$'`:
+CTest resets the board and runs OpenOCD with the board's configuration (a
+CMSIS-DAP probe; the serial console is yours). The test's verdict is the `RESULT: PASS`
 line and/or the CTest exit code; a run that never prints it is a timeout, not
 a pass.
 
@@ -1713,11 +1714,11 @@ No design is free. These are the deliberate limits of this one.
 | C API | `src/rtos/os-c-wrapper.cpp` |
 | Shared port declarations | `port/smp-common/cmsis-plus/rtos/port/os-decls.h` |
 | AArch32 port | `micro-os-plus-iii-aarch32/include/cmsis-plus/rtos/port/*`, `src/rtos/os-core.cpp`, `src/handlers.cpp`, `src/context_switch.cpp` |
-| AArch64 port | `micro-os-plus-iii-aarch64/include/cmsis-plus/rtos/port/*`, `src/rtos/os-core.cpp`, `test/boards/rpi4b/src/startup.S` |
+| AArch64 port | `micro-os-plus-iii-aarch64/include/cmsis-plus/rtos/port/*`, `src/rtos/os-core.cpp`; the Pi 4 B's `tests/platforms/aarch64-rpi4b/src/startup.S` (kernel) |
 | Cortex-M port | `micro-os-plus-iii-cortexm/include-*`, `src/rtos/os-core-*.cpp` |
 | POSIX host port | `micro-os-plus-iii-posix-arch/src/rtos/os-core.cpp`, `src/host_cpu.cpp` |
-| Board facts and contract | `test/boards/<board>/board.cmake`, `test_smpl/src/board-contract.cpp` |
-| Shared SMP test scaffolding | `test/<board>/src/test-smp-boot.cpp` |
+| Board facts and contract | `tests/platforms/<platform>/cmake/board.cmake`, `test_smpl/src/board-contract.cpp` |
+| Shared SMP test scaffolding | `tests/platforms/<platform>/tests/src/test-smp-boot.cpp` |
 
 ## 17.2 Glossary
 

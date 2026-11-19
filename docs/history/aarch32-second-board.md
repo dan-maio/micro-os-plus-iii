@@ -1,5 +1,7 @@
 # What a second board changed in the AArch32 port
 
+> **History.** This document describes the test layout, scripts and commands before the 2026-11 alignment with upstream µOS++ IIIe (steps 1-7 of WHY-SMP-BUILD-TEST-DIFFERS.md): `test/<board>/` folders in the ports, `hw.sh` / `run-hw.sh`, flatfs and FatFs R0.15a. It is kept as a record; for the current layout see `docs/tests/TESTS-DEVELOPER-GUIDE.md` and `docs/tests/COMMANDS.md`.
+
 The AArch32 port was written for one board — a Raspberry Pi Zero 2 W, four
 Cortex-A53 running in 32-bit mode — and then, in step 3, asked to carry a
 second: the **Luckfox Lyra B**, a Rockchip RK3506 with three Cortex-A7 and a

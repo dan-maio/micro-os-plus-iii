@@ -16,12 +16,12 @@ message (VERBOSE "Processing 'tests/platforms/${PLATFORM_NAME}'...")
 include ("cmake/platform-library.cmake")
 
 # The board facts and micro-os-plus::board come from cmake/platform-library.cmake
-# (cmake/board.cmake); the port's builder below reads them.
+# (cmake/board.cmake); the tests' builder below reads them.
 
-# Build the port's tests by reusing the port's builder. The binary dir ends in
-# `test`, which is what the board's hw.sh expects ($BUILD/test/<app>-hwd).
+# Build the board's tests with the tests' builder (board-tests/); the images
+# land in port-tests/test/.
 # The board tests, built by the tests' own builder (board-tests/) from the
-# board's test folder (still in the port until the tests move into tests/).
+# board's test folder (this platform's tests/).
 set (UOS_TESTS_PORT cortexm)
 # Upstream's suites (tests/sources/<suite>/), on the platform's start-up
 # (board-tests/cortexm/test-end.cpp, include/test-end-console.h), with the

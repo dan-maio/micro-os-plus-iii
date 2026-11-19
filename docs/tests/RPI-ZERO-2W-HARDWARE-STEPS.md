@@ -2,8 +2,13 @@
 
 This page runs one µOS++ test on a Raspberry Pi Zero 2 W through OpenOCD,
 by hand, for the 32-bit (AArch32) and the 64-bit (AArch64) port. It does
-the same thing the test scripts (`hw.sh`, `run-hw.sh`) do, written out as
-plain commands.
+the same thing CTest does for a `-hwd` test (the reset fixture
+`tests/cmake/uos-hwd-reset.cmake`, then `tests/cmake/uos-hwd.tcl`), written
+out as plain commands. The usual way is one line, in the build folder:
+
+```bash
+PROBE=jlink ctest -R '^aarch32-rpi-zero-2w-smp_test0-hwd$' --output-on-failure
+```
 
 The probe is a SEGGER J-Link, used through OpenOCD. (An Olimex
 ARM-USB-OCD also works; see the end of the page.)
@@ -22,8 +27,7 @@ ARM-USB-OCD also works; see the end of the page.)
 7. The test runs and prints `RESULT: PASS` (or `FAIL`).
 
 Each test starts with the watchdog reset of step 4, so the tests can be run
-one after another. (On 2026-10-09 all 14 tests but `usb_test` passed this
-way, back to back, on both ports.) If a test hangs, power-cycle the board.
+one after another. If a test hangs, power-cycle the board.
 
 ## The SD card
 
@@ -34,7 +38,7 @@ same width as the port, because the two ports wake the cores differently:
 | Port | SD card `config.txt` | The kernel wakes cores 1–3 by writing | Cores 1–3 wait at (after step 4) |
 |---|---|---|---|
 | AArch32 | `arm_64bit=0` | their mailbox 3 | `pc=0x7a`, Thumb, Hypervisor |
-| AArch64 | `arm_64bit=1` (e.g. `$A64/test/boards/rpi-zero-2w/hw-park/`) | their release word at `0xd8 + 8*core` | `pc=0x7c`, EL2H |
+| AArch64 | `arm_64bit=1` (e.g. `$K/tests/platforms/aarch64-rpi-zero-2w/hw-park/`) | their release word at `0xd8 + 8*core` | `pc=0x7c`, EL2H |
 
 So switch the SD card (or its `config.txt` and kernel) when you switch
 ports. To check it, after a step-4 reset and a 12 s wait:
@@ -47,27 +51,23 @@ $OPENOCD -s $CFG -f $CFG/openocd-jlink-rpi3.cfg -c "init" \
 
 `pc` must be the value in the table (the same for `cpu2`, `cpu3`). If a core
 is anywhere else, the SD card's kernel has started it, and these steps will
-not work: use another card, or the previous flow, kept in each port's
-`test/boards/rpi-zero-2w/hw.sh.bak` (it starts all four cores and first
-clears the `__smp_spin` table in RAM).
+not work: use another card.
 
 ## Step 0 — set the paths
 
 ```bash
-WORK=/home/dan/Desktop/tmp_tests          # the folder that holds the repositories
-K=$WORK/micro-os-plus-iii                 # kernel
-A32=$WORK/micro-os-plus-iii-aarch32       # 32-bit port
-A64=$WORK/micro-os-plus-iii-aarch64       # 64-bit port
+K=<workspace>/micro-os-plus-iii          # the kernel; the board files are in its tests/
 BUILD=$K/tests/build
-OPENOCD=$HOME/.local/xPacks/@xpack-dev-tools/openocd/0.12.0-7.1/.content/bin/openocd
+OPENOCD=$(ls -d $HOME/.local/xPacks/@xpack-dev-tools/openocd/*/.content/bin/openocd | sort -V | tail -1)
 ```
 
 ## Step 1 — build the tests
 
 ```bash
 cd $K/tests
-xpm install     --config aarch32-rpi-zero-2w-cmake-gcc-debug
-xpm run prepare --config aarch32-rpi-zero-2w-cmake-gcc-debug
+xpm install       --config aarch32-rpi-zero-2w-cmake-gcc-debug
+xpm run link-deps --config aarch32-rpi-zero-2w-cmake-gcc-debug
+xpm run prepare   --config aarch32-rpi-zero-2w-cmake-gcc-debug
 xpm run build   --config aarch32-rpi-zero-2w-cmake-gcc-debug
 ```
 
@@ -77,8 +77,8 @@ The programs for the board are the files ending in `-hwd`, in
 `$BUILD/aarch32-rpi-zero-2w-cmake-gcc-debug/platform-bin/port-tests/test/`
 (or `aarch64-...`). The tests are: `smp_test0` … `smp_test4`,
 `smp-mat-test`, `smp-mat-sdcard-test`, `smp-num-test`, `smp-pipeline-test`,
-`smp-pro-cons-test`, `sd_test`, `usb_test`, `cmsis-os-validator`,
-`mutex-stress`, `rtos-apis`.
+`smp-pro-cons-test`, `sd_test`, `clock-test`, `usb_test`, `wifi-net`,
+`wifi-tcp-server`, `cmsis-os-validator`, `mutex-stress`, `rtos-apis`.
 
 ---
 
@@ -88,7 +88,7 @@ The programs for the board are the files ending in `-hwd`, in
 
 ```bash
 D=$BUILD/aarch32-rpi-zero-2w-cmake-gcc-debug/platform-bin/port-tests/test
-CFG=$A32/test/boards/rpi-zero-2w
+CFG=$K/tests/platforms/aarch32-rpi-zero-2w
 ELF=$D/smp_test0-hwd
 ```
 
@@ -100,7 +100,7 @@ Nothing has to be read from the ELF: the program always starts at
 In another terminal:
 
 ```bash
-tio -b 115200 /dev/ttyACM0
+tio -b 115200 /dev/serial/by-id/<your USB-UART>
 ```
 
 OpenOCD never uses this port, so it can stay open all the time.
@@ -186,7 +186,7 @@ What each part does:
    in the firmware's loop, waiting on their mailbox 3.
 
 Core 0 starts the system. When the kernel is ready, the test wakes each of
-cores 1–3 (`release_one()` in `test/boards/rpi-zero-2w/src/smp.cpp`): it
+cores 1–3 (`release_one()` in the platform's `src/smp.cpp`): it
 first writes the core's start address into its `__smp_spin` slot, then
 writes `_start` into the core's mailbox 3. The core leaves the firmware's
 loop, runs `_start`, and finds its `__smp_spin` slot already written — so
@@ -194,7 +194,7 @@ whatever the previous program left in RAM there does not matter, and
 OpenOCD does not have to clear it.
 
 
-this can be simplified by tcl script :
+`tests/cmake/uos-hwd.tcl` does the same as a Tcl procedure; written out, it is:
 
 ```
 # Connect to the board.
@@ -227,14 +227,13 @@ foreach core {1 2 3} {
 ### Step 7 — watch the result
 
 The test's messages appear in this OpenOCD window. It passed when it prints
-`RESULT: PASS`. Then press **Ctrl-C** to stop OpenOCD. An SMP test shows that
+`RESULT: PASS`; its semihosting exit then ends OpenOCD (press **Ctrl-C** if
+it does not). An SMP test shows that
 cores 1–3 started, e.g. `join: c1=3 c2=3 c3=3`.
 
-How long to wait at most: `smp_test0`–`smp_test3` 120 s; `smp_test4`,
-`usb_test`, `cmsis-os-validator`, `mutex-stress`, `rtos-apis` 300 s;
-`sd_test` 450 s; `smp-num-test`, `smp-pipeline-test`, `smp-pro-cons-test`
-600 s; `smp-mat-test`, `smp-mat-sdcard-test` 900 s. Printing is slow over
-JTAG, so the chatty tests take long.
+How long to wait at most: the time limit of the test's `-hwd` case (its
+`TIMEOUT` in the platform's `CMakeLists.txt`).
+Printing is slow over JTAG, so the chatty tests take long.
 
 ### Step 8 — the next test
 
@@ -250,7 +249,7 @@ The same steps; only these things change:
 | | AArch32 | AArch64 |
 |---|---|---|
 | SD card | `arm_64bit=0` | `arm_64bit=1` |
-| Config folder `CFG` | `$A32/test/boards/rpi-zero-2w` | `$A64/test/boards/rpi-zero-2w` |
+| Config folder `CFG` | `$K/tests/platforms/aarch32-rpi-zero-2w` | `$K/tests/platforms/aarch64-rpi-zero-2w` |
 | Entry point | `0x1003c` | `0x80000` |
 | Start core 0 | `reg cpsr 0x600001da`, `resume 0x1003c` | `reg pc 0x80000`, `resume` |
 | Cores 1–3 | `resume` where they are | `resume` where they are |
@@ -260,7 +259,7 @@ The same steps; only these things change:
 
 ```bash
 D=$BUILD/aarch64-rpi-zero-2w-cmake-gcc-debug/platform-bin/port-tests/test
-CFG=$A64/test/boards/rpi-zero-2w
+CFG=$K/tests/platforms/aarch64-rpi-zero-2w
 ELF=$D/smp_test0-hwd
 ```
 
@@ -317,10 +316,11 @@ In steps 4 and 6, write `openocd-olimex.cfg` instead of
 
 A Raspberry Pi Debug Probe, or a Pico running the debugprobe firmware, on the
 same JTAG pins: in steps 4 and 6, write `openocd-cmsisdap-rpi3.cfg` instead of
-`openocd-jlink-rpi3.cfg` (with `hw.sh`: `PROBE=cmsis-dap`). Leave the probe's
+`openocd-jlink-rpi3.cfg` (with CTest: `PROBE=cmsis-dap`). Leave the probe's
 reset line off the Pi's RUN pad: held low, it keeps the Pi in reset and the
 JTAG chain reads all zeroes. With two CMSIS-DAP probes connected, OpenOCD takes
-the first one it finds; add `-c "adapter serial <serial>"` before the config.
+the first one it finds; add `-c "adapter serial <serial>"` before the config
+(with CTest: `UOS_HW_ADAPTER_SERIAL=<serial>`).
 
 ## If something goes wrong
 

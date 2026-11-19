@@ -37,15 +37,15 @@ boot card) the test prints `RESULT: SKIP`, as `usb_test` does.
 The PC's cable goes into the Pi 4's USB-C socket.
 
 ```sh
-# the board (from micro-os-plus-iii-aarch64, BUILD as for every rpi4b test)
-tests/platforms/aarch64-rpi4b/hw.sh usb_big_test 240
+# the board, in tests/build/aarch64-rpi4b-cmake-gcc-debug/
+ctest -R '^aarch64-rpi4b-usb_big_test-hwd$' --output-on-failure
 
-# the PC, once 1d6b:0104 is on the bus (lsusb -d 1d6b:0104)
+# the PC, from the kernel's tests/, once 1d6b:0104 is on the bus (lsusb -d 1d6b:0104)
 make -C platforms/aarch64-rpi4b/tests/usb_big_test/host
 platforms/aarch64-rpi4b/tests/usb_big_test/host/output/usb_test_host --big <file>
 ```
 
-**`SEMI_PRINTS` must be 0** (the default, `test/CMakeLists.txt`). With 1,
+**`SEMI_PRINTS` must be 0** (the default, `tests/board-tests/CMakeLists.txt`). With 1,
 every console line of the `hwd` image is also a semihosting trap, which stops
 core 0 for a JTAG round trip (seconds on this probe): the USB device cannot
 answer the host meanwhile, and enumeration fails (`device descriptor read/64,
@@ -54,7 +54,7 @@ can also lose the debug link. Check the build directory's cache
 (`grep SEMI_PRINTS CMakeCache.txt`) and reconfigure with `-DSEMI_PRINTS=0`.
 
 The host tool (`host/`) is the Luckfox Lyra's `usb_test_host`
-(`micro-os-plus-iii-aarch32/test/luckfox-lyra/smp_test6/host/`) with the
+(`platforms/aarch32-luckfox-lyra/tests/smp_test6/host/`) with the
 VID:PID `1d6b:0104`. It reports `PASSED: all N bytes match` and the ack; the
 board's verdict and the transfer's numbers are on its UART.
 
@@ -64,11 +64,13 @@ board's verdict and the transfer's numbers are on its UART.
 - `host/` — the host tool (`usb_test_host.cpp`, `libusb_wrapper.hpp`,
   `Makefile`; `usb_recv_host.cpp` is the Lyra bridge's other end, unused
   here).
-- `drivers/src/usb_dwc2.cpp`, `drivers/include/usb_dwc2.hpp` — the driver;
+- the driver, in the `micro-os-plus-iii-devices-bcm283x` package:
+  `drivers/aarch64/src/usb_dwc2.cpp`, `drivers/aarch64/include/usb_dwc2.hpp`;
   `soc/bcm2711/include/bcm2711.hpp` (`USB_BASE`, `INTID_USB`),
   `gic400.hpp` (`gic::enable_spi ()`).
-- `platforms/aarch64-rpi4b/tests/tests.cmake` — the test in `BOARD_TEST_NEED_DEVICES`, and the
-  driver linked through `aarch64-rpi4b-usb`.
+- `platforms/aarch64-rpi4b/tests/tests.cmake` — the test in `UOS_TESTS_STORAGE`
+  (the builder links the SD card, POSIX I/O and FatFs), and the driver linked
+  through `aarch64-rpi4b-usb` (`board_test_libs`).
 
 ## Results
 

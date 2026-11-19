@@ -4,7 +4,7 @@
 > earlier kernel (`7.0.0-beta`) and toolchains, from the retired
 > `micro-os-plus-iii.git/tests` layout. The current harness is in
 > `micro-os-plus-iii-smp.git/tests`; for the current state see
-> [`docs/tests/STEPS.md`](../docs/tests/STEPS.md) and
+> [`../docs/history/STEPS.md`](../docs/history/STEPS.md) and
 > [`docs/tests/TESTS-CATALOG.md`](../docs/tests/TESTS-CATALOG.md).
 
 The tests generally pass, as long as there are no trace prints in the

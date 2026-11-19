@@ -1,14 +1,16 @@
 # µOS++ IIIe test framework — developer guide
 
 How to **configure**, **run** and **write** tests in the xPack/xpm test
-framework of `micro-os-plus-iii` (branch `smp`).
+framework of `micro-os-plus-iii` (the SMP fork, aligned with upstream in
+2026-11).
 
-This guide follows the workflow of the upstream
-[`README-DEVELOPER.md`](../../README-DEVELOPER.md): every command is an
-`xpm run <action>` executed in the `tests/` folder (or with
-`-C <repo>/tests`), and the same four verbs — `install-all`, `test`,
-`test-all`, `deep-clean` — are the entry points. Everything below that is
-the machinery those verbs drive, and how to extend it.
+The framework is upstream's: every command is an `xpm run <action>` in the
+kernel's `tests/` folder, CMake builds, CTest runs. Every test lives in that
+folder. The portable ones are in `tests/sources/`, the board facts, board
+code and board-only tests in `tests/platforms/<platform>/`. The ports and the
+device packages carry no tests. The command reference is
+[`COMMANDS.md`](COMMANDS.md); what each test does is in
+[`TESTS-CATALOG.md`](TESTS-CATALOG.md).
 
 Every statement in this guide was checked against the files it names. When
 another document disagrees, the files win.
@@ -17,967 +19,551 @@ another document disagrees, the files win.
 
 ## Contents
 
-1. [Who this is for](#1-who-this-is-for)
-2. [Prerequisites and workspace](#2-prerequisites-and-workspace)
-3. [Quick start (the README-DEVELOPER flow)](#3-quick-start-the-readme-developer-flow)
-4. [Architecture in one picture](#4-architecture-in-one-picture)
-5. [Layer 1 — `tests/package.json` (xpm)](#5-layer-1--testspackagejson-xpm)
-6. [Layer 2 — the CMake harness (`tests/`)](#6-layer-2--the-cmake-harness-tests)
-7. [Layer 3 — the port test builders](#7-layer-3--the-port-test-builders)
-8. [Layer 4 — CTest, runners and verdicts](#8-layer-4--ctest-runners-and-verdicts)
-9. [Running tests day to day](#9-running-tests-day-to-day)
-10. [Writing a new test](#10-writing-a-new-test)
-11. [Adding a configuration or a platform](#11-adding-a-configuration-or-a-platform)
-12. [Checklist before you commit](#12-checklist-before-you-commit)
-13. [Troubleshooting](#13-troubleshooting)
-14. [Reference tables](#14-reference-tables)
+1. [Vocabulary](#1-vocabulary)
+2. [The workspace](#2-the-workspace)
+3. [Architecture in one picture](#3-architecture-in-one-picture)
+4. [Layer 1 — `tests/package.json`](#4-layer-1--testspackagejson)
+5. [Layer 2 — the CMake tree and the platforms](#5-layer-2--the-cmake-tree-and-the-platforms)
+6. [Layer 3 — the board tests' builder](#6-layer-3--the-board-tests-builder)
+7. [Layer 4 — CTest: names, labels, verdicts, runs](#7-layer-4--ctest-names-labels-verdicts-runs)
+8. [Writing a new test](#8-writing-a-new-test)
+9. [Adding a configuration or a platform](#9-adding-a-configuration-or-a-platform)
+10. [Checklist before you commit](#10-checklist-before-you-commit)
+11. [Troubleshooting](#11-troubleshooting)
+12. [Reference tables](#12-reference-tables)
 
 ---
 
-## 1. Who this is for
-
-- You want to **run** the existing tests on the host, under QEMU, or on a
-  board → read §2, §3 and §9.
-- You want to **add a test** → read §4, then §10. §5–§8 explain every file
-  a recipe touches.
-- You want to **add a board, a toolchain or a build type** → §11.
-
-Vocabulary used throughout:
+## 1. Vocabulary
 
 | term | meaning |
 |---|---|
-| **configuration** (`C`) | one entry of `xpack.buildConfigurations` in `tests/package.json`, e.g. `cortexm-pico2-cmake-gcc-debug`. It owns one build folder, `tests/build/<C>`. |
-| **platform** | the value of `PLATFORM_NAME`, e.g. `cortexm-pico2`. One folder under `tests/platforms/`. Several configurations (debug/release, toolchains) share one platform. |
-| **port** | an architecture repository: `micro-os-plus-iii-{aarch32,aarch64,cortexm,posix-arch}`. |
-| **board** | the port's name for a physical/emulated board (`BOARD`), e.g. `pico2-rp2350b-psram`. |
-| **harness suite** | a portable test in `tests/sources/<name>/`, entry point `os_main()`, no `main()`. |
-| **board test** | a test owned by one board of one port, in `<port>/test/<board>/<name>/`, with its own `main()`. |
-| **variant** | how a test image runs: `-qemu` (emulator), `-host` (native process), `-hwd` (real board over OpenOCD). |
+| **configuration** | one entry of `xpack.buildConfigurations` in `tests/package.json`, e.g. `cortexm-pico2-cmake-gcc-debug`; it owns the build folder `tests/build/<configuration>/` |
+| **platform** | the value of `PLATFORM_NAME`, e.g. `cortexm-pico2`: one folder under `tests/platforms/`, shared by the debug and release configurations |
+| **port** | an architecture package: `micro-os-plus-iii-{aarch32,aarch64,cortexm,posix-arch}` |
+| **device package** | the chips' drivers: `micro-os-plus-iii-devices-{bcm283x,rk3506,rp2xxx,stm32f4,storage}` |
+| **suite** | upstream's portable test library in `tests/sources/<suite>/` (`mutex-stress`, `rtos-apis`, `cmsis-os-validator`): `test::<suite>`, its own `os_main()` |
+| **portable test** | a test in `tests/sources/<test>/` with `os_main()` only (`smp_test0`, `smp-mat-test`, `sd_test`, …): the platform starts it up and ends it |
+| **board test** | a test only one board runs: `tests/platforms/<platform>/tests/<test>/`, with its own start-up when it needs one |
+| **variant** | how an image runs: `-qemu` (emulator), `-host` (a native program), `-hwd` (the board, through OpenOCD) |
 
 ---
 
-## 2. Prerequisites and workspace
+## 2. The workspace
 
-### Tools
+The kernel and its packages are separate git repositories and xPacks, in one
+folder, grouped by architecture:
 
-- A recent [xpm](https://xpack.github.io/xpm/) (the harness requires
-  `minimumXpmRequired: 0.20.8`), which is a portable
-  [Node.js](https://nodejs.org/) command line application:
-
-  ```sh
-  npm install --global xpm@latest
-  ```
-
-- `bash`, `git`, and for hardware runs a USB debug probe (CMSIS-DAP / ST-Link /
-  J-Link, per board).
-
-Everything else — CMake, Ninja, the host GCC/clang versions, `arm-none-eabi-gcc`,
-`aarch64-none-elf-gcc`, `qemu-arm`, `openocd` — is **pinned per configuration**
-in `tests/package.json` and installed by xpm into
-`tests/build/<C>/xpacks/.bin`. Nothing is taken from your system `PATH` except
-in the `native-cmake-sys-*` configurations, whose purpose is to test the
-system compiler.
-
-### Workspace layout
-
-The kernel and its ports are separate repositories that must be **siblings**:
-
-```
-~/Work/micro-os-plus/
-├── micro-os-plus-iii/              the kernel + the test harness   (branch smp)
-│   ├── tests/                      ← every xpm command runs here
-│   └── test_smpl/                  the runners: run-qemu.sh, run-host.sh, run-hw.sh
-├── micro-os-plus-iii-aarch32/      AArch32 port   (Raspberry Pi, Luckfox Lyra)
-├── micro-os-plus-iii-aarch64/      AArch64 port   (Raspberry Pi)
-├── micro-os-plus-iii-cortexm/      Cortex-M port  (RP2350, STM32F4, QEMU cores)
-└── micro-os-plus-iii-posix-arch/   POSIX port     (native host process)
+```text
+<workspace>/
+├── micro-os-plus-iii/                the kernel; tests/ is the test project
+├── aarch32/   micro-os-plus-iii-aarch32,  micro-os-plus-iii-devices-rk3506
+├── aarch64/   micro-os-plus-iii-aarch64
+├── cortexm/   micro-os-plus-iii-cortexm,  micro-os-plus-iii-devices-rp2xxx,
+│              micro-os-plus-iii-devices-stm32f4
+├── posix-arch/ micro-os-plus-iii-posix-arch
+└── common/    micro-os-plus-iii-devices-bcm283x, micro-os-plus-iii-devices-storage
 ```
 
-Each port carries its own drivers and SoC support in `drivers/` and
-`soc/<chip>/`. They come from the former `micro-os-plus-iii-devices`
-repository, which was dissolved into the ports on 2026-10-06
-(`xpack-dev-smp.md` §14) and is no longer cloned.
+The tests reach the packages the xPack way, not by relative paths: each
+package is registered once with `xpm link` (in its folder), and
+`xpm run link-deps --config <configuration>` links the ones a configuration
+needs into `tests/build/<configuration>/xpacks/@micro-os-plus/`. A platform
+names them in its `cmake/dependencies-folders.cmake`; when one is not linked
+the configure stops with "`<package>` is not linked into this build folder".
 
-`tests/cmake/tests-main.cmake` finds the ports as
-`<tests>/../../micro-os-plus-iii-<port>`, and falls back to the old
-`micro-os-plus-iii-<port>.git` names when the plain name has no
-`CMakeLists.txt`. To use a copy somewhere else, pass the cache variable on
-`prepare` (see §6.3), e.g. `-D UOS_CORTEXM_DIR=/path/to/cortexm`.
+Everything else — CMake, Ninja, the host GCC/clang versions,
+`arm-none-eabi-gcc`, `aarch64-none-elf-gcc`, `qemu-arm`, `openocd` — is
+pinned per configuration and installed by xpm. The QEMU and OpenOCD tests
+use the newest `qemu-arm` / `openocd` xPack in `~/.local/xPacks/` when there
+is one, else the one on `PATH`.
 
-To clone the workspace:
-
-```sh
-mkdir -p ~/Work/micro-os-plus && cd ~/Work/micro-os-plus
-for r in micro-os-plus-iii micro-os-plus-iii-aarch32 micro-os-plus-iii-aarch64 \
-         micro-os-plus-iii-cortexm micro-os-plus-iii-posix-arch
-do
-  git clone --branch smp "<origin>/$r.git" "$r"   # <origin>: your remote
-done
-```
-
-or, to update an existing workspace:
-
-```sh
-for r in ~/Work/micro-os-plus/micro-os-plus-iii*; do git -C "$r" pull; done
-```
+The install commands are in [`COMMANDS.md`](COMMANDS.md) §2.
 
 ---
 
-## 3. Quick start (the README-DEVELOPER flow)
+## 3. Architecture in one picture
 
-The commands below are exactly the upstream `README-DEVELOPER.md` sequence,
-pointed at this workspace. `-C` makes xpm run in the `tests/` folder, so they
-work from anywhere.
-
-**Top dependencies** (the build helper, `del-cli`, …), once per clone:
-
-```sh
-npm --prefix ~/Work/micro-os-plus/micro-os-plus-iii/tests install
-```
-
-**Satisfy dependencies for all configurations** — downloads every pinned
-toolchain and emulator into each configuration's build folder (large, one-off):
-
-```sh
-xpm run install-all -C ~/Work/micro-os-plus/micro-os-plus-iii/tests
-```
-
-**Run a first test set** — `test` is the quick one (the `qemu-cortex-m7f`
-debug and release suites):
-
-```sh
-xpm run test -C ~/Work/micro-os-plus/micro-os-plus-iii/tests
-```
-
-**Run all tests with all available toolchains:**
-
-```sh
-xpm run test-all -C ~/Work/micro-os-plus/micro-os-plus-iii/tests
-```
-
-`test-all` is `test-native-cmake` → `test-cortex-cmake` → `test-smp-cmake`:
-every host compiler (GCC 11–14 and clang 16–19 on Linux; the system compiler
-and clang 16–19 on macOS — clang 13–15 are listed but disabled), the four QEMU
-Cortex-M cores,
-then every SMP platform (AArch32, AArch64, the emulated Cortex-M33 pair, the
-Pico 2 boards under QEMU), each in debug and release. Hardware (`hwd`) cases
-are **never** part of it. Expect it to take hours.
-
-**Remove all** dependencies and build folders, then restart from `npm install`:
-
-```sh
-xpm run deep-clean -C ~/Work/micro-os-plus/micro-os-plus-iii/tests
-```
-
-> **Never `rm -rf tests/build/<C>` by hand to "fix" a build.** The folder
-> also holds that configuration's pinned toolchain (`xpacks/`). If a CMake
-> cache is poisoned, delete only `tests/build/<C>/CMakeCache.txt` and run
-> `prepare` again.
-
----
-
-## 4. Architecture in one picture
-
-Four layers, each edited by hand, each with one job:
-
-```
- xpm run test-foo-qemu --config cortexm-pico2-cmake-gcc-debug
+```text
+ xpm run build --config aarch64-rpi4b-cmake-gcc-debug
    │
    │ LAYER 1  tests/package.json
-   │          which configuration, which toolchain, which build type,
-   │          which actions exist (and therefore which appear in VS Code)
+   │          configuration -> toolchain, build type, PLATFORM_NAME
    ▼
- cmake -S tests -B build/<C> -G Ninja -D PLATFORM_NAME=cortexm-pico2
-       -D CMAKE_BUILD_TYPE=Debug -D CMAKE_TOOLCHAIN_FILE=…/arm-none-eabi-gcc.cmake
+ cmake -S tests -B build/<C> -G Ninja -D PLATFORM_NAME=aarch64-rpi4b ...
    │
-   │ LAYER 2  tests/CMakeLists.txt → cmake/tests-main.cmake
-   │          → tests/platforms/<platform>/
-   │          which port (library under test) and which CTest cases exist
+   │ LAYER 2  tests/CMakeLists.txt -> cmake/tests-main.cmake
+   │          -> platforms/<platform>/cmake/*.cmake (definitions, the linked
+   │             packages, the board facts, micro-os-plus::platform)
+   │          -> platforms/<platform>/CMakeLists.txt
    ▼
- add_subdirectory(<port>/test)          ← the port's own test builder
+ add_subdirectory (board-tests)        the board tests' builder
    │
-   │ LAYER 3  <port>/test/CMakeLists.txt + test/boards/<board>/board.cmake
-   │          + test/<board>/tests.cmake + test/<board>/<app>/*.cpp
-   │          which images are built: <app>-qemu, <app>-hwd, <app>-host
+   │ LAYER 3  board-tests/CMakeLists.txt + platforms/<P>/tests/tests.cmake
+   │          one image per test and variant: <test>-qemu, -hwd, -host
    ▼
- ctest -R cortexm-pico2-foo-qemu
+ ctest -R '^aarch64-rpi4b-smp_test0-qemu$'
    │
-   │ LAYER 4  CTest case → runner (qemu / run-qemu.sh / run-host.sh / hw.sh)
-   │          the verdict: exit code and the "RESULT: PASS|FAIL|SKIP" line
+   │ LAYER 4  the platform registers each image (cmake/uos-tests-run.cmake):
+   │          QEMU, the host program, or OpenOCD, started by CTest itself
    ▼
- PASS / FAIL / TIMEOUT
+ PASS / FAIL / SKIP (the RESULT line) or TIMEOUT
 ```
 
-The rule that makes this work: **only `package.json` passes `-D PLATFORM_NAME`,
-`CMAKE_BUILD_TYPE` and `CMAKE_TOOLCHAIN_FILE`**, and only the platform folder
-creates CTest cases. A port never knows it is inside the harness; a platform
-never compiles a test by itself when the port can.
+Two rules hold it together: **only `package.json` passes `PLATFORM_NAME`,
+the build type and the toolchain file**; and **only the platform folder
+creates CTest cases**. There is no shell script anywhere in the chain.
 
 ---
 
-## 5. Layer 1 — `tests/package.json` (xpm)
+## 4. Layer 1 — `tests/package.json`
 
-The file has two parts that matter: `xpack.properties` + `xpack.actions`
-(global), and `xpack.buildConfigurations` (one entry per configuration, plus
-hidden mixins).
+### 4.1 Properties and mixins
 
-### 5.1 Properties: the command chain
+Properties are Liquid templates xpm expands before an action runs; the
+global ones build every CMake command (`commandCMakePrepareWithToolchain`,
+`commandCMakeBuild`, `commandCMakePerformTests`). A configuration supplies
+`buildType`, `platformName`, `toolchainFileName` and (for short Windows
+paths) `shortConfigurationName`.
 
-Properties are [Liquid](https://shopify.github.io/liquid/) templates, expanded
-by xpm before an action runs. The global ones build every CMake command:
-
-| property | expands to |
-|---|---|
-| `buildFolderRelativePath` | `build/<configuration name, lower-cased>` |
-| `commandCMakeReconfigure` | `cmake -S . -B <build> -G Ninja -D CMAKE_BUILD_TYPE={{buildType}} -D PLATFORM_NAME={{platformName}}` |
-| `commandCMakePrepare` | `<Reconfigure> --log-level=VERBOSE` |
-| `commandCMakePrepareWithToolchain` | `<Prepare> -D CMAKE_TOOLCHAIN_FILE=xpacks/@micro-os-plus/build-helper/cmake/toolchains/{{toolchainFileName}}` |
-| `commandCMakeBuild` | `cmake --build <build>` |
-| `commandCMakePerformTests` | `cd <build> && ctest -V` |
-
-A configuration supplies the variables they use: `buildType`, `platformName`,
-`toolchainFileName`, and (for short Windows paths) `shortConfigurationName`.
-
-### 5.2 Hidden mixins
-
-A configuration with `"hidden": true` has no build folder; it exists to be
-inherited. The ones in use:
+A configuration with `"hidden": true` is a mixin, inherited by the others:
 
 | mixin | provides |
 |---|---|
-| `cmake-actions` | the lifecycle actions `prepare`, `build`, `test`, `clean` |
-| `native-actions`, `cortexm-actions`, `aarch32-actions`, `aarch64-actions` | `install` (`xpm install --config {{ configuration.name }}`), plus `link-deps` for native/cortexm |
-| `gccNN-dependencies`, `clangNN-dependencies`, `gcc-latest-…`, `clang-latest-…` | the pinned host compiler |
-| `arm-none-eabi-gcc-dependencies`, `aarch32-dependencies`, `aarch64-dependencies` | the cross toolchains (+ `qemu-arm` for the Pis) |
-| `qemu-arm-dependencies`, `openocd-dependencies` | emulator / probe tools |
-| `native-dependencies`, `cortexm-dependencies`, `arm-cmsis-…` | source packages the platform needs |
-| `clang-gcc14-properties` | for clang 16–18: builds against the xPack GCC 14 libstdc++ (`--gcc-toolchain=…`), because clang < 19 cannot parse a newer host GCC's headers |
-| `short-win-paths-properties` | on Windows, `build/<shortConfigurationName>` instead of the long name |
+| `cmake-actions` | `prepare`, `build`, `test`, `clean` |
+| `native-actions`, `cortexm-actions`, `aarch32-actions`, `aarch64-actions` | `install` and `link-deps` (the port and device packages that family links) |
+| `gccNN-dependencies`, `clangNN-dependencies`, `arm-none-eabi-gcc-dependencies`, `aarch32-dependencies`, `aarch64-dependencies` | the pinned compilers |
+| `qemu-arm-dependencies`, `openocd-dependencies` | emulator and probe tools |
+| `clang-gcc14-properties` | clang 16–18 against the xPack GCC 14 libstdc++ |
+| `short-win-paths-properties` | `build/<shortConfigurationName>` on Windows |
 
-### 5.3 A concrete configuration
+### 4.2 A configuration
 
 Name pattern: **`<platform>-cmake-<toolchain>-<debug|release>`**.
 
 ```json
-"cortexm-pico2-rp2350b-psram-cmake-gcc-debug": {
-  "inherit": [
-    "cortexm-actions", "cmake-actions", "cortexm-dependencies",
-    "arm-cmsis-dependencies", "arm-none-eabi-gcc-dependencies",
-    "openocd-dependencies", "short-win-paths-properties"
-  ],
+"aarch64-rpi4b-cmake-gcc-debug": {
+  "inherit": ["aarch64-actions", "cmake-actions", "aarch64-dependencies",
+              "short-win-paths-properties"],
   "properties": {
     "buildType": "Debug",
-    "platformName": "cortexm-pico2-rp2350b-psram",
-    "toolchainFileName": "arm-none-eabi-gcc.cmake",
-    "shortConfigurationName": "cpsd"
+    "platformName": "aarch64-rpi4b",
+    "toolchainFileName": "aarch64-none-elf-gcc.cmake",
+    "shortConfigurationName": "a64p4d"
   },
   "actions": {
-    "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE hwd",
-    "test-fp-switch-qemu": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R cortexm-pico2-rp2350b-psram-fp-switch-qemu",
-    "test-fp-switch-hwd":  "… same, ending in -fp-switch-hwd"
+    "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE \"hwd|hwsh\""
   }
-},
-"cortexm-pico2-rp2350b-psram-cmake-gcc-release": {
-  "inherit": ["cortexm-pico2-rp2350b-psram-cmake-gcc-debug"],
-  "properties": { "buildType": "MinSizeRel", "shortConfigurationName": "cpsr" }
 }
 ```
 
-**Inheritance rules** (xpm):
+The release configuration inherits the debug one and changes only
+`buildType` (`MinSizeRel` on the boards, `Release` on native); it has its
+own build folder, so it needs its own `install` and `link-deps`. A local
+action replaces an inherited one of the same name: that is how `test`
+excludes the hardware tests on the configurations that have them.
 
-- parents are merged in the order listed; a later parent wins over an
-  earlier one; the configuration's own `properties`/`actions` win over all;
-- a local action **replaces** an inherited action of the same name (that is
-  how `test` above becomes `ctest -V -LE hwd`);
-- the **release** configuration inherits the debug one and changes only
-  `buildType` (`MinSizeRel` on embedded, `Release` on native). It has its
-  **own build folder**, so it needs its own `install`.
+### 4.3 The actions
 
-### 5.4 Actions: three kinds
-
-**Lifecycle** (per configuration, from `cmake-actions` and the family mixin):
-
-| action | does | note |
-|---|---|---|
-| `install` | downloads the configuration's pinned tools into `build/<C>/xpacks` | run once per configuration |
-| `prepare` | CMake configure **with** the toolchain file | must precede `build` on a new folder |
-| `build` | CMake reconfigure (no toolchain arg — it is already cached) + build | |
-| `test` | `ctest -V` — or `ctest -V -LE hwd` on every configuration that has hardware cases | **does not build** |
-| `clean` | `cmake --build … --target clean` | |
-
-**Per-test** (per configuration, written by hand, one per CTest case):
-
-```json
-"test-<app>-<variant>": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R <platformName>-<app>-<variant>"
-```
-
-It configures and builds before it runs, so it works on a cold tree once
-`install` has run. **These actions are what make a test appear in the VS Code
-xPack extension**; there is no generator, so a test without its action runs
-in CTest but is invisible in the IDE.
-
-For the upstream-style platforms (`qemu-cortex-m*`, `pico2-1cpu`,
-`2xcortex-m33`) the case names are `<platform>-<suite>-test`, so the actions
-are `test-<suite>-test`.
-
-**Top-level** (`xpack.actions`, no `--config`), all arrays run in sequence and
-stopping at the first failure:
-
-| action | runs |
+| kind | actions |
 |---|---|
-| `install`, `test` | the quick set (`qemu-cortex-m7f`, debug + release) |
-| `install-all` | `npm install` + `xpm install --all-configs` |
-| `test-all` | `test-native-cmake` + `test-cortex-cmake` + `test-smp-cmake` |
-| `test-native-cmake` | every `test-native-cmake-<compiler>`: Linux GCC 11–14 + clang 16–19, macOS `sys` + clang 16–19 (clang 13–15 are only echoed, i.e. disabled) |
-| `test-native-cmake-<compiler>` | prepare/build/test of that compiler's debug and release |
-| `test-cortex-cmake` | the four `test-qemu-cortex-m*-cmake` |
-| `test-smp-cmake` | every SMP platform's `test-<platform>-cmake` |
-| `test-<platform>-cmake` | prepare/build/test, debug then release, of one platform |
-| `build-aarch32-luckfox-lyra-cmake` | build only (the Lyra is hardware-only) |
-| `clean-all`, `clean-native-cmake`, `clean-cortex-cmake` | `clean` across configurations |
-| `link-deps`, `link-deps-all`, `git-clone-deps`, `git-pull-deps`, `git-status-deps` | writable development packages (upstream workflow) |
-| `deep-clean` | removes `build/`, `node_modules/`, `xpacks/`, `package-lock.json` |
+| per configuration | `install`, `link-deps`, `prepare`, `build`, `test`, `clean` |
+| groups (no `--config`) | `test-native-cmake[-<compiler>]`, `test-cortex-cmake`, `test-qemu-cortex-m*-cmake`, `test-smp-cmake`, `test-<platform>-cmake`, `test-all`, `build-aarch32-luckfox-lyra-cmake` |
+| housekeeping | `install-all`, `link-deps-all`, `clean-all`, `deep-clean`, `git-*-deps` |
 
-An array action accepts no extra command-line arguments.
+There are no per-test actions: one test is one CTest case, selected with
+`ctest -R` in the build folder (§7). A group action stops at the first
+failing configuration; an array action takes no extra arguments.
 
 ---
 
-## 6. Layer 2 — the CMake harness (`tests/`)
+## 5. Layer 2 — the CMake tree and the platforms
 
-```
+```text
 tests/
-├── CMakeLists.txt                project, C11/C++20, enable_testing(), build helper,
-│                                 then cmake/global-definitions.cmake + cmake/tests-main.cmake
+├── CMakeLists.txt              project, C11/C++20, enable_testing(), build helper
 ├── cmake/
-│   ├── tests-main.cmake          chooses the port from PLATFORM_NAME, adds the platform
-│   ├── common-options.cmake      warnings and options shared by every target
-│   └── global-definitions.cmake  ENABLE_*_TEST switches (read by upstream platforms only)
-├── platforms/<platform>/         one folder per PLATFORM_NAME (§6.4)
-├── sources/<suite>/              the harness suites (§10.3)
-├── device-qemu-cortexm/          device support for the QEMU Cortex-M boards
-└── package.json                  Layer 1
+│   ├── tests-main.cmake        the platform's cmake/*.cmake, the linked packages
+│   │                           (and their UOS_<PACKAGE>_DIR), the kernel, the platform
+│   ├── common-options.cmake    warnings and options for every target
+│   ├── uos-aarch-board.cmake   micro-os-plus::board of an AArch platform
+│   ├── uos-cortexm-board.cmake micro-os-plus::board of a Cortex-M platform
+│   ├── uos-tests-run.cmake     how CTest runs a test: QEMU, host, OpenOCD (§7)
+│   ├── uos-hwd.tcl             the AArch hardware run, in OpenOCD (§7.4)
+│   └── uos-hwd-reset.cmake     the reset that drops the debug link (§7.4)
+├── board-tests/                the board tests' builder (§6) and what every
+│                               board shares (the start-up end, the SD mount)
+├── sources/<test>/             suites and portable tests
+├── platforms/<platform>/       one folder per PLATFORM_NAME
+├── device-qemu-cortexm/         the generic QEMU Cortex-M device (upstream platforms)
+├── third_party/lwip/           lwIP 2.2.1, for the network tests
+└── package.json                Layer 1
 ```
 
-### 6.1 `tests/CMakeLists.txt`
+### 5.1 A platform folder
 
-Refuses an in-source build, sets the language standards, loads
-`micro-os-plus-build-helper` from `xpacks/@micro-os-plus/build-helper`, and
-includes `global-definitions.cmake` and `tests-main.cmake`. You should not
-need to edit it.
-
-### 6.2 `cmake/tests-main.cmake` — which library is under test
-
-In order:
-
-1. includes `platforms/${PLATFORM_NAME}/cmake/definitions.cmake` and
-   `…/dependencies-folders.cmake`, and adds each folder listed in
-   `xpack_dependencies_folders` (the suites, CMSIS, …);
-2. resolves the sibling repositories into cache variables (§6.3);
-3. adds **the library under test**, chosen by the **first matching prefix**
-   of `PLATFORM_NAME`:
-
-| `PLATFORM_NAME` starts with | added as `port-bin` | platforms |
-|---|---|---|
-| `aarch32` | `UOS_AARCH32_DIR` | `aarch32-rpi-zero-2w`, `aarch32-rpi3b`, `aarch32-luckfox-lyra` |
-| `aarch64` | `UOS_AARCH64_DIR` | `aarch64-rpi-zero-2w`, `aarch64-rpi3b` |
-| `native` | `UOS_POSIX_ARCH_DIR` | `native` |
-| `cortexm`, `qemu-cortex` | `UOS_CORTEXM_DIR` | `cortexm-*` boards, `qemu-cortex-m0/m3/m4f/m7f` |
-| `pico2`, `2xcortex` | `UOS_CORTEXM_DIR` | `pico2-1cpu`, `2xcortex-m33` |
-| anything else | the kernel itself (`..`, as `top-bin`) | `nucleo-*`, `raspberrypi-pico` |
-
-Each port brings the kernel (`micro-os-plus::iii`) and the devices library
-with it; **never add the kernel a second time** (`alias micro-os-plus::iii
-already exists`).
-
-4. finally `add_subdirectory(platforms/${PLATFORM_NAME} platform-bin)`.
-
-### 6.3 Where the repositories come from
-
-| cache variable | default |
-|---|---|
-| `UOS_SMP_DIR` | `tests/..` (this kernel, forced) |
-| `UOS_AARCH32_DIR` | `<tests>/../../micro-os-plus-iii-aarch32` |
-| `UOS_AARCH64_DIR` | `<tests>/../../micro-os-plus-iii-aarch64` |
-| `UOS_POSIX_ARCH_DIR` | `<tests>/../../micro-os-plus-iii-posix-arch` |
-| `UOS_CORTEXM_DIR` | `<tests>/../../micro-os-plus-iii-cortexm` |
-
-If the plain name has no `CMakeLists.txt` but `<name>.git` does, the `.git`
-name is used. Override on the command line to test another working copy:
-
-```sh
-cd ~/Work/micro-os-plus/micro-os-plus-iii/tests
-PATH="$PWD/build/C/xpacks/.bin:$PATH" \
-  cmake -S . -B build/C -D UOS_CORTEXM_DIR=$HOME/src/my-cortexm
-```
-
-### 6.4 A platform folder
-
-```
+```text
 tests/platforms/<platform>/
-├── CMakeLists.txt                    registers the CTest cases           (§6.5)
+├── CMakeLists.txt                the tests this platform builds and registers
 ├── cmake/
-│   ├── definitions.cmake             xpack_platform_compile_definition;
-│   │                                 on a port platform: set (BOARD "<id>" CACHE STRING "" FORCE)
-│   ├── dependencies-folders.cmake    xpack_dependencies_folders: sources/<suite>, CMSIS, …
-│   └── platform-library.cmake        micro-os-plus::platform (flags, linker, port libs)
-│                                     [+ micro-os-plus::platform-support on some platforms]
-├── include/cmsis-plus/platform.h     compile-time contract, included by each suite's config
-└── src/platform-support.cpp          startup hooks + a strong main() calling os_main()
-                                      (only platforms that run harness suites through it)
+│   ├── definitions.cmake         xpack_platform_compile_definition, BOARD
+│   ├── dependencies-folders.cmake the suites and linked packages it needs
+│   ├── board.cmake               the board facts (flags, CPU count, linker
+│   │                             scripts, defines, the SD driver set)
+│   └── platform-library.cmake    micro-os-plus::platform and micro-os-plus::board
+├── include/, src/                the board's code (console, SMP boot, MMU,
+│                                 platform.h, the suites' support files)
+├── device/linker-scripts/        the hardware and QEMU linker scripts
+├── openocd*.cfg                  the probe and the target
+└── tests/                        the board-only tests (§6)
+    ├── tests.cmake               the per-test knobs
+    ├── include/, src/            what the board's tests share
+    └── <test>/                   one folder per test
 ```
 
-**`dependencies-folders.cmake` is per platform.** A suite that is not listed
-there does not exist on that platform: `test::<suite>` is undefined and the
-configure fails.
+Some boards add their own folders: `net/` (Pi 4 B Ethernet), `wifi/` (Zero
+2 W), `usb/`, `qemu/`, `glue/` (Pico 2). The Pi 3 B platforms reuse the Zero
+2 W's board code (same SoC).
 
-### 6.5 The two shapes of a platform `CMakeLists.txt`
+`dependencies-folders.cmake` is per platform: a suite or package it does not
+list does not exist on that platform, and the configure fails.
 
-**(a) Port platforms** (`aarch32-*`, `aarch64-*`, `cortexm-*`, `native`)
-reuse the port's own builder and **glob** the board's test folders:
+### 5.2 The two shapes of a platform `CMakeLists.txt`
+
+**(a) The board platforms** (`aarch32-*`, `aarch64-*`, `cortexm-*`,
+`native`) say what to build and hand it to the builder, then register every
+image it built:
 
 ```cmake
 include ("cmake/platform-library.cmake")
-include ("${UOS_CORTEXM_DIR}/test/boards/${BOARD}/board.cmake")   # board facts
-add_subdirectory ("${UOS_CORTEXM_DIR}/test" "port-tests/test")     # builds the images
+include ("${CMAKE_SOURCE_DIR}/cmake/uos-tests-run.cmake")
 
-file (GLOB _test_dirs LIST_DIRECTORIES true "${UOS_CORTEXM_DIR}/test/${BOARD}/*")
-foreach (_dir IN LISTS _test_dirs)
-  # skip files, include/, src/ and folders without *.c/*.cpp
-  if (TARGET "${_app}-qemu")
-    add_test (NAME "${PLATFORM_NAME}-${_app}-qemu" COMMAND <qemu> … -kernel …/${_app}-qemu.elf …)
-    set_tests_properties (… PROPERTIES LABELS "qemu" TIMEOUT 300)
-  endif ()
-  add_test (NAME "${PLATFORM_NAME}-${_app}-hwd" COMMAND bash <board>/hw.sh "${_app}" 600)
-  set_tests_properties (… PROPERTIES ENVIRONMENT "BUILD=…" LABELS "hwd" TIMEOUT 1200)
+set (UOS_TESTS_PORT aarch64)
+set (UOS_TESTS_SOURCES  smp_test0 ... sd_test clock-test)   # from tests/sources/
+set (UOS_TESTS_PORTABLE smp_test0 ... sd_test clock-test)   # os_main() only
+set (UOS_TESTS_STORAGE  sd_test smp-mat-sdcard-test ...)    # get /sd/ mounted
+set (UOS_TESTS_SUITES   mutex-stress rtos-apis cmsis-os-validator)
+set (UOS_TESTS_BOARD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/tests")
+add_subdirectory ("${CMAKE_SOURCE_DIR}/board-tests" "port-tests/test")
+
+foreach (_app IN LISTS UOS_TESTS_APPS)       # handed back by the builder
+  uos_tests_add_qemu (NAME "${PLATFORM_NAME}-${_app}-qemu" APP "${_app}"
+                      IMAGE ".../${_app}-qemu.bin" QEMU "${_qemu}"
+                      MACHINE -M raspi4b -smp 4)
+  uos_tests_add_hwd  (NAME "${PLATFORM_NAME}-${_app}-hwd" APP "${_app}"
+                      ELF "$<TARGET_FILE:${_app}-hwd>" CFG ... ENTRY ...)
 endforeach ()
 ```
 
-Consequence: **adding a board test needs no edit in `tests/platforms/`.**
-Creating the folder in the port and re-running `prepare` is enough for the
-CTest case to exist. (The xpm action is still yours to add — §5.4.)
+Adding a board test therefore needs no edit here: a new folder in
+`tests/` and a re-`prepare` are enough.
 
-The differences between the port platforms:
-
-| platform family | `-qemu` case runs | `-host` | `-hwd` case runs |
+| platform family | `-qemu` | `-host` | `-hwd` |
 |---|---|---|---|
-| `aarch32-rpi*`, `aarch64-rpi*` | `test_smpl/run-qemu.sh <bin> <qemu> -M raspi3b -smp 4` (`UOS_QEMU_ONLY=<app>`) | — | the board's `hw.sh <app> 600` |
-| `aarch32-luckfox-lyra` | — (hardware only) | — | the board's `hw.sh` |
-| `cortexm-*` | `qemu-system-arm -M mps2-an500 -cpu cortex-m7 -kernel <app>-qemu.elf …`, only if the port built `<app>-qemu` | — | the board's `hw.sh <app> 600` |
-| `native` | — | `test_smpl/run-host.sh <bin>` (`UOS_RUN_ONLY=<app>`) | — |
+| `aarch32-rpi*`, `aarch64-rpi*` | `raspi3b` / `raspi4b`, `-smp 4` (AArch32 through a boot shim) | — | `uos_tests_add_hwd` (§7.4) |
+| `aarch32-luckfox-lyra` | — (hardware only) | — | `uos_tests_add_hwd` |
+| `cortexm-pico`, `cortexm-pico2`, `-pico2-rp2350b-psram` | the tests the board can run emulated, on a generic Cortex-M | — | `uos_tests_add_openocd` |
+| `cortexm-pico2-pizero`, `-nucleof411`, `-weactf411`, `-weactf412` | — | — | `uos_tests_add_openocd` |
+| `native` | — | `uos_tests_add_host` | — |
 
-**(b) Upstream-style platforms** (`qemu-cortex-m*`, `pico2-1cpu`,
-`2xcortex-m33`, `nucleo-*`, `raspberrypi-pico`) build the harness suites
-themselves:
+**(b) The upstream platforms** (`qemu-cortex-m*`, `pico2-1cpu`,
+`2xcortex-m33`, `nucleo-*`, `raspberrypi-pico`) build upstream's suites
+themselves, as upstream does:
 
 ```cmake
-function (add_suite_executable name suite)
-  add_executable (${name})
-  target_link_libraries (${name} PRIVATE micro-os-plus::common-options
-                         test::${suite} micro-os-plus::iii micro-os-plus::platform ${ARGN})
-  add_test (NAME "${PLATFORM_NAME}-${name}"
-            COMMAND "${_qemu}" --machine mps2-an500 --cpu cortex-m7
-                    --kernel "$<TARGET_FILE:${name}>" --nographic
-                    --semihosting-config enable=on,target=native)
-  set_tests_properties ("${PLATFORM_NAME}-${name}" PROPERTIES LABELS "qemu" TIMEOUT 1200)
-endfunction ()
-
-add_suite_executable (rtos-apis-test          rtos-apis          xpacks::chan-fatfs)
-add_suite_executable (mutex-stress-test       mutex-stress)
-add_suite_executable (cmsis-os-validator-test cmsis-os-validator xpacks::arm-cmsis-os-validator)
+add_executable (rtos-apis-test)
+target_link_libraries (rtos-apis-test PRIVATE micro-os-plus::common-options
+  test::rtos-apis micro-os-plus::iii micro-os-plus::platform xpacks::chan-fatfs)
+add_test (NAME "${PLATFORM_NAME}-rtos-apis-test" COMMAND "${_qemu}" ... )
 ```
 
-The QEMU binary is found by globbing
-`$HOME/.local/xPacks/@xpack-dev-tools/qemu-arm/*/.content/bin` (newest
-first), falling back to `PATH`.
-
 ---
 
-## 7. Layer 3 — the port test builders
+## 6. Layer 3 — the board tests' builder
 
-Every port carries the same structure; the harness only includes it.
+`tests/board-tests/CMakeLists.txt` is one builder for every port (it was
+each port's own `test/CMakeLists.txt`). It reads what the platform set
+(§5.2a) and the board facts, and builds:
 
-```
-<port>/test/
-├── CMakeLists.txt              the builder: one application per folder of test/<BOARD>/
-├── boards/<board>/
-│   ├── board.cmake             board facts: UOS_BOARD_NCPU, UOS_BOARD_LINKER_HW,
-│   │                           UOS_BOARD_LINKER_QEMU, UOS_BOARD_DEFINES, sources, …
-│   ├── hw.sh                   hardware runner for this board (OpenOCD)
-│   └── openocd.cfg             probe + target
-├── boards/shared/              cross-board helpers, e.g. hw_result.hpp (cortexm)
-└── <board>/                    the board's TESTS — one folder per application
-    ├── include/  src/          support shared by this board's tests (not applications)
-    ├── tests.cmake             the per-test knobs a folder listing cannot express
-    └── <app>/main.cpp …        one test
-```
+- **the board tests** — every folder of `UOS_TESTS_BOARD_DIR` holding a
+  `*.cpp` (the folder name is the test name), each with the board's shared
+  `tests/src/*.cpp`;
+- **the portable tests** (`UOS_TESTS_SOURCES`) — one copy in
+  `tests/sources/<test>/` for every board. Those in `UOS_TESTS_PORTABLE` get
+  the platform's start-up (`src/platform-support.cpp`: board bring-up, the
+  secondary cores, then `os_main()`) and the common end
+  (`board-tests/portable-test-end.cpp`, or `board-tests/cortexm/test-end.cpp`
+  on Cortex-M): it prints `RESULT: PASS|FAIL` from `os_main()`'s return
+  value and ends the run;
+- **the suites** (`UOS_TESTS_SUITES`) — from their `test::<suite>`
+  libraries, on the platform's start-up, with what upstream's platforms link
+  them with (`rtos-apis`: Chan FatFs; `cmsis-os-validator`: the Arm
+  validator) and the platform's `src/<suite>-support.cpp` when there is one;
+- **the storage** of the tests in `UOS_TESTS_STORAGE` — the board's SD card
+  as the posix-io block device `/dev/sd`, Chan FatFs, mounted at `/sd/`
+  before `os_main()` (`board-tests/portable-test-storage.cpp`; a board test
+  calls `uos_test_storage_start()` from `uos-test-storage.h` itself).
 
-### 7.1 What the builder produces
+Each test becomes one image per variant: `-qemu` and `-hwd` when the board
+has a QEMU linker script, `-hwd` only when it has not, `-host` on the POSIX
+port. The builder hands the names back in `UOS_TESTS_APPS`.
 
-For each folder `test/<BOARD>/<app>/` that contains a `*.cpp` — `*.c` alone
-does not count (skipping
-`include/` and `src/`):
+### 6.1 `tests.cmake` — the per-test knobs
 
-| port | images |
+`tests/platforms/<P>/tests/tests.cmake` changes what the defaults do, per
+test. Each knob is a function `(<test> <out-variable>)`:
+
+| knob | for |
 |---|---|
-| `cortexm` | `<app>-qemu.elf` if `board.cmake` sets `UOS_BOARD_LINKER_QEMU` and `<app>` is not in `BOARD_TEST_HWD_ONLY`; `<app>-hwd` always |
-| `aarch32`, `aarch64` | `<app>-qemu.bin` and `<app>-hwd` |
-| `posix-arch` | `<app>-host` |
-
-**Tests are never shared between boards.** Two boards of the same SoC each
-have their own `test/<board>/`; changing a test reaches one board only.
-
-### 7.2 `tests.cmake` — the per-test knobs
-
-Lists (variables) and hooks (functions `board_test_<x> (_app _out)` that set
-`${_out}` in `PARENT_SCOPE`). The builder defines empty defaults; the board's
-`tests.cmake` overrides what it needs.
-
-| knob | kind | ports | effect |
-|---|---|---|---|
-| `BOARD_TEST_NEED_DEVICES` | list | all | link the board's device drivers (`UOS_BOARD_DEVICES`) |
-| `BOARD_TEST_SELF_CONTAINED` | list | all | the test brings its own startup / board glue |
-| `BOARD_TEST_NO_KERNEL` | list | all | bare-metal: no kernel, no scheduler, no `OS_NCPU` |
-| `BOARD_TEST_HWD_ONLY` | list | cortexm | build `-hwd` only (QEMU cannot model what it tests) |
-| `board_test_ncpu` | hook | all | `OS_NCPU` for this app (e.g. 1 for single-core tests) |
-| `board_test_defines` | hook | all | extra compile definitions |
-| `board_test_sources` | hook | all | extra sources (board glue, PSRAM, ADC, …) |
-| `board_test_includes` | hook | all | extra include directories |
-| `board_test_linker` | hook | all | a different linker script (e.g. PSRAM) |
-| `board_test_options` | hook | all | extra compile options (e.g. `-mlong-calls`) |
-| `board_test_libs` | hook | cortexm, aarch32/64 | extra link libraries — used to turn a harness suite into a board app (§10.4) |
-| `board_test_libraries` | hook | posix-arch | same, posix-arch spelling |
-| `board_test_qemu_libs/_sources/_includes` | hooks | cortexm | replace the board for the `-qemu` image (the generic single-core QEMU core) |
-
-A test that needs none of these needs **no** `tests.cmake` edit.
-
----
-
-## 8. Layer 4 — CTest, runners and verdicts
-
-### 8.1 Case names and labels
-
-| platform shape | CTest name | label |
-|---|---|---|
-| port platform | `<platform>-<app>-qemu` / `-hwd` / `-host` | `qemu` / `hwd` / `host` |
-| upstream-style platform | `<platform>-<suite>-test` | `qemu` (`hwd` on the nucleo / pico boards) |
-
-`ctest -R` is a **regular-expression substring** match: always pass the full
-name, or `-R cortexm-pico2-smp-test1-qemu` also runs
-`cortexm-pico2-smp-test1-qemu-something`.
-
-The generic `test` action runs `ctest -V -LE hwd`: **hardware cases are
-excluded on purpose**, because each one needs a board and a power cycle.
-
-### 8.2 The verdict protocol
-
-A test passes by saying so, in one of two ways:
-
-| mechanism | used by | how |
-|---|---|---|
-| **exit status** | upstream-style suites; cortexm `-qemu`; native `cmsis-os-validator` | semihosting `SYS_EXIT` (QEMU returns it as the process status) or the host process exit code; `0` = pass |
-| **`RESULT:` line** | runners (`run-qemu.sh`, `run-host.sh`, `run-hw.sh`, the boards' `hw.sh`) | the log is grepped for `RESULT: PASS`, `RESULT: SKIP`, `RESULT: FAIL` |
-
-Board tests do both: print `RESULT: PASS|FAIL` and then **stop the run** —
-`hw_result::ok()` / `hw_result::fail()` (cortexm `boards/shared/hw_result.hpp`,
-and the aarch/posix equivalents) write the line through semihosting and call
-`std::_Exit(0|1)`. A test that prints `RESULT:` but never stops is reported
-as a timeout on hardware.
-
-### 8.3 The runners (`test_smpl/`)
-
-| script | arguments | environment | logs |
-|---|---|---|---|
-| `run-qemu.sh` | `<build-test-dir> <qemu> <machine-args…>` | `UOS_QEMU_ONLY=<app>`, `UOS_QEMU_SHIM` / `UOS_QEMU_LOAD_ADDR` (AArch32 on raspi3b), `UOS_TEST_SRC_DIR` (SD image seeding) | `<dir>/.qemu-logs/<app>.log` |
-| `run-host.sh` | `<build-test-dir>` | `UOS_RUN_ONLY=<app>` | `<dir>/.host-logs/<app>.log` |
-| `run-hw.sh` | `<build-test-dir> <app> [secs]` or `list` | `UOS_HW_CFG` (required), `UOS_HW_*` | `<dir>/.hw-logs/<app>.log` |
-
-Verdicts: `PASS`, `SKIP` (e.g. `usb_test` under QEMU), `FAIL`, `TIMEOUT`,
-`NO RESULT`. Per-test time budgets are in `timeout_for()` of `run-qemu.sh`
-and `run-host.sh`: 300 s unless listed (`smp_test0/1/3/4` 150,
-`smp_test2` 300, `smp-mat-test` 900, `smp-num/pipeline/pro-cons` 1000,
-`smp-mat-sdcard-test` 2000, `sd_test` 450, `usb_test` 200). SD-card tests get
-a fresh 4 GiB sparse card image per run, deleted afterwards.
-
-### 8.4 Hardware runs (`-hwd`)
-
-- **OpenOCD only, no GDB.** The runner programs the image, enables
-  semihosting and resumes; the verdict comes from the semihosting output.
-- **The UART is yours.** No runner opens the serial port; keep your terminal
-  (`tio`, `picocom`) on it.
-- **One test per power cycle.** Power-cycle the board before each `-hwd`
-  case; `run-hw.sh` refuses to run a suite.
-
----
-
-## 9. Running tests day to day
-
-All commands run in `~/Work/micro-os-plus/micro-os-plus-iii/tests` (or add
-`-C ~/Work/micro-os-plus/micro-os-plus-iii/tests`). `C` is a configuration
-name.
-
-| goal | command |
-|---|---|
-| tools, first time | `npm install && xpm install` |
-| one configuration, cold | `xpm run install --config C` → `xpm run prepare --config C` → `xpm run build --config C` → `xpm run test --config C` (**this order**) |
-| one platform, debug + release | `xpm run test-<platform>-cmake` |
-| one compiler, debug + release | `xpm run test-native-cmake-gcc14` |
-| one test (builds first) | `xpm run test-<app>-<variant> --config C` |
-| list the cases | `PATH="$PWD/build/C/xpacks/.bin:$PATH" ctest --test-dir build/C -N` |
-| one case, by hand | `PATH="$PWD/build/C/xpacks/.bin:$PATH" ctest --test-dir build/C -V -R '^<platform>-<app>-<variant>$'` |
-| rebuild after editing a test | `xpm run build --config C` (or the per-test action) |
-| a new test folder was added | `xpm run prepare --config C` — the glob runs at configure time |
-| every broken target at once | `PATH="$PWD/build/C/xpacks/.bin:$PATH" cmake --build build/C -- -k 0` |
-| the log of the last run | `build/C/…/.qemu-logs/<app>.log`, `.host-logs/`, `.hw-logs/` |
-
-Standing rules:
-
-- Run QEMU suites **one at a time** on an idle host; parallel emulators turn
-  timing-sensitive SMP tests into timeouts. Re-run a lone timeout by itself
-  before debugging it.
-- `test` never builds. After an edit, `build` first or use the per-test action.
-- A release configuration is separate: `install` it before its first `prepare`.
-
----
-
-## 10. Writing a new test
-
-### 10.1 Which kind of test?
-
-| the test… | it is a… | lives in | its verdict |
-|---|---|---|---|
-| is portable, has no `main()`, entry `os_main()` | **harness suite** | `tests/sources/<name>/` | `os_main()` return value → exit code |
-| needs one board, has its own `main()` / hooks | **board test** | `<port>/test/<board>/<name>/` | prints `RESULT:` and stops |
-
-Rule of thumb: a test of **kernel API behaviour** that should hold on every
-architecture is a harness suite. A test of **a board, a driver, an SMP
-boot sequence or a port detail** is a board test.
-
-A suite links `micro-os-plus::platform` **and** the platform's startup
-support (`platform-support`, or the board's harness wrapper); a board test
-links the platform **only**, because it brings its own `main()` — two strong
-`main()`s collide at link time.
-
-### 10.2 Recipe A — a board test
-
-1. **Create the folder** `<port>/test/<board>/<name>/` with a `main.cpp`.
-   Start from the closest sibling in the same folder (e.g. `smp-test1/` on a
-   Pico 2 board, `smp_test0/` on native). Keep its boot sequence; change the
-   body. The folder name **is** the application name.
-
-2. **End with a verdict** — print the line, then stop:
-
-   ```cpp
-   #include <hw_result.hpp>
-   // …
-   if (ok)
-     {
-       uart::write ("RESULT: PASS\n");   // the board's console, for you
-       hw_result::ok ();                 // semihosting line + _Exit(0): stops the run
-     }
-   else
-     {
-       uart::write ("RESULT: FAIL\n");
-       hw_result::fail ();               // _Exit(1)
-     }
-   for (;;) {}                           // reached only without semihosting
-   ```
-
-3. **If needed, declare it** in `<port>/test/<board>/tests.cmake` (§7.2):
-   `BOARD_TEST_NEED_DEVICES`, `BOARD_TEST_NO_KERNEL`, `BOARD_TEST_HWD_ONLY`
-   (cortexm), a different `board_test_ncpu`, extra sources/defines. Most tests
-   need nothing.
-
-4. **If it runs longer than 300 s** under QEMU or on the host, add it to
-   `timeout_for()` in `test_smpl/run-qemu.sh` / `run-host.sh`.
-
-5. **Re-configure** so the glob sees it, and check the case exists:
-
-   ```sh
-   xpm run prepare --config C
-   PATH="$PWD/build/C/xpacks/.bin:$PATH" ctest --test-dir build/C -N | grep <name>
-   ```
-
-6. **Add one action per variant** to **each** configuration that builds it
-   (the debug one; release inherits it):
-
-   ```json
-   "test-<name>-qemu": "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R <platform>-<name>-qemu",
-   "test-<name>-hwd":  "{{ properties.commandCMakePrepareWithToolchain }} && {{ properties.commandCMakeBuild }} && cd {{ properties.buildFolderRelativePath }} && ctest -V -R <platform>-<name>-hwd"
-   ```
-
-7. **Build everything and run it:**
-
-   ```sh
-   PATH="$PWD/build/C/xpacks/.bin:$PATH" cmake --build build/C -- -k 0
-   xpm run test-<name>-qemu --config C
-   ```
-
-   A per-test action builds the **whole** tree: one target that does not
-   build makes every action of that configuration fail.
-
-8. **Hardware**: power-cycle the board, then `xpm run test-<name>-hwd --config C`.
-
-### 10.3 Recipe B — a harness suite
-
-1. **Create the files**, copying `tests/sources/mutex-stress/`:
-
-   ```
-   tests/sources/<name>/
-   ├── CMakeLists.txt
-   ├── README.md
-   ├── include/cmsis-plus/os-app-config.h    per-suite RTOS configuration
-   └── src/main.cpp                          int os_main (int argc, char* argv[])
-   ```
-
-2. **`CMakeLists.txt`** — an INTERFACE library with the `test::` alias:
-
-   ```cmake
-   cmake_minimum_required (VERSION 3.20)
-
-   add_library (test-<name>-interface INTERFACE EXCLUDE_FROM_ALL)
-   target_include_directories (test-<name>-interface INTERFACE "include")
-   target_sources (test-<name>-interface INTERFACE src/main.cpp)
-
-   if (COMMAND xpack_display_target_lists)
-     xpack_display_target_lists (test-<name>-interface)
-   endif ()
-
-   add_library (test::<name> ALIAS test-<name>-interface)
-   message (VERBOSE "> test::<name> -> test-<name>-interface")
-   ```
-
-3. **`src/main.cpp`** — the entry point is `os_main`, never `main`; return 0
-   for pass:
-
-   ```cpp
-   #include <cmsis-plus/rtos/os.h>
-   #include <cmsis-plus/diag/trace.h>
-
-   using namespace os;
-   using namespace os::rtos;
-
-   int
-   os_main (int argc __attribute__ ((unused)),
-            char* argv[] __attribute__ ((unused)))
-   {
-     bool ok = true;
-     // … exercise the kernel API; set ok = false on any failure …
-     return ok ? 0 : 1;
-   }
-   ```
-
-   Do not trace from the scheduler/tick ISR. Keep the controlling thread
-   above the priority of busy worker threads, or on real silicon it may never
-   run again (this is what `fp-switch` does).
-
-4. **`include/cmsis-plus/os-app-config.h`** — copy the one from
-   `mutex-stress` (or `fp-switch`); it includes `cmsis-plus/platform.h` and
-   sets the tick, stack sizes and per-architecture options.
-
-5. **Wire it into each platform that should run it:**
-
-   - add `"${CMAKE_SOURCE_DIR}/sources/<name>"` to that platform's
-     `cmake/dependencies-folders.cmake`;
-   - upstream-style platform: add to its `CMakeLists.txt`
-     `add_suite_executable (<name>-test <name> [extra libs])`;
-   - port platform (cortexm, aarch32/64): run it as a board app — §10.4.
-
-6. `prepare`, add the `test-<name>-test` (or `test-<name>-<variant>`) action,
-   full build with `-k 0`, run.
-
-### 10.4 Recipe C — a harness suite as a board app (port platforms)
-
-Port platforms build only what the port builder builds, so a suite runs there
-as a **board app** that wraps `os_main()`. This is how `cortexm-pico2` runs
-`rtos-apis`, `mutex-stress`, `cmsis-os-validator` and `fp-switch`, and how
-`cortexm-pico2-rp2350b-psram` runs `fp-switch`. Every step is required:
-
-1. **A folder per suite**: `<port>/test/<board>/<suite>/harness-suite.cpp`
-   (the folder gives the app its name). On the Pico 2 boards it is one line:
-
-   ```cpp
-   #include "../../pico2/harness-suite.hpp"
-   ```
-
-   `harness-suite.hpp` defines `__wrap_os_main()`: it calls
-   `__real_os_main()`, prints `RESULT: PASS|FAIL` on the UART **and** through
-   semihosting, and returns the code; the kernel's `std::exit(code)` is the
-   semihosting `SYS_EXIT`.
-
-2. **`board_test_libs()`** in the board's `tests.cmake` returns
-   `test::<suite>` (+ its extras, e.g. `xpacks::chan-fatfs`) **and** an
-   INTERFACE target that carries:
-   - `OS_USE_OS_APP_CONFIG_H UOS_HARNESS_SUITE _POSIX_C_SOURCE=200809L _GNU_SOURCE`;
-   - the include directory `${CMAKE_SOURCE_DIR}/platforms/${PLATFORM_NAME}/include`
-     (the harness `platform.h` the suite's config includes);
-   - `micro-os-plus::iii-semihosting`, `iii-newlib-reent`, `iii-posix-io`;
-   - the link option `-Wl,--wrap=os_main`.
-
-   On cortexm this target is `pico2-harness-suite`; on the Pis it is
-   `<platform>-harness-suite` and also adds the platform's
-   `src/platform-support.cpp`.
-
-3. **`board_test_ncpu()`** returns 1 for the suite if the suite is
-   single-core.
-
-4. The suite folder must be in the platform's `dependencies-folders.cmake`
-   (Recipe B, step 5), or `test::<suite>` is undefined.
-
-5. `prepare`, add the `-qemu` / `-hwd` actions, full build, run.
-
-The board's own `os-app-config.h` must `#include_next` the suite's config
-under `UOS_HARNESS_SUITE` and wrap its own values in `#ifndef`, so the suite's
-settings win and the board's other tests are unchanged.
-
----
-
-## 11. Adding a configuration or a platform
-
-### 11.1 A new toolchain or build type for an existing platform
-
-1. Copy the nearest **pair** (debug + release) in
-   `xpack.buildConfigurations`, rename it
-   `<platform>-cmake-<toolchain>-<debug|release>`.
-2. Change the dependency mixin (`gccNN-dependencies`, …), the
-   `toolchainFileName`, and a unique `shortConfigurationName`.
-3. Copy the `test` override and the per-test actions from the sibling.
-4. Add it to the relevant top-level array (`test-native-cmake`, …) and give
-   it a `test-<platform>-cmake`-style action if it needs one.
-5. `xpm install --config <new>-debug`, then the cold sequence of §9.
-
-For clang < 19 on a host with a newer GCC, inherit `gcc14-dependencies` and
-`clang-gcc14-properties` as `native-cmake-clang16/17/18-*` do.
-
-### 11.2 A new platform
-
-1. **Name it** with a prefix that `tests-main.cmake` maps to the right port
-   (§6.2), or add a branch there.
-2. **Copy the nearest sibling folder** under `tests/platforms/` and adapt:
-   - `cmake/definitions.cmake`: `xpack_platform_compile_definition`, and
-     `set (BOARD "<board>" CACHE STRING "" FORCE)` for a port platform;
-   - `cmake/dependencies-folders.cmake`: the suites and packages it needs;
-   - `cmake/platform-library.cmake`: `micro-os-plus::platform` (the port
-     library, startup, semihosting, flags);
-   - `CMakeLists.txt`: the shape of §6.5 (a) or (b);
-   - `include/cmsis-plus/platform.h`.
-3. **On the port side** (port platforms): `test/boards/<board>/board.cmake`,
-   `hw.sh`, `openocd.cfg`, and `test/<board>/` with its tests and
-   `tests.cmake`. The builder fails at configure time if `test/<board>/` is
-   missing.
-4. **Add the configuration pair** (§11.1) with the right dependency mixins:
-   an emulator needs `qemu-arm-dependencies`, a board needs
-   `openocd-dependencies`.
-5. Add `test-<platform>-cmake` and, if it is emulated, list it in
-   `test-smp-cmake` (or the relevant top-level set).
-6. Re-run the emulated sets of the **other** platforms of the same port: a new
-   board must not change their results.
-
-Some files carry a "DO NOT EDIT … generated from build-helper" header
-(`cmake/tests-main.cmake`, `cmake/common-options.cmake`, several upstream
-`platform-library.cmake`). This tree has diverged from those templates on
-purpose: edit the local copy, do not regenerate it.
-
----
-
-## 12. Checklist before you commit
-
-- [ ] `xpm run prepare --config C` done after adding or removing a test folder.
-- [ ] `ctest -N` shows the new case with the full name you expect.
-- [ ] `cmake --build build/C -- -k 0` builds **every** target (not only yours).
-- [ ] Every CTest case of every configuration that builds it has a
-      `test-<app>-<variant>` action. A quick cross-check:
-
-      ```sh
-      cd ~/Work/micro-os-plus/micro-os-plus-iii/tests
-      C=cortexm-pico2-cmake-gcc-debug
-      PATH="$PWD/build/$C/xpacks/.bin:$PATH" ctest --test-dir build/$C -N \
-        | sed -n 's/.*Test *#[0-9]*: //p' | while read -r t; do
-          grep -q "ctest -V -R $t\"" package.json || echo "missing action: $t"
-        done
-      ```
-
-- [ ] The test passes alone, and in its configuration's full `test` run.
-- [ ] Debug **and** release (release often exposes timing and optimisation
-      issues — see the clang TLS defect in `docs/posix-arch-port.md` §2).
-- [ ] For a port change: the emulated sets of the port's other boards still
-      pass.
-- [ ] For hardware: the `-hwd` case passes on the board, one per power cycle.
-- [ ] `docs/tests/TESTS-CATALOG.md` updated if you added a test or a platform.
-
----
-
-## 13. Troubleshooting
-
-| symptom | cause and fix |
-|---|---|
-| `found /usr/bin/cc`, or the toolchain guard says the compiler "must be …" | configured before `install`, or `build` before `prepare`. Run `install` → `prepare` again. If the cache is poisoned, delete only `build/C/CMakeCache.txt`. |
-| `Missing …/build/C/xpacks/…` on a **release** configuration | release has its own build folder: `xpm run install --config <release>` |
-| `no *-host executables` / every case fails at once | `test` does not build: run `build` first, or use the per-test action |
-| the test runs in CTest but not in VS Code | its `test-<app>-<variant>` action is missing from `package.json` |
-| every `test-*` action of one configuration fails at the build step | one target in that tree does not build: `cmake --build build/C -- -k 0` lists them all |
-| a new port test is not in `ctest -N` | not re-prepared; or the folder has no `*.cpp` (the builders glob `*.cpp` only — a folder with just `*.c` gets a CTest case on cortexm but no image); or the port clone is not the one CMake uses (`UOS_*_DIR` in `CMakeCache.txt`) |
-| `Cannot find the <port> port at …` | the sibling repository is missing or misnamed (§2); pass `-D UOS_<PORT>_DIR=…` |
-| `alias micro-os-plus::iii already exists` | the kernel was added twice; the port adds it — never add it again |
-| `undefined reference to os_startup_initialize_hardware…` | a harness suite linked without the platform support / harness wrapper |
-| `undefined reference to test::<suite>` / target not found | the suite is not in the platform's `dependencies-folders.cmake` |
-| two definitions of `main` | a board test linked with `platform-support`, or a suite given its own `main()` |
-| a QEMU case times out with no fault in the log | host contention (parallel emulators) or a missing `timeout_for` entry: re-run alone |
-| `sd_test` fails at once: `no flatfs_tool.py (set UOS_TEST_SRC_DIR)` | the CTest case must pass `UOS_TEST_SRC_DIR` in its `ENVIRONMENT` |
-| `NO RESULT` although the test printed PASS | the runner read the log before it was complete; fixed in `run-host.sh` / `run-qemu.sh` (pipeline + `PIPESTATUS`) — update your clone |
-| a hardware test never ends | it prints `RESULT` but does not stop: call `hw_result::ok()` / `fail()` |
-| a hardware test hangs after the first print | the controlling thread starves behind busy workers: raise its priority |
-| a native test hangs only with clang 16–18 release | the CPU id was read through a cached thread pointer — fixed in posix-arch; see `docs/posix-arch-port.md` §2 |
-
----
-
-## 14. Reference tables
-
-### 14.1 Files, by layer
-
-| file | layer | edit when |
-|---|---|---|
-| `tests/package.json` | 1 | new configuration, new test action, new toolchain |
-| `tests/CMakeLists.txt` | 2 | practically never |
-| `tests/cmake/tests-main.cmake` | 2 | a new platform prefix / a new port |
-| `tests/cmake/global-definitions.cmake` | 2 | an upstream-platform suite switch |
-| `tests/platforms/<p>/cmake/definitions.cmake` | 2 | new platform, board id |
-| `tests/platforms/<p>/cmake/dependencies-folders.cmake` | 2 | a suite added to that platform |
-| `tests/platforms/<p>/cmake/platform-library.cmake` | 2 | flags, linker, port libraries |
-| `tests/platforms/<p>/CMakeLists.txt` | 2 | new platform; new suite on an upstream-style platform |
-| `tests/sources/<suite>/…` | 2 | new or changed harness suite |
-| `<port>/test/CMakeLists.txt` | 3 | the builder itself (rare, affects every board) |
-| `<port>/test/boards/<b>/board.cmake`, `hw.sh`, `openocd.cfg` | 3 | new board, probe, memory map |
-| `<port>/test/<b>/tests.cmake` | 3 | per-test knobs |
-| `<port>/test/<b>/<app>/…` | 3 | new or changed board test |
-| `test_smpl/run-{qemu,host,hw}.sh` | 4 | timeouts, verdict parsing |
-
-### 14.2 Environment variables
-
-| variable | read by | meaning |
-|---|---|---|
-| `UOS_QEMU_ONLY` | `run-qemu.sh` | run only this app |
-| `UOS_RUN_ONLY` | `run-host.sh` | run only this app |
-| `UOS_QEMU_SHIM`, `UOS_QEMU_LOAD_ADDR` | `run-qemu.sh` | AArch32 on `raspi3b`: shim image and load address |
-| `UOS_TEST_SRC_DIR` | `run-qemu.sh` | where the board's tests (and `flatfs_tool.py`) are |
-| `UOS_HW_CFG`, `UOS_HW_*` | `run-hw.sh` | OpenOCD configuration and ISA facts |
-| `BUILD` | the boards' `hw.sh` | the build folder holding `test/<app>-hwd` |
-| `OPENOCD` | the boards' `hw.sh` | an explicit OpenOCD binary |
-
-### 14.3 CMake cache variables
+| `board_test_defines` | per-test `-D` (e.g. `usb_test`'s LED pattern) |
+| `board_test_sources`, `board_test_includes` | extra sources and include folders |
+| `board_test_libs` | extra libraries (a driver set, `aarch64-rpi4b-eth`, `micro-os-plus::devices-usb`) |
+| `board_test_linker`, `board_test_options` | a test's own linker script or options |
+| `board_test_ncpu` | a CPU count other than the board's |
+| `board_test_sd_posix` | the card's driver set of a storage test (`OWN`: the test brings its own) |
+| `board_test_qemu_libs`, `_sources`, `_includes` | what replaces the board in the emulated image (the RP2xxx boards) |
+
+and the lists `BOARD_TEST_SELF_CONTAINED` (brings its own start-up),
+`BOARD_TEST_NO_KERNEL` (no scheduler), `BOARD_TEST_HWD_ONLY` (no QEMU
+image), plus additions to `UOS_TESTS_STORAGE`.
+
+### 6.2 Cache options
 
 | variable | meaning |
 |---|---|
-| `PLATFORM_NAME` | the platform (set by `package.json`) |
-| `CMAKE_BUILD_TYPE` | `Debug`, `Release`, `MinSizeRel` (set by `package.json`) |
-| `CMAKE_TOOLCHAIN_FILE` | from `build-helper/cmake/toolchains/<toolchainFileName>` |
-| `BOARD` | the port's board id (set by the platform's `definitions.cmake`) |
-| `UOS_SMP_DIR`, `UOS_AARCH32_DIR`, `UOS_AARCH64_DIR`, `UOS_CORTEXM_DIR`, `UOS_POSIX_ARCH_DIR` | the repositories in use (§6.3) |
-| `UOS_DEBUG_BOOT` | cortexm: compile the `hwd` images with early-boot markers |
+| `UOS_DEBUG_BOOT` | compile the `-hwd` images with the early-boot markers (each one a semihosting trap) |
+| `SEMI_PRINTS` | AArch64: mirror every console line to semihosting in the `-hwd` images (keep 0 for the USB tests) |
+| `LED_PIN` | the GPIO used as the user LED (per board) |
+| `WIFI_TEST_SSID`, `WIFI_TEST_PASS` | the Wi-Fi tests' network; kept in the build folder's `CMakeCache.txt`, never committed |
 
-### 14.4 Related documents
+---
 
-- [`README-DEVELOPER.md`](../../README-DEVELOPER.md) — the upstream quick start this guide follows.
-- [`TESTS-CATALOG.md`](TESTS-CATALOG.md) — every platform, test and probe.
-- [`STEPS.md`](STEPS.md) — step-by-step install, build and run.
-- [`TESTS-XPACK-SYSTEM.md`](TESTS-XPACK-SYSTEM.md) — the xPack system in depth.
-- [`../posix-arch-port.md`](../posix-arch-port.md) — the native port, including the verdict and timing traps.
+## 7. Layer 4 — CTest: names, labels, verdicts, runs
+
+### 7.1 Names and labels
+
+| platform shape | CTest name | label |
+|---|---|---|
+| board platforms | `<platform>-<test>-qemu` / `-hwd` / `-host` | `qemu` / `hwd` / `host` |
+| upstream platforms | `<platform>-<suite>-test` | `qemu` |
+| the debug-link reset before a hardware test | `<platform>-<test>-hwd-reset` | `hwd-reset` |
+| a per-run SD image (QEMU, host) | `<name>-sd-make`, `<name>-sd-remove` | as the test |
+
+`ctest -R` is a regular-expression **substring** match: anchor the full name
+(`-R '^cortexm-pico2-smp-test1-qemu$'`). The configuration's `test` action
+excludes the hardware labels (`ctest -LE "hwd|hwsh"`).
+
+### 7.2 The verdict
+
+Every test prints one line: `RESULT: PASS`, `RESULT: FAIL` or
+`RESULT: SKIP` (e.g. `usb_test` under QEMU, which has no USB device mode).
+CTest's `PASS/FAIL/SKIP_REGULAR_EXPRESSION` read it
+(`UOS_TESTS_RESULT_PROPERTIES`); with a pass expression set, the exit code
+does not decide. Each test has a time limit (`uos_tests_timeout()`: 300 s
+unless listed — `smp_test0/1/3/4` 150, `smp-mat-test` 900,
+`smp-num/pipeline/pro-cons` 1000, `smp-mat-sdcard-test` 2000, `sd_test` 450,
+`usb_test` 200; the hardware tests set their own).
+
+A test must also **end the run** after its line, or it ends in a timeout:
+
+- portable tests and suites return from `os_main()`; the common end prints
+  the line and ends;
+- Cortex-M board tests call `hw_result::ok()` / `fail()`
+  (`board-tests/cortexm/hw_result.hpp`): the line through semihosting, then
+  `_Exit()`, a semihosting `SYS_EXIT`;
+- AArch board tests print the line through their console and semihosting and
+  end through semihosting the same way.
+
+On QEMU and on a board, the semihosting exit ends QEMU or OpenOCD.
+
+### 7.3 QEMU and host runs
+
+`uos_tests_add_qemu` runs QEMU with semihosting and the image
+(`-kernel`; on AArch32 Pis, a shim that drops `raspi3b`'s AArch64 cores to
+AArch32 and a `-device loader` for the image). `uos_tests_add_host` runs the
+native program. A test that uses the SD card gets a fresh 4 GiB card image
+(MBR + FAT32, `board-tests/sd-image.py`; `sd_test`'s with a seed file) from a
+CTest fixture, deleted after the run.
+
+### 7.4 Hardware runs
+
+CTest runs OpenOCD directly with the board's configuration. No GDB, no
+script; the test's semihosting `SYS_EXIT` ends OpenOCD.
+
+- **AArch boards** (`uos_tests_add_hwd`): `cmake/uos-hwd.tcl` halts the
+  cores, enables semihosting, runs the board's hooks, an optional pre-load,
+  loads the image and resumes in the board's mode (`entry`, `cpsr`,
+  `pc-first`, `cpsr-first`, `pc`). These boards have no reset line: before
+  each test, `cmake/uos-hwd-reset.cmake` resets them in its own OpenOCD
+  session (the Pi's PM watchdog, the RK3506 global reset), waits for them to
+  boot, and runs as a CTest fixture (`<test>-hwd-reset`); if it cannot reach
+  the board, the test is not run.
+- **Cortex-M boards** (`uos_tests_add_openocd`): the board's commands, from
+  its `CMakeLists.txt`: program the flash, reset, enable semihosting, run;
+  the `-ram` tests load into SRAM and start core 0 from the image's vector
+  table.
+
+The environment: `PROBE` (Zero 2 W / Pi 3 B probe: `jlink`, `olimex`,
+`cmsis-dap`), `UOS_HW_ADAPTER_SERIAL` (which CMSIS-DAP), `UOS_HW_ADAPTER_KHZ`
+(the clock). The board's UART is never opened by a test run: it is yours, in
+your own terminal. Hardware tests run one at a time (`RUN_SERIAL`); two
+boards on different probes can run side by side from two build folders
+(OpenOCD's Tcl and telnet ports are off), except the Lyra, whose WCH-Link
+loses its link beside another CMSIS-DAP probe.
+
+Until every board has proven this route, each hardware test also exists as
+`<test>-hwsh` (label `hwsh`): the same test through the board's former
+`hw.sh` script. Both the twins and the scripts go after the proof.
+
+---
+
+## 8. Writing a new test
+
+### 8.1 Which kind?
+
+| the test… | it is a… | lives in |
+|---|---|---|
+| checks kernel behaviour on every architecture, `os_main()` only | **portable test** | `tests/sources/<test>/main.cpp` |
+| is one of upstream's suites, or a new one in their shape | **suite** | `tests/sources/<suite>/` (an INTERFACE library `test::<suite>`) |
+| needs one board, a driver, an SMP boot detail | **board test** | `tests/platforms/<P>/tests/<test>/` |
+
+### 8.2 A portable test
+
+1. Create `tests/sources/<test>/main.cpp` with `int os_main (int, char*[])`,
+   returning 0 for a pass; use the µOS++ interfaces only (start from
+   `smp_test0/`). No `main()`, no board headers.
+2. Add it to `UOS_TESTS_SOURCES` and `UOS_TESTS_PORTABLE` of every platform
+   that should run it (and to `UOS_TESTS_STORAGE` if it needs `/sd/`).
+3. If it needs more than 300 s, add it to `uos_tests_timeout()`.
+4. `prepare`, `build`, run it with `ctest -R` (§7.1).
+
+### 8.3 A board test
+
+1. Create `tests/platforms/<P>/tests/<test>/main.cpp`, starting from the
+   closest sibling; the folder name is the test name.
+2. End with a verdict that stops the run (§7.2): on Cortex-M,
+
+   ```cpp
+   #include <hw_result.hpp>
+   // ...
+   if (ok)
+     hw_result::ok ();      // RESULT: PASS through semihosting, then SYS_EXIT
+   else
+     hw_result::fail ();
+   ```
+
+3. If it needs anything special, say so in `tests/tests.cmake` (§6.1). Most
+   tests need nothing.
+4. Re-`prepare` (the folder glob runs at configure time) and check:
+   `ctest -N | grep <test>`.
+5. Build, run `-qemu` if the board has one, then `-hwd` on the board.
+
+### 8.4 A suite
+
+Copy `tests/sources/mutex-stress/` (its `CMakeLists.txt` defines
+`test-<name>-interface` and the alias `test::<name>`, its
+`include/cmsis-plus/os-app-config.h` the RTOS configuration, `src/main.cpp`
+the `os_main()`). Then add the folder to each platform's
+`cmake/dependencies-folders.cmake`, and the name to `UOS_TESTS_SUITES` (board
+platforms) or an `add_executable` + `add_test` (upstream platforms).
+
+---
+
+## 9. Adding a configuration or a platform
+
+### 9.1 A new toolchain or build type
+
+1. Copy the nearest debug + release pair in `xpack.buildConfigurations`,
+   named `<platform>-cmake-<toolchain>-<debug|release>`.
+2. Change the dependency mixin, `toolchainFileName` and a unique
+   `shortConfigurationName`; keep the sibling's `test` action.
+3. Add it to the relevant group action.
+4. `xpm run install --config <new>`, `link-deps`, `prepare`, `build`, `test`.
+
+### 9.2 A new board
+
+1. Copy the nearest sibling folder under `tests/platforms/` and adapt
+   `cmake/definitions.cmake`, `dependencies-folders.cmake` (the port and the
+   device packages, linked by xpm), `board.cmake` (the facts),
+   `platform-library.cmake`, `include/`, `src/`, the linker scripts and
+   `openocd*.cfg`.
+2. In `CMakeLists.txt`: the lists of §5.2a, and the run — `uos_tests_add_qemu`
+   for an emulated machine, `uos_tests_add_hwd` (AArch: entry, target name
+   format, cores, resume mode, reset) or `uos_tests_add_openocd` (Cortex-M:
+   the OpenOCD commands) for the board.
+3. Add its configuration pair to `package.json` (§9.1), with
+   `openocd-dependencies` for a board and `qemu-arm-dependencies` for QEMU,
+   and its `link-deps`.
+4. Re-run the emulated tests of the other platforms of the same port: a new
+   board must not change their results.
+
+Files with a "DO NOT EDIT … generated from build-helper" header
+(`cmake/tests-main.cmake`, `cmake/common-options.cmake`) have been changed
+on purpose: edit the local copy, do not regenerate it.
+
+---
+
+## 10. Checklist before you commit
+
+- [ ] `prepare` done after adding or removing a test folder; `ctest -N` shows
+      the new case with the name you expect.
+- [ ] `cmake --build build/<C> -- -k 0` builds every target, not only yours.
+- [ ] The test passes alone and in the configuration's full `test` run.
+- [ ] Debug **and** release.
+- [ ] A port or builder change: the emulated tests of the port's other boards
+      still pass.
+- [ ] A hardware change: the `-hwd` case passes on the board.
+- [ ] [`TESTS-CATALOG.md`](TESTS-CATALOG.md) updated for a new test or
+      platform.
+- [ ] No `WIFI_TEST_*` value in what you commit.
+
+---
+
+## 11. Troubleshooting
+
+| symptom | cause and fix |
+|---|---|
+| "`<package>` is not linked into this build folder" | `xpm link` the package once, then `xpm run link-deps --config <C>` |
+| `found /usr/bin/cc`, or the toolchain guard complains | configured before `install`, or `build` before `prepare`: `install`, then `prepare` |
+| `Missing …/build/<C>/xpacks/…` on a release configuration | release has its own build folder: `install` and `link-deps` it |
+| a new board test is not in `ctest -N` | not re-prepared, or its folder has no `*.cpp` |
+| CTest runs an old image after a failed build | delete the image (or `build` successfully) before running again |
+| `undefined reference to test::<suite>` / target not found | the suite is not in the platform's `dependencies-folders.cmake` |
+| `<test> is both a portable test … and a board test` | the same name in `tests/sources/` and the platform's `tests/`: rename one |
+| two definitions of `main` / of the start-up | a test that brings its own start-up is not in `BOARD_TEST_SELF_CONTAINED` |
+| a QEMU test times out with no fault | host contention (parallel emulators): re-run it alone |
+| a hardware test is "Not Run" with a failed `-hwd-reset` | the reset session did not reach the board: power, probe, wiring, `PROBE` |
+| a hardware test never ends | it prints `RESULT` but does not end through semihosting (§7.2) |
+| a USB gadget test does not enumerate | `SEMI_PRINTS` must be 0; the cable in the board's data/OTG port |
+
+---
+
+## 12. Reference tables
+
+### 12.1 Files
+
+| file | edit when |
+|---|---|
+| `tests/package.json` | a new configuration, toolchain or group |
+| `tests/cmake/tests-main.cmake` | practically never |
+| `tests/cmake/uos-tests-run.cmake` | a new way to run, a timeout |
+| `tests/cmake/uos-hwd.tcl`, `uos-hwd-reset.cmake` | the AArch hardware run itself |
+| `tests/board-tests/CMakeLists.txt` | the builder (affects every board) |
+| `tests/platforms/<P>/cmake/*.cmake` | the board facts, the linked packages |
+| `tests/platforms/<P>/CMakeLists.txt` | the tests a platform runs and how |
+| `tests/platforms/<P>/tests/tests.cmake` | per-test knobs |
+| `tests/platforms/<P>/tests/<test>/` | a board test |
+| `tests/sources/<test>/` | a portable test or a suite |
+
+### 12.2 Related documents
+
+- [`COMMANDS.md`](COMMANDS.md) — every command, the probes and boards.
+- [`TESTS-CATALOG.md`](TESTS-CATALOG.md) — every platform and test.
+- [`test-framework.md`](test-framework.md) — upstream's framework, as on
+  `xpack-development`.
+- [`../posix-arch-port.md`](../posix-arch-port.md),
+  [`../cortexm-port.md`](../cortexm-port.md),
+  [`../building-aarch32-aarch64.md`](../building-aarch32-aarch64.md) — the
+  ports.
+- [`../history/`](../history/) — the layout and scripts before the
+  alignment.

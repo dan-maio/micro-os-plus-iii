@@ -1,5 +1,7 @@
 # µOS++ III SMP — test commands, one by one
 
+> **History.** This document describes the test layout, scripts and commands before the 2026-11 alignment with upstream µOS++ IIIe (steps 1-7 of WHY-SMP-BUILD-TEST-DIFFERS.md): `test/<board>/` folders in the ports, `hw.sh` / `run-hw.sh`, flatfs and FatFs R0.15a. It is kept as a record; for the current layout see `docs/tests/TESTS-DEVELOPER-GUIDE.md` and `docs/tests/COMMANDS.md`.
+
 Every QEMU, hardware and host test of the AArch32, AArch64, Cortex-M33,
 RP2350, STM32F4 and POSIX platforms, written as the explicit commands that
 the runners execute — `test_smpl/run-qemu.sh`, `test_smpl/run-hw.sh` and

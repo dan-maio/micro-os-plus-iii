@@ -27,20 +27,18 @@ The test runs **entirely from internal SRAM** (`0x20000000`, 264 KB) without wri
 |------|---------|
 | `main.cpp` | Reuses the `smp-mat-test` parallel block solver implementation. |
 | `linker-ram.ld` | Dedicated linker script mapping all loadable sections (`.text`, `.rodata`, `.data`) to SRAM `0x20000000` (264 KB). Marks `.bss`, `.heap` and the 8 KB `.stack` as `(NOLOAD)` and discards `.boot2` (the flash second stage, not needed in RAM), so only the loadable sections are downloaded (~48 KB). |
-| `hw.sh` | Custom hardware test runner. Sets the OpenOCD target work-area to the top of SRAM (`0x20041000`, size `0x1000`; used only by `verify_image`, before the run), automates direct SRAM image loading, core 1 bootrom holding, core 0 VTOR/SP/PC configuration, semihosting monitoring, and clean exit. |
-| `load-ram.cfg` | Standalone TCL script for interactive debugging or manual OpenOCD flashing. |
+| `hw.sh` | The former runner, still registered as `<test>-hwsh` for comparison until the OpenOCD run below is proven on the board; then removed. |
+| `load-ram.cfg` | The same RAM load as an OpenOCD script, for a manual session; removed with `hw.sh`. |
 
 ---
 
 ## 3. Running the Test
 
-### Via CTest (Micro-OS+ SMP Test Framework)
+### Via CTest
 ```bash
 cd <workspace>/micro-os-plus-iii/tests/build/cortexm-pico-cmake-gcc-debug
 ctest -V -R cortexm-pico-smp-mat-test-ram-hwd
 ```
 
-### Via Standalone Script
-```bash
-BUILD=$PWD/platform-bin/port-tests <workspace>/micro-os-plus-iii-cortexm/test/boards/pico/hw.sh smp-mat-test-ram
-```
+The `-hwd` test is registered in `platforms/cortexm-pico/CMakeLists.txt` (`_hwd_ram`): CTest runs OpenOCD with the board's `openocd.cfg`, which loads the image into SRAM, verifies it, starts core 1 in the boot ROM and core 0 from the image's vector table (VTOR, SP, PC). The test's semihosting exit ends OpenOCD; its `RESULT` line is the verdict.
+

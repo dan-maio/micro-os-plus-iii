@@ -5,12 +5,11 @@
 # board's own sources are this platform's include/ and src/, its tests
 # tests/ (the Pi 3 B's tests carried over, without usb_test).
 #
-#   hwd    runs through the board's own hw.sh (this platform's hw.sh:
-#          OpenOCD + CMSIS-DAP over JTAG). Before each test the board is
-#          reset through the PM watchdog and given UOS_HW_RESET_WAIT (15) s
-#          to boot, so the hwd cases can run one after another. The port's
-#          builder is add_subdirectory()'d into port-tests/test -- the layout
-#          that script expects.
+#   hwd    runs on the board through OpenOCD, started by CTest
+#          (uos_tests_add_hwd below, tests/cmake/uos-hwd.tcl); before each
+#          test a CTest fixture resets the board through its PM watchdog
+#          (tests/cmake/uos-hwd-reset.cmake), so the hwd cases can run one
+#          after another.
 #   qemu   raspi4b (QEMU >= 9.0), handed the raw image directly (-kernel):
 #          QEMU enters it at EL2 in AArch64 and holds cores 1-3 in the
 #          spin-table, like the Pi 4 firmware's armstub8.
@@ -27,12 +26,12 @@ include ("cmake/platform-library.cmake")
 include ("${CMAKE_SOURCE_DIR}/cmake/uos-tests-run.cmake")
 
 # The board facts and micro-os-plus::board come from cmake/platform-library.cmake
-# (cmake/board.cmake); the port's builder below reads them.
+# (cmake/board.cmake); the tests' builder below reads them.
 
 # -----------------------------------------------------------------------------
-# Build every port test (qemu + hwd) by reusing the port's builder.
+# Build every test (qemu + hwd) with the tests' builder (board-tests/).
 # The board tests, built by the tests' own builder (board-tests/) from the
-# board's test folder (still in the port until the tests move into tests/).
+# board's test folder (this platform's tests/).
 # The portable tests this board runs (tests/sources/).
 set (UOS_TESTS_SOURCES smp_test0 smp_test1 smp_test2 smp_test3 smp_test4
      smp-num-test smp-pipeline-test smp-pro-cons-test smp-mat-test sd_test

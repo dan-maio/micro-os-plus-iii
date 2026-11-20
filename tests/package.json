@@ -1495,7 +1495,8 @@
           "shortConfigurationName": "cpzd"
         },
         "actions": {
-          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE \"hwd\""
+          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -L hwd",
+          "test-hwd": "cd {{ properties.buildFolderRelativePath }} && ctest -V -L hwd"
         }
       },
       "cortexm-pico2-pizero-cmake-gcc-release": {
@@ -1554,7 +1555,8 @@
           "shortConfigurationName": "cnfd"
         },
         "actions": {
-          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE \"hwd\""
+          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -L hwd",
+          "test-hwd": "cd {{ properties.buildFolderRelativePath }} && ctest -V -L hwd"
         }
       },
       "cortexm-nucleof411-cmake-gcc-release": {
@@ -1583,7 +1585,8 @@
           "shortConfigurationName": "cw4d"
         },
         "actions": {
-          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE \"hwd\""
+          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -L hwd",
+          "test-hwd": "cd {{ properties.buildFolderRelativePath }} && ctest -V -L hwd"
         }
       },
       "cortexm-weactf411-cmake-gcc-release": {
@@ -1612,7 +1615,8 @@
           "shortConfigurationName": "cw4rd"
         },
         "actions": {
-          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE \"hwd\""
+          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -L hwd",
+          "test-hwd": "cd {{ properties.buildFolderRelativePath }} && ctest -V -L hwd"
         }
       },
       "cortexm-weactf412-cmake-gcc-release": {
@@ -1796,7 +1800,8 @@
           "commandCMakeReconfigure": "cmake -S . -B {{ properties.buildFolderRelativePathPosix }} -G Ninja -D CMAKE_BUILD_TYPE={{ properties.buildType }} -D PLATFORM_NAME={{ properties.platformName }} -D ENABLE_HW_TESTS=ON"
         },
         "actions": {
-          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE \"hwd\""
+          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -L hwd",
+          "test-hwd": "cd {{ properties.buildFolderRelativePath }} && ctest -V -L hwd"
         }
       },
       "aarch32-luckfox-lyra-cmake-gcc-release": {

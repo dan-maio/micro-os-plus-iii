@@ -98,7 +98,7 @@ From `micro-os-plus-iii/tests`:
 | `xpm run test-native-cmake-sys` | POSIX host, system compiler, debug + release |
 | `xpm run test-native-cmake` | POSIX host, xPack GCC 11–14 and clang 16–19 |
 | `xpm run test-cortex-cmake` | QEMU Cortex-M0/M3/M4F/M7F |
-| `xpm run test-smp-cmake` | all emulated SMP platforms |
+| `xpm run test-smp-cmake` | the CI SMP set: Pi Zero 2 W and Pi 3 B both ports, 2×M33, `pico2-1cpu`, Pico 2, PSRAM board (not Pi 4 B) |
 | `xpm run test-<platform>-cmake` | one board/platform, debug + release |
 
 Examples:
@@ -111,7 +111,9 @@ xpm run test-cortexm-pico2-cmake
 ```
 
 These group actions run **prepare, build and test**; they do not include
-hardware-only boards or the PC-driven tests.
+hardware-only boards or the PC-driven tests. `test-all` is the upstream CI
+subset: it also omits the Pi 4 B, so run `test-aarch64-rpi4b-cmake` (or the
+configuration's own `test`) for that board.
 
 ## 5. All architectures and platforms
 
@@ -138,7 +140,7 @@ releases use `MinSizeRel`; native releases use `Release`.
 | Pico 2 | QEMU | OpenOCD | CDC-ACM, HID |
 | Pico (RP2040) | QEMU | OpenOCD | — |
 | Pi-Zero RP2350B | — | OpenOCD | CDC-ACM, HID |
-| WeAct RP2350B + PSRAM | QEMU | OpenOCD | the two `hwd-manual` clock tests |
+| WeAct RP2350B + PSRAM | QEMU | OpenOCD | the three clock tests (pot + `y`); `_200`/`_250` are `hwd-manual` |
 | Nucleo F411 / WeAct F411 / F412 | — | OpenOCD | — |
 | QEMU Cortex-M / `2xcortex-m33` / `pico2-1cpu` | QEMU | — | — |
 | POSIX host | host process | — | — |

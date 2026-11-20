@@ -64,7 +64,7 @@ with OpenOCD only (no GDB). Before each AArch hardware test CTest adds
 | `cortexm-nucleof411` | cortexm | ST Nucleo-F411RE | 1× Cortex-M4F | 1 | 4 hwd | on-board ST-Link v2.1 |
 | `cortexm-weactf411` | cortexm | WeAct Studio F411CE | 1× Cortex-M4F | 1 | 5 hwd | DAPLink CMSIS-DAP (or WCH-Link) |
 | `cortexm-weactf412` | cortexm | WeAct Studio F412RE | 1× Cortex-M4F | 1 | 5 hwd | ST-Link |
-| `native` | posix-arch | the Linux host | host threads as CPUs | 4 (`-DNCPU`) | 16 host | — |
+| `native` | posix-arch | the Linux host | host threads as CPUs | 4 (`-DNCPU`) | 20 host | — |
 | `2xcortex-m33` | cortexm | QEMU `mps2-an521` | 2× Cortex-M33 | 2 | 4 QEMU | — |
 | `pico2-1cpu` | cortexm | QEMU `mps2-an505` | 1× Cortex-M33 | 1 | 4 QEMU | — |
 | `qemu-cortex-m0` | cortexm | QEMU `mps2-an385` | Cortex-M3 (the platform passes `--cpu cortex-m3`, not an M0) | 1 | 3 QEMU | — |
@@ -97,8 +97,8 @@ local generic M33 core, `micro-os-plus::cortexm-qemu-m33`.)
 |---|---|---|---|---|
 | Pi Zero 2 W, Pi 3 B (both ports) — default, `PROBE=jlink` | SEGGER J-Link | — | JTAG | `<arch>-rpi-zero-2w/openocd-jlink-rpi3.cfg` |
 | the same, `PROBE=olimex` | Olimex ARM-USB-OCD (FTDI) | — | JTAG, 1000 kHz | `<arch>-rpi-zero-2w/openocd-olimex.cfg` |
-| the same, `PROBE=cmsis-dap` | any CMSIS-DAP (Raspberry Pi Debug Probe, a Pico with the debugprobe firmware) | `2e8a:000c` | JTAG (4000 kHz AArch64, 1000 kHz AArch32) | `<arch>-rpi-zero-2w/openocd-cmsisdap-rpi3.cfg` |
-| Pi 4 B | CMSIS-DAP (a Pico as JTAG probe) | — | JTAG | `aarch64-rpi4b/openocd-cmsis-dap-rpi4b.cfg` |
+| the same, `PROBE=cmsis-dap` | any CMSIS-DAP (Raspberry Pi Debug Probe, a Pico with the debugprobe firmware) | `2e8a:000c` | JTAG (15000 kHz AArch64, 1000 kHz AArch32) | `<arch>-rpi-zero-2w/openocd-cmsisdap-rpi3.cfg` |
+| Pi 4 B | CMSIS-DAP (a Pico as JTAG probe) | `2e8a:000c` | JTAG, 4000 kHz | `aarch64-rpi4b/openocd-cmsis-dap-rpi4b.cfg` |
 | Luckfox Lyra B | WCH-Link in ARM mode (CMSIS-DAP) | `1a86:8011` | SWD, 4000 kHz | `aarch32-luckfox-lyra/openocd.cfg` |
 | Pico 2 | any CMSIS-DAP (no vid_pid pinned) | — | SWD, 1000 kHz | `cortexm-pico2/openocd.cfg` |
 | Pi-Zero RP2350B | XV-Link CMSIS-DAP | `0416:5951` | SWD, 2000 kHz | `cortexm-pico2-pizero/openocd.cfg` |
@@ -322,7 +322,7 @@ Three boards on the same silicon (2× Cortex-M33): `pico2`, `pico2-pizero` and
 | `cmsis-os-validator-ram`, `mutex-stress-ram`, `rtos-apis-ram` | RAM-resident harness suites executing entirely from internal SRAM (no flash writes). | single | hwd | — | — |
 | `smp-mat-test-ram` | Parallel block solver executing entirely from internal SRAM (no flash writes). | SMP 2 | hwd | — | — |
 
-Case counts: `pico2` 27 (6 qemu, 21 hwd), `pico2-pizero` 14, `pico2-rp2350b-psram` 18 (3 qemu, 15 hwd: 13 automatic + 2 `hwd-manual`).
+Case counts: `pico2` 27 (6 qemu, 21 hwd), `pico2-pizero` 14, `pico2-rp2350b-psram` 18 (3 qemu, 15 hwd: 12 automatic + 1 interactive CTest + 2 `hwd-manual`).
 
 ### 7.1a RP2040 board
 
@@ -424,7 +424,7 @@ initial failures (`aarch32-rpi3b-smp-pipeline-test-qemu`, the PSRAM board's
 | Pico 2 | 21/21 |
 | Pico (RP2040) | 20/20 on 2026-11-19 (not rerun in this round) |
 | Pi-Zero RP2350B | 14/14 (12 automatic + CDC-ACM + HID) |
-| WeAct RP2350B + PSRAM | 13 automatic; the two `hwd-manual` clock tests PASS on the UART |
+| WeAct RP2350B + PSRAM | 12 automatic + `smp-test-nested-clock` (interactive, CTest-recorded); the two `hwd-manual` clock tests PASS on the UART |
 | Nucleo-F411RE | 4/4 |
 | WeAct F411CE | 5/5 |
 | WeAct F412RE | 5/5 |

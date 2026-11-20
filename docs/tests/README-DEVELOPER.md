@@ -59,8 +59,6 @@ xpm run test -C ~/Work/micro-os-plus-iii-smp.git/tests
 
 ```sh
 xpm run install-native-cmake-sys -C ~/Work/micro-os-plus-iii-smp.git/tests
-
-xpm run install-native-cmake-sys -C ~/Work/micro-os-plus-iii-smp.git/tests
 ```
 
 ## Run all tests

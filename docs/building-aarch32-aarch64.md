@@ -3,8 +3,8 @@
 From an empty folder to every AArch test image, run under QEMU or on a
 Raspberry Pi (Zero 2 W, 3 B, 4 B) or a Luckfox Lyra B. The ports are built
 the way upstream builds its Cortex-M port: as xPack dependencies of the
-kernel's test project, `micro-os-plus-iii/tests`. A port carries no tests of
-its own.
+kernel's test project, `micro-os-plus-iii/tests`. The AArch ports carry no
+tests of their own.
 
 ---
 

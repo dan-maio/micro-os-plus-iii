@@ -809,7 +809,7 @@ deciding argument.
 
 | half | file | what it decides |
 |---|---|---|
-| portable | `micro-os-plus-iii-smp/src/rtos/os-core.cpp` | *which* thread runs next |
+| portable | `micro-os-plus-iii/src/rtos/os-core.cpp` | *which* thread runs next |
 | port | `micro-os-plus-iii-posix-arch/src/rtos/os-core.cpp` | *how* to start running it |
 
 Both are compiled, at the same relative path, exactly as on every other port.
@@ -2122,7 +2122,7 @@ port's own machinery before the kernel was looked at.
 
 ### The defect
 
-`micro-os-plus-iii-smp/src/rtos/os-mutex.cpp`, the priority-inheritance path of
+`micro-os-plus-iii/src/rtos/os-mutex.cpp`, the priority-inheritance path of
 `mutex::internal_try_lock_()`:
 
 ```cpp

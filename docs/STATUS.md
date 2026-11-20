@@ -68,9 +68,9 @@ pinned OpenOCD, the Cortex-M boards that build QEMU images declare
 **2026-11-20 hardware rerun, OpenOCD from CTest (no `hw.sh`):** AArch64 Pi 3 B
 15/15, AArch32 Pi 3 B 15/15, Pi 4 B 22/22 (19 automatic plus `eth-net`,
 `eth-tcp-server`, `usb_big_test`), Pico 2 21/21, Pi-Zero RP2350B 14/14, PSRAM
-board 13 automatic plus the two `hwd-manual` clock tests, AArch64 Zero 2 W
-18/18, AArch32 Zero 2 W 18/18, Lyra 21/21, Nucleo F411 4/4, WeAct F411 5/5,
-WeAct F412 5/5.
+board 12 automatic plus the interactive `smp-test-nested-clock` and the two
+`hwd-manual` clock tests, AArch64 Zero 2 W 18/18, AArch32 Zero 2 W 18/18,
+Lyra 21/21, Nucleo F411 4/4, WeAct F411 5/5, WeAct F412 5/5.
 
 The PSRAM 200/250 MHz clock tests reboot the chip after the pot/`y`
 confirmation; the reboot drops the debug state, so their `RESULT` is read on

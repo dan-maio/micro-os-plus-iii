@@ -225,9 +225,10 @@ are normal.
 - **Pass:** `RESULT: PASS`, followed by `100% tests passed`.
 - **Fail:** `RESULT: FAIL` or a timeout. Read the `ctest -V` output, then the UART.
 
-The latest results: QEMU 22/22 but the known flaky `smp-shapes-test`
-(baseline), and 22/22 on the board on 2026-11-19 (through the former `hw.sh`
-route; the OpenOCD route from CTest is not yet proven on the board).
+Latest results (2026-11-20): all QEMU cases pass (the known flaky
+`cmsis-os-validator` failed once and passed on rerun), and 22/22 on the board
+through CTest/OpenOCD: 19 automatic tests plus `eth-net`,
+`eth-tcp-server` and `usb_big_test`.
 
 ## 8. Earlier verification (2026-10/11, before the alignment)
 

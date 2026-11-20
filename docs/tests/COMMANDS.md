@@ -27,8 +27,9 @@ device packages. Each is its own git repository and xPack:
 └── common/   micro-os-plus-iii-devices-bcm283x, micro-os-plus-iii-devices-storage
 ```
 
-The ports carry no tests (their `test/` holds only `.gitkeep`, as upstream's
-Cortex-M port); the device packages carry the chips' drivers.
+The AArch and Cortex-M ports carry no tests (their `test/` holds only
+`.gitkeep`, as upstream's Cortex-M port); `posix-arch` keeps upstream's two
+`trace-*` programs. The device packages carry the chips' drivers.
 
 ## 2. Install once
 
@@ -115,13 +116,14 @@ then the `-release` configuration of each member.
 | `xpm run test-native-cmake-sys` | the POSIX host with the system compiler |
 | `xpm run test-native-cmake` | the POSIX host with xPack GCC 11–14 and clang 16–19 (`test-native-cmake-gcc14`, `-clang19`, … one by one) |
 | `xpm run test-cortex-cmake` | QEMU Cortex-M0, M3, M4F, M7F (`test-qemu-cortex-m7f-cmake`, …) |
-| `xpm run test-smp-cmake` | the SMP QEMU configurations: AArch32 and AArch64 Pi Zero 2 W and Pi 3 B, the dual Cortex-M33, the single-CPU Pico 2, the Pico 2 and its PSRAM board |
+| `xpm run test-smp-cmake` | the SMP QEMU configurations: AArch32 and AArch64 Pi Zero 2 W and Pi 3 B, the dual Cortex-M33, the single-CPU Pico 2, the Pico 2 and its PSRAM board (not the Pi 4 B) |
 | `xpm run test-aarch64-rpi4b-cmake`, `test-cortexm-pico-cmake` | one board's QEMU tests |
-| `xpm run test-all` | native, Cortex-M and SMP together |
+| `xpm run test-all` | the native, Cortex-M and SMP groups above; not every platform |
 
 The Luckfox Lyra (`aarch32-luckfox-lyra-*`), the Pico 2 Pi Zero, the Nucleo
-F411 and the WeAct F411 and F412 have hardware tests only: they are built
-with `prepare` / `build --config` and run on the board (section 5).
+F411 and the WeAct F411 and F412 have hardware tests only. Their `test`
+action runs the unattended board set; on the Lyra and Pi-Zero it skips the
+PC-driven cases, and `test-hwd` runs every hardware case (section 5).
 
 ## 5. On the board (`hwd`)
 

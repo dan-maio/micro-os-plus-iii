@@ -198,7 +198,7 @@ named actions.
 The tests package pins the *orchestration* tools at the top level
 (`tests/package.json:27-45`):
 
-*File:* [`micro-os-plus-iii.git/tests/package.json`](micro-os-plus-iii.git/tests/package.json)
+*File:* `micro-os-plus-iii.git/tests/package.json`
 
 ```jsonc
 // micro-os-plus-iii.git/tests/package.json
@@ -290,7 +290,7 @@ fragments that configurations `inherit` from:
 
 Example (`tests/package.json:1103-1125`), abbreviated:
 
-*File:* [`micro-os-plus-iii.git/tests/package.json`](micro-os-plus-iii.git/tests/package.json)
+*File:* `micro-os-plus-iii.git/tests/package.json`
 
 ```jsonc
 // micro-os-plus-iii.git/tests/package.json
@@ -369,7 +369,7 @@ configurations:
 
 Example (`tests/package.json:377-384`):
 
-*File:* [`micro-os-plus-iii.git/tests/package.json`](micro-os-plus-iii.git/tests/package.json)
+*File:* `micro-os-plus-iii.git/tests/package.json`
 
 ```jsonc
 // micro-os-plus-iii.git/tests/package.json
@@ -405,7 +405,7 @@ configuration, repeated for debug and release.
 `tests/cmake/tests-main.cmake` is the orchestrator (marked *auto-generated*
 from build-helper templates). In order it:
 
-*File:* [`micro-os-plus-iii.git/tests/cmake/tests-main.cmake`](micro-os-plus-iii.git/tests/cmake/tests-main.cmake)
+*File:* `micro-os-plus-iii.git/tests/cmake/tests-main.cmake`
 
 ```cmake
 # micro-os-plus-iii.git/tests/cmake/tests-main.cmake
@@ -447,7 +447,7 @@ Each platform provides three CMake fragments:
 
 **`definitions.cmake`** — names used by the device package and toolchain:
 
-*File:* [`micro-os-plus-iii.git/tests/platforms/<platform>/cmake/definitions.cmake`](micro-os-plus-iii.git/tests/platforms/<platform>/cmake/definitions.cmake)
+*File:* `micro-os-plus-iii.git/tests/platforms/<platform>/cmake/definitions.cmake`
 
 ```cmake
 # micro-os-plus-iii.git/tests/platforms/<platform>/cmake/definitions.cmake
@@ -462,7 +462,7 @@ set(xpack_device_linker_script_file_name "mem-mps2-an500.ld")
 `add_subdirectory()`. It always includes the test sources, the tested library
 dependency, the CMSIS package, the portable xPacks, and the device package:
 
-*File:* [`micro-os-plus-iii.git/tests/platforms/<platform>/cmake/dependencies-folders.cmake`](micro-os-plus-iii.git/tests/platforms/<platform>/cmake/dependencies-folders.cmake)
+*File:* `micro-os-plus-iii.git/tests/platforms/<platform>/cmake/dependencies-folders.cmake`
 
 ```cmake
 # micro-os-plus-iii.git/tests/platforms/<platform>/cmake/dependencies-folders.cmake
@@ -709,7 +709,7 @@ tests are excluded (no hardware in CI). `test-all` adds the native suites.
 
 The suites are enabled by switches in `tests/cmake/global-definitions.cmake`:
 
-*File:* [`micro-os-plus-iii.git/tests/CMakeLists.txt`](micro-os-plus-iii.git/tests/CMakeLists.txt)
+*File:* `micro-os-plus-iii.git/tests/CMakeLists.txt`
 
 ```cmake
 # micro-os-plus-iii.git/tests/CMakeLists.txt
@@ -840,7 +840,7 @@ stack sizes, tick frequency, memory pools and trace switches independently.
 one (`tests/sources/mutex-stress/include/cmsis-plus/os-app-config.h` is a good
 starting point) and adjust:
 
-*File:* [`micro-os-plus-iii.git/tests/sources/<name>/include/cmsis-plus/os-app-config.h`](micro-os-plus-iii.git/tests/sources/<name>/include/cmsis-plus/os-app-config.h)
+*File:* `micro-os-plus-iii.git/tests/sources/<name>/include/cmsis-plus/os-app-config.h`
 
 ```c
 // micro-os-plus-iii.git/tests/sources/<name>/include/cmsis-plus/os-app-config.h
@@ -862,7 +862,7 @@ starting point) and adjust:
 
 `tests/sources/counter/include/counter.h`:
 
-*File:* [`micro-os-plus-iii.git/tests/sources/<name>/include/counter.h`](micro-os-plus-iii.git/tests/sources/<name>/include/counter.h)
+*File:* `micro-os-plus-iii.git/tests/sources/<name>/include/counter.h`
 
 ```c
 // micro-os-plus-iii.git/tests/sources/<name>/include/counter.h
@@ -885,7 +885,7 @@ extern "C"
 
 `tests/sources/counter/src/main.cpp`:
 
-*File:* [`micro-os-plus-iii.git/tests/sources/<name>/src/counter.cpp`](micro-os-plus-iii.git/tests/sources/<name>/src/counter.cpp)
+*File:* `micro-os-plus-iii.git/tests/sources/<name>/src/counter.cpp`
 
 ```cpp
 // micro-os-plus-iii.git/tests/sources/<name>/src/counter.cpp
@@ -907,7 +907,7 @@ os_main (int argc __attribute__ ((unused)),
 
 The test body uses the public RTOS API. A typical worker-thread pattern:
 
-*File:* [`micro-os-plus-iii.git/tests/sources/<name>/src/counter.cpp`](micro-os-plus-iii.git/tests/sources/<name>/src/counter.cpp)
+*File:* `micro-os-plus-iii.git/tests/sources/<name>/src/counter.cpp`
 
 ```cpp
 // micro-os-plus-iii.git/tests/sources/<name>/src/counter.cpp
@@ -1000,7 +1000,7 @@ aggressive (GCC: `-Wall -Wextra` plus dozens of flags; clang: `-Weverything`).
 When a warning is genuinely unavoidable, disable it **locally** with a push/pop
 pair, as the existing tests do:
 
-*File:* [`micro-os-plus-iii.git/tests/sources/<name>/src/counter.cpp`](micro-os-plus-iii.git/tests/sources/<name>/src/counter.cpp)
+*File:* `micro-os-plus-iii.git/tests/sources/<name>/src/counter.cpp`
 
 ```cpp
 // micro-os-plus-iii.git/tests/sources/<name>/src/counter.cpp
@@ -1030,7 +1030,7 @@ Wiring a new suite into the harness touches four places. Using a test named
 Create `tests/sources/counter/` with the files from section 12, including a
 `CMakeLists.txt` modelled on `tests/sources/mutex-stress/CMakeLists.txt`:
 
-*File:* [`micro-os-plus-iii.git/tests/sources/counter/CMakeLists.txt`](micro-os-plus-iii.git/tests/sources/counter/CMakeLists.txt)
+*File:* `micro-os-plus-iii.git/tests/sources/counter/CMakeLists.txt`
 
 ```cmake
 # micro-os-plus-iii.git/tests/sources/counter/CMakeLists.txt
@@ -1066,7 +1066,7 @@ The target name **must** be `test-<name>-interface` and the alias
 
 Edit `tests/cmake/global-definitions.cmake`:
 
-*File:* [`micro-os-plus-iii.git/tests/CMakeLists.txt`](micro-os-plus-iii.git/tests/CMakeLists.txt)
+*File:* `micro-os-plus-iii.git/tests/CMakeLists.txt`
 
 ```cmake
 # micro-os-plus-iii.git/tests/CMakeLists.txt
@@ -1083,7 +1083,7 @@ Add the source folder to `xpack_dependencies_folders` in **every** platform
 that should run the test, e.g.
 `tests/platforms/qemu-cortex-m7f/cmake/dependencies-folders.cmake`:
 
-*File:* [`micro-os-plus-iii.git/tests/platforms/<platform>/cmake/dependencies-folders.cmake`](micro-os-plus-iii.git/tests/platforms/<platform>/cmake/dependencies-folders.cmake)
+*File:* `micro-os-plus-iii.git/tests/platforms/<platform>/cmake/dependencies-folders.cmake`
 
 ```cmake
 # micro-os-plus-iii.git/tests/platforms/<platform>/cmake/dependencies-folders.cmake
@@ -1106,7 +1106,7 @@ In each platform's `CMakeLists.txt`, add a guarded block using the platform's
 
 **Native** (`tests/platforms/native/CMakeLists.txt`):
 
-*File:* [`micro-os-plus-iii.git/tests/platforms/<platform>/CMakeLists.txt`](micro-os-plus-iii.git/tests/platforms/<platform>/CMakeLists.txt)
+*File:* `micro-os-plus-iii.git/tests/platforms/<platform>/CMakeLists.txt`
 
 ```cmake
 # micro-os-plus-iii.git/tests/platforms/<platform>/CMakeLists.txt
@@ -1131,7 +1131,7 @@ endif ()
 already sets `OS_USE_TRACE_SEMIHOSTING_STDOUT` and the cross post-build steps,
 so only the link and the runner are added:
 
-*File:* [`micro-os-plus-iii.git/tests/platforms/<platform>/CMakeLists.txt`](micro-os-plus-iii.git/tests/platforms/<platform>/CMakeLists.txt)
+*File:* `micro-os-plus-iii.git/tests/platforms/<platform>/CMakeLists.txt`
 
 ```cmake
 # micro-os-plus-iii.git/tests/platforms/<platform>/CMakeLists.txt
@@ -1158,7 +1158,7 @@ endif ()
 
 **OpenOCD / physical board** (e.g. `tests/platforms/nucleo-f767zi/CMakeLists.txt`):
 
-*File:* [`micro-os-plus-iii.git/tests/platforms/<platform>/CMakeLists.txt`](micro-os-plus-iii.git/tests/platforms/<platform>/CMakeLists.txt)
+*File:* `micro-os-plus-iii.git/tests/platforms/<platform>/CMakeLists.txt`
 
 ```cmake
 # micro-os-plus-iii.git/tests/platforms/<platform>/CMakeLists.txt
@@ -1345,7 +1345,7 @@ The rules are:
 
 This is why the repo can express an entire matrix with a handful of mixins:
 
-*File:* [`micro-os-plus-iii.git/tests/package.json`](micro-os-plus-iii.git/tests/package.json)
+*File:* `micro-os-plus-iii.git/tests/package.json`
 
 ```jsonc
 // micro-os-plus-iii.git/tests/package.json

@@ -7,8 +7,10 @@ framework of `micro-os-plus-iii` (the SMP fork, aligned with upstream in
 The framework is upstream's: every command is an `xpm run <action>` in the
 kernel's `tests/` folder, CMake builds, CTest runs. Every test lives in that
 folder. The portable ones are in `tests/sources/`, the board facts, board
-code and board-only tests in `tests/platforms/<platform>/`. The ports and the
-device packages carry no tests. The command reference is
+code and board-only tests in `tests/platforms/<platform>/`. The AArch and
+Cortex-M ports carry no test projects (`posix-arch` keeps upstream's two
+`trace-*` programs), and the device packages carry no tests. The command
+reference is
 [`COMMANDS.md`](COMMANDS.md); what each test does is in
 [`TESTS-CATALOG.md`](TESTS-CATALOG.md).
 

@@ -406,29 +406,32 @@ the run (USB, network); their READMEs say what to run.
 
 ## 10. Last verified run
 
-**QEMU and host** (2026-11-18/19, after each alignment step; every case of
-the configuration's `test` action, debug and release): every configuration
-passes, the only failure being the known flaky
-`aarch64-rpi4b-smp-shapes-test-qemu` (`baseline-2026-11-17/BASELINE.md`).
+**QEMU and host** (2026-11-20, clean rebuild): the full matrix passes —
+AArch32 and AArch64 Pi Zero 2 W / Pi 3 B / Pi 4 B, the QEMU Cortex-M boards,
+`2xcortex-m33`, `pico2-1cpu`, the Pico 2 boards and the POSIX host. The two
+initial failures (`aarch32-rpi3b-smp-pipeline-test-qemu`, the PSRAM board's
+`cmsis-os-validator` on RPi 4 B) passed on rerun.
 
-**Hardware** (2026-11-19, through the boards' former `hw.sh` route; the
-results are in the workspace's `hw-check/2026-11-19/RESULTS.md`):
+**Hardware** (2026-11-20, through CTest and OpenOCD; logs in the workspace's
+`hw-check/2026-11-20-*`):
 
 | Board | Result |
 |---|---|
-| Raspberry Pi 4 B | 22/22 |
+| Raspberry Pi 4 B | 22/22 (19 automatic + `eth-net`, `eth-tcp-server`, `usb_big_test`) |
+| Raspberry Pi 3 B AArch64 / AArch32 | 15/15 each |
+| Raspberry Pi Zero 2 W AArch64 / AArch32 | 18/18 each (Wi-Fi and USB included) |
 | Luckfox Lyra B | 21/21 (the USB tests driven from the PC) |
 | Pico 2 | 21/21 |
-| Pico (RP2040) | 20/20 |
-| Pi-Zero RP2350B | 12/12 automatic; the two USB tests passed on 2026-11-18 |
-| WeAct RP2350B + PSRAM | `fp-switch` after the last change; the interactive `smp-test-nested-clock*` by hand |
+| Pico (RP2040) | 20/20 on 2026-11-19 (not rerun in this round) |
+| Pi-Zero RP2350B | 14/14 (12 automatic + CDC-ACM + HID) |
+| WeAct RP2350B + PSRAM | 13 automatic; the two `hwd-manual` clock tests PASS on the UART |
 | Nucleo-F411RE | 4/4 |
 | WeAct F411CE | 5/5 |
 | WeAct F412RE | 5/5 |
 
-The Zero 2 W and Pi 3 B were last run on hardware before the board code moved
-into the kernel (2026-11-18). The OpenOCD route (`-hwd`) is not yet proven on
-the boards.
+The OpenOCD route (`-hwd`) is proven on every local board. The PSRAM
+`smp-test-nested-clock_200`/`_250` cases remain manual: their clock reboot
+drops the debug state, so the `RESULT` is read on the UART.
 
 The upstream `nucleo-f411re`, `nucleo-f767zi`, `nucleo-h743zi` and
 `raspberrypi-pico` platforms do not configure (the Cortex-M port does not find

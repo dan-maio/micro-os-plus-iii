@@ -1,7 +1,8 @@
 # Migration status
 
-**Updated:** 2026-11-19 (the build and test system aligned with upstream,
-steps 1–7) · Ten repositories: the kernel (`micro-os-plus-iii`), four
+**Updated:** 2026-11-20 (the build and test system aligned with upstream,
+steps 1–7, and the OpenOCD route verified on every local board) · Ten
+repositories: the kernel (`micro-os-plus-iii`), four
 architecture ports (`cortexm`, `aarch32`, `aarch64`, `posix-arch`) and five
 device packages (`devices-bcm283x`, `-rk3506`, `-rp2xxx`, `-stm32f4`,
 `-storage`).
@@ -68,7 +69,8 @@ pinned OpenOCD, the Cortex-M boards that build QEMU images declare
 15/15, AArch32 Pi 3 B 15/15, Pi 4 B 22/22 (19 automatic plus `eth-net`,
 `eth-tcp-server`, `usb_big_test`), Pico 2 21/21, Pi-Zero RP2350B 14/14, PSRAM
 board 13 automatic plus the two `hwd-manual` clock tests, AArch64 Zero 2 W
-18/18, AArch32 Zero 2 W 18/18, Lyra 21/21.
+18/18, AArch32 Zero 2 W 18/18, Lyra 21/21, Nucleo F411 4/4, WeAct F411 5/5,
+WeAct F412 5/5.
 
 The PSRAM 200/250 MHz clock tests reboot the chip after the pot/`y`
 confirmation; the reboot drops the debug state, so their `RESULT` is read on
@@ -76,10 +78,11 @@ the UART and they are labelled `hwd-manual`, outside the automatic `-L hwd`
 batch. The Lyra `smp_test_int` console is UART-only (verdict through
 semihosting), which fixes the hang when characters are typed on UART1.
 
-**Open:** the remaining boards without an OpenOCD-route run (WeAct F411/F412,
-Nucleo F411); the Pi 3 B/Zero 2 W runs are now complete. Known intermittent:
-`usb_test` occasionally loses the debug link at USB start-up on the Zero 2 W
-(likely the supply).
+**Open:** none of the local hardware platforms is left without an
+OpenOCD-route run; Pico (RP2040) was last run on 2026-11-19 (20/20). Known
+intermittent: `usb_test` occasionally loses the debug link at USB start-up on
+the Zero 2 W (likely the supply); the PSRAM 200/250 MHz clock tests need the
+pot and `y`, and are `hwd-manual`.
 
 
 ## Today (2026-10-23)

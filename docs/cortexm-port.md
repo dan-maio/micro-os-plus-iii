@@ -65,14 +65,14 @@ On RP2350, `pico2` and `pico2-rp2350b-psram` build `-qemu` images on `mps2-an500
 (the generic M0 core, single-core) and the same four pure-RAM targets.
 What each test does is in [`tests/TESTS-CATALOG.md`](tests/TESTS-CATALOG.md).
 
-**Verified on 2026-11-18/19**, after the board code and tests moved into the
-kernel's `tests/`: every QEMU case, debug and release (`cortexm-pico2` 6/6,
-`cortexm-pico` 6/6, `cortexm-pico2-rp2350b-psram` 3/3, `2xcortex-m33` 4/4,
-`pico2-1cpu` 4/4, `qemu-cortex-m0/m3/m4f/m7f` 3/3 each), and on the boards:
-Pico 2 21/21, Pico 20/20, Nucleo F411 4/4, WeAct F411 5/5, WeAct F412 5/5,
-Pi-Zero RP2350B 14/14, the PSRAM board's automatic tests. The hardware runs
-went through the boards' former `hw.sh`; the OpenOCD route from CTest is not
-yet proven on the boards.
+**Verified on 2026-11-20** with a clean rebuild: every QEMU case
+(`cortexm-pico2` 6/6, `cortexm-pico` 6/6,
+`cortexm-pico2-rp2350b-psram` 3/3, `2xcortex-m33` 4/4, `pico2-1cpu` 4/4,
+`qemu-cortex-m0/m3/m4f/m7f` 3/3 each), and through CTest/OpenOCD on the
+boards: Pico 2 21/21, Nucleo F411 4/4, WeAct F411 5/5, WeAct F412 5/5,
+Pi-Zero RP2350B 14/14, the PSRAM board's 13 automatic tests plus the two
+`hwd-manual` clock tests. The OpenOCD route is now the only hardware route,
+proven on every board; Pico (RP2040) was last run on 2026-11-19 (20/20).
 
 The port also exports **generic QEMU cores** beside the board ones:
 `micro-os-plus::cortexm-qemu-m0`, `-m3`, `-m4f` and `-m7` (with

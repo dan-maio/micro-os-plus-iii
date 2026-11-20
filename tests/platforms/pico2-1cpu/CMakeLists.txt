@@ -14,6 +14,7 @@ include ("cmake/platform-library.cmake")
 # The QEMU binary, from the configuration's xpm .bin (the per-config pin) (same discovery as
 # the cortexm-pico2 platform); it is used as an absolute path in add_test, so
 # PATH does not matter.
+unset (_qemu CACHE)
 find_program (_qemu qemu-system-arm)
 if (NOT _qemu)
   set (_qemu "qemu-system-arm")

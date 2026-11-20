@@ -48,6 +48,7 @@ set (_port_bin "${CMAKE_CURRENT_BINARY_DIR}/port-tests")
 # (ARMv6-M, a subset of what the M3 runs) and run on QEMU's mps2-an385 with a
 # Cortex-M3, as the harness's qemu-cortex-m0 platform does. The RP2040-only
 # blocks (SIO, USB) are listed HWD_ONLY and never get a `qemu` image.
+unset (_qemu CACHE)
 find_program (_qemu qemu-system-arm)
 if (NOT _qemu)
   set (_qemu "qemu-system-arm")

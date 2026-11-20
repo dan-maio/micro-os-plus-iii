@@ -69,6 +69,7 @@ set (_shim_img "${_port_bin}/shim8.img")
 
 # -----------------------------------------------------------------------------
 # The QEMU binary and machine arguments: raspi3b + the shim, image at 0x10000.
+unset (_qemu CACHE)
 find_program (_qemu qemu-system-aarch64)
 if (NOT _qemu)
   set (_qemu "qemu-system-aarch64")

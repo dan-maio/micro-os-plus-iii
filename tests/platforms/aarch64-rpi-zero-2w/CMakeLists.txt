@@ -48,6 +48,7 @@ set (_port_bin "${CMAKE_CURRENT_BINARY_DIR}/port-tests/test")
 
 # -----------------------------------------------------------------------------
 # The QEMU binary and machine arguments: raspi3b, image handed to -kernel.
+unset (_qemu CACHE)
 find_program (_qemu qemu-system-aarch64)
 if (NOT _qemu)
   set (_qemu "qemu-system-aarch64")

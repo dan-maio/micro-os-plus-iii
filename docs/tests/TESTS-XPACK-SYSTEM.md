@@ -657,7 +657,7 @@ on `PATH`.
 | Host clang 13–19 | `@xpack-dev-tools/clang` | 13.0.1-1.1 … 19.1.7-1.1 |
 | Arm cross GCC | `@xpack-dev-tools/arm-none-eabi-gcc` | 15.2.1-1.1.1 |
 | QEMU Arm | `@xpack-dev-tools/qemu-arm` | 8.2.6-1.1 (Cortex-M); 9.2.4-1.1 (AArch32/AArch64, `raspi4b`) |
-| OpenOCD | `@xpack-dev-tools/openocd` | 0.12.0-6.1 |
+| OpenOCD | `@xpack-dev-tools/openocd` | 0.12.0-7.1 |
 | CMake | `@xpack-dev-tools/cmake` | 3.26.5-1.1 |
 | Ninja | `@xpack-dev-tools/ninja-build` | 1.11.1-3.1 |
 

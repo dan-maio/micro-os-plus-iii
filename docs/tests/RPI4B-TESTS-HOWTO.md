@@ -13,7 +13,7 @@ board through OpenOCD.
 | `git`, Node.js + `npm` | from the distribution |
 | `xpm` | `npm install -g xpm@latest` |
 | internet | the first `xpm install` downloads CMake, Ninja, GCC and QEMU into `~/.local/xPacks` |
-| **OpenOCD, for `-hwd` only** | installed per configuration by `xpm run install --config <C>` (`@xpack-dev-tools/openocd@0.12.0-6.1`) |
+| **OpenOCD, for `-hwd` only** | installed per configuration by `xpm run install --config <C>` (`@xpack-dev-tools/openocd@0.12.0-7.1`) |
 | probe, for `-hwd` only | CMSIS-DAP JTAG probe with user access (udev); a USB-serial on the Pi UART (GPIO14/15) |
 
 The hardware tests use the configuration's

@@ -419,6 +419,8 @@ message (STATUS "µOS++ III ${UOS_TESTS_PORT} board tests: ${_n} targets, board=
 # cores in AArch64, so an AArch32 image is loaded at an address and this shim
 # drops to AArch32 and jumps there. Built with the aarch64 toolchain.
 if (UOS_TESTS_PORT STREQUAL "aarch32")
+  unset (_a64_gcc CACHE)
+  unset (_a64_objcopy CACHE)
   find_program (_a64_gcc aarch64-none-elf-gcc)
   find_program (_a64_objcopy aarch64-none-elf-objcopy)
   if (_a64_gcc AND _a64_objcopy AND EXISTS "${_boards_dir}/qemu-raspi3-shim/shim.S")

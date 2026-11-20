@@ -137,6 +137,7 @@ endfunction ()
 # the per-configuration pinned xPack). If it is not there, the PATH's copy
 # is used.
 
+unset (UOS_TESTS_OPENOCD CACHE)
 find_program (UOS_TESTS_OPENOCD openocd)
 if (NOT UOS_TESTS_OPENOCD)
   set (UOS_TESTS_OPENOCD "openocd")

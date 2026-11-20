@@ -751,7 +751,7 @@
         "hidden": true,
         "$devDependenciesUrl": "https://www.npmjs.com/package/@xpack-dev-tools/openocd",
         "devDependencies": {
-          "@xpack-dev-tools/openocd": "0.12.0-6.1"
+          "@xpack-dev-tools/openocd": "0.12.0-7.1"
         }
       },
       "aarch32-actions": {
@@ -775,7 +775,7 @@
           "@xpack-dev-tools/arm-none-eabi-gcc": "15.2.1-1.1.1",
           "@xpack-dev-tools/aarch64-none-elf-gcc": "15.2.1-1.1.1",
           "@xpack-dev-tools/qemu-arm": "9.2.4-1.1",
-          "@xpack-dev-tools/openocd": "0.12.0-6.1"
+          "@xpack-dev-tools/openocd": "0.12.0-7.1"
         }
       },
       "aarch32-luckfox-lyra-dependencies": {
@@ -783,7 +783,7 @@
         "$devDependenciesUrl": "https://www.npmjs.com/package/@xpack-dev-tools/arm-none-eabi-gcc",
         "devDependencies": {
           "@xpack-dev-tools/arm-none-eabi-gcc": "15.2.1-1.1.1",
-          "@xpack-dev-tools/openocd": "0.12.0-6.1"
+          "@xpack-dev-tools/openocd": "0.12.0-7.1"
         }
       },
       "aarch64-actions": {
@@ -805,7 +805,7 @@
         "devDependencies": {
           "@xpack-dev-tools/aarch64-none-elf-gcc": "15.2.1-1.1.1",
           "@xpack-dev-tools/qemu-arm": "9.2.4-1.1",
-          "@xpack-dev-tools/openocd": "0.12.0-6.1"
+          "@xpack-dev-tools/openocd": "0.12.0-7.1"
         }
       },
       "short-win-paths-properties": {

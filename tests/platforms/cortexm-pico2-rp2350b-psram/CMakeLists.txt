@@ -46,6 +46,7 @@ set (_port_bin "${CMAKE_CURRENT_BINARY_DIR}/port-tests")
 # Cortex-M33 is close enough to QEMU's generic mps2-an500 Cortex-M7 for the
 # core bring-up and kernel-object tests; the RP2350-only blocks (SIO, PSRAM,
 # ADC) are listed HWD_ONLY and never get a `qemu` image.
+unset (_qemu CACHE)
 find_program (_qemu qemu-system-arm)
 if (NOT _qemu)
   set (_qemu "qemu-system-arm")

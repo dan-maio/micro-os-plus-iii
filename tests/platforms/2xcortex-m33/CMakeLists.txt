@@ -12,6 +12,7 @@ message (VERBOSE "Processing 'tests/platforms/${PLATFORM_NAME}'...")
 # -----------------------------------------------------------------------------
 include ("cmake/platform-library.cmake")
 
+unset (_qemu CACHE)
 find_program (_qemu qemu-system-arm)
 if (NOT _qemu)
   set (_qemu "qemu-system-arm")

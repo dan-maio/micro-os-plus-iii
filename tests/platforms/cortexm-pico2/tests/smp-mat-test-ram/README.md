@@ -27,8 +27,6 @@ The test runs **entirely from internal SRAM** (`0x20000000`, 520 KB) without wri
 |------|---------|
 | `main.cpp` | Reuses the `smp-mat-test` parallel block solver implementation. |
 | `linker-ram.ld` | Dedicated linker script mapping all loadable sections (`.text`, `.rodata`, `.data`) to SRAM `0x20000000`. Marks `.bss` (~266 KB), `.heap` (64 KB), and `.stack` (32 KB) as `(NOLOAD)` and embeds Pico `.embedded_end_block` to keep the download size compact (~32 KB). |
-| `hw.sh` | The former runner, still registered as `<test>-hwsh` for comparison until the OpenOCD run below is proven on the board; then removed. |
-| `load-ram.cfg` | The same RAM load as an OpenOCD script, for a manual session; removed with `hw.sh`. |
 
 ---
 

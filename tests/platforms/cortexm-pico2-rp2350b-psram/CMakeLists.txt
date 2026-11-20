@@ -7,7 +7,7 @@
 # builder and registers what it produced, named `<platform>-<app>-<variant>`.
 #
 # hwd tests need the board: they carry the `hwd` label, which the
-# configuration's `test` action skips (`ctest -LE "hwd|hwsh"`), and run one at
+# configuration's `test` action skips (`ctest -LE hwd`), and run one at
 # a time (RUN_SERIAL); OpenOCD programs and resets the board for each.
 #
 # The `qemu` images end themselves: each test prints a RESULT line and, under
@@ -41,19 +41,13 @@ set (UOS_TESTS_BOARD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/tests")
 add_subdirectory ("${CMAKE_SOURCE_DIR}/board-tests" "port-tests/test")
 
 set (_port_bin "${CMAKE_CURRENT_BINARY_DIR}/port-tests")
-set (_board_hw "${CMAKE_CURRENT_SOURCE_DIR}/hw.sh")
 
 # The QEMU binary, for the tests the board can run emulated. The RP2350's
 # Cortex-M33 is close enough to QEMU's generic mps2-an500 Cortex-M7 for the
 # core bring-up and kernel-object tests; the RP2350-only blocks (SIO, PSRAM,
 # ADC) are listed HWD_ONLY and never get a `qemu` image.
-file (GLOB _qemu_bins
-      "$ENV{HOME}/.local/xPacks/@xpack-dev-tools/qemu-arm/*/.content/bin")
-if (_qemu_bins)
-  list (SORT _qemu_bins COMPARE NATURAL ORDER DESCENDING)
-  list (GET _qemu_bins 0 _qemu_bin)
-  set (_qemu "${_qemu_bin}/qemu-system-arm")
-else ()
+find_program (_qemu qemu-system-arm)
+if (NOT _qemu)
   set (_qemu "qemu-system-arm")
 endif ()
 
@@ -65,7 +59,7 @@ endif ()
 # One CTest case per test the builder built (board-tests/: UOS_TESTS_APPS).
 include ("${CMAKE_SOURCE_DIR}/cmake/uos-tests-run.cmake")
 
-# The hardware run's OpenOCD commands (they were the board's hw.sh): program,
+# The hardware run's OpenOCD commands (the board's own commands): program,
 # reset, semihosting on, run.
 set (_hwd_flash
      "init" "reset init" "program {@ELF@} verify" "reset init"
@@ -88,16 +82,6 @@ foreach (_app IN LISTS UOS_TESTS_APPS)
     )
   endif ()
 
-  # The same run through the board's hw.sh, label hwsh: kept until the
-  # OpenOCD runs are proven on the board (step 7).
-  add_test (
-    NAME "${PLATFORM_NAME}-${_app}-hwsh"
-    COMMAND bash "${_board_hw}" "${_app}" 600
-  )
-  set_tests_properties (
-    "${PLATFORM_NAME}-${_app}-hwsh"
-    PROPERTIES ENVIRONMENT "BUILD=${_port_bin}" LABELS "hwsh" TIMEOUT 1200
-  )
   # The hardware run: OpenOCD from CTest (cmake/uos-tests-run.cmake), the
   # board's commands above.
   uos_tests_add_openocd (

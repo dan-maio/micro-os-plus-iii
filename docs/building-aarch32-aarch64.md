@@ -42,9 +42,10 @@ in [`tests/COMMANDS.md`](tests/COMMANDS.md) §2.
 
 xpm installs the pinned tools per configuration: `aarch64-none-elf-gcc` 15
 (AArch64, and the AArch32 QEMU boot shim), `arm-none-eabi-gcc` 15 (AArch32),
-CMake, Ninja, `qemu-arm` and `openocd`. The tests run the newest `qemu-arm`
-and `openocd` xPacks in `~/.local/xPacks/` when there are some (QEMU 9.x is
-needed for `raspi4b`), else the ones on `PATH`.
+CMake, Ninja, `qemu-arm` and `openocd`. The tests run the configuration's
+`build/<configuration>/xpacks/.bin` copies (QEMU 9.x is pinned for the AArch
+platforms, since `raspi4b` needs it); if a configuration has none, the ones
+on `PATH` are used.
 
 ## 3. Configure and build
 

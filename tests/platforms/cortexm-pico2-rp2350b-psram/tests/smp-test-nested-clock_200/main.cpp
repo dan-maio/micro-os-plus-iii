@@ -1291,7 +1291,7 @@ os_main (int /*argc*/, char* /*argv*/[])
   g_mutex.unlock ();
 
   // STOP THE WHOLE CHIP before the verdict. The semihosting SYS_EXIT below
-  // halts only the core that executes it, and hw.sh drops OpenOCD as soon as
+  // halts only the core that executes it, and the CTest OpenOCD run drops OpenOCD as soon as
   // it reads RESULT: the other core would go on running the workers, the
   // trace and pot threads and the UART, and the board never stops. So: let
   // the RESULT line drain, mask this core's interrupts, and hold the other

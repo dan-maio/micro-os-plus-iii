@@ -77,7 +77,7 @@ xpm run test    --config <configuration>     # the tests that need no board
 ```
 
 `test` runs `ctest -V` in the build folder; on the configurations that also
-have hardware tests it runs `ctest -V -LE "hwd|hwsh"`, so the board tests are
+have hardware tests it runs `ctest -V -LE hwd`, so the board tests are
 built but not run. Every test is a CTest case named
 `<platform>-<test>-<variant>`:
 
@@ -170,9 +170,9 @@ unattended. Several interactive Pico 2 PSRAM tests (`smp-test-nested-clock*`)
 reboot into a clock chosen with a potentiometer and are run by hand from
 flash.
 
-Until the boards have proven the OpenOCD runs, every hardware test also
-exists as `<test>-hwsh` (label `hwsh`): the same run through the board's old
-`hw.sh` script, for comparison. Both go when the proof is done.
+The former `<test>-hwsh` twins and the boards' `hw.sh` scripts were removed
+after the OpenOCD route was proven on hardware; the `-hwd` case is the only
+way a test runs on a board.
 
 ## 6. Results
 

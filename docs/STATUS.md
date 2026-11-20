@@ -57,12 +57,17 @@ Lyra 21/21, Pico 2 21/21, Pico 20/20, Pi-Zero RP2350B 12/12 (+ the two USB
 tests on 2026-11-18), Nucleo F411 4/4, WeAct F411 5/5, WeAct F412 5/5, the
 PSRAM board's `fp-switch`.
 
-**Open:** the hardware proof of the OpenOCD route (`-hwd`) on every board;
-then the removal of the boards' `hw.sh`, `test_smpl/run-hw.sh`,
-`test_smpl/no-power-cycle/` and the `-hwsh` twins kept for comparison. The
-Zero 2 W and Pi 3 B were last run on hardware before the board code moved
-(2026-11-18). Known intermittent: `usb_test` occasionally loses the debug link
-at USB start-up on the Zero 2 W (likely the supply).
+**Done since:** the boards' `hw.sh`, `test_smpl/run-hw.sh`,
+`test_smpl/no-power-cycle/` and the `-hwsh` twins are removed; the `-hwd`
+route is the only hardware run. The AArch configurations now install their
+pinned OpenOCD, the Cortex-M boards that build QEMU images declare
+`qemu-arm`, and QEMU/OpenOCD are taken from the configuration's
+`xpacks/.bin` rather than the newest global xPack.
+
+**Open:** the hardware proof of the OpenOCD route (`-hwd`) on the remaining
+boards. The Zero 2 W and Pi 3 B were last run on hardware before the board
+code moved (2026-11-18). Known intermittent: `usb_test` occasionally loses
+the debug link at USB start-up on the Zero 2 W (likely the supply).
 
 
 ## Today (2026-10-23)

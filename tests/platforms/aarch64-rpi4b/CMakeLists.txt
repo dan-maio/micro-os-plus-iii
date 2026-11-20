@@ -54,17 +54,11 @@ set (UOS_TESTS_BOARD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/tests")
 add_subdirectory ("${CMAKE_SOURCE_DIR}/board-tests" "port-tests/test")
 
 set (_port_bin "${CMAKE_CURRENT_BINARY_DIR}/port-tests/test")
-set (_board_hw "${CMAKE_CURRENT_SOURCE_DIR}/hw.sh")
 
 # -----------------------------------------------------------------------------
 # The QEMU binary and machine arguments: raspi4b, image handed to -kernel.
-file (GLOB _qemu_bins
-      "$ENV{HOME}/.local/xPacks/@xpack-dev-tools/qemu-arm/*/.content/bin")
-if (_qemu_bins)
-  list (SORT _qemu_bins COMPARE NATURAL ORDER DESCENDING)
-  list (GET _qemu_bins 0 _qemu_bin)
-  set (_qemu "${_qemu_bin}/qemu-system-aarch64")
-else ()
+find_program (_qemu qemu-system-aarch64)
+if (NOT _qemu)
   set (_qemu "qemu-system-aarch64")
 endif ()
 
@@ -79,20 +73,6 @@ foreach (_app IN LISTS UOS_TESTS_APPS)
     QEMU "${_qemu}" MACHINE -M raspi4b -smp 4
   )
 
-  # The same run through the board's hw.sh (test_smpl/run-hw.sh), label
-  # hwsh: kept until the OpenOCD runs are proven on the board (step 7).
-  add_test (
-    NAME "${PLATFORM_NAME}-${_app}-hwsh"
-    # 1800 s: the budget counts from OpenOCD's start, and loading an image
-    # over the CMSIS-DAP probe alone takes 3-8 minutes (~0.6 KB/s; the
-    # images are 100-290 KB). The watchdog reset and boot wait come first.
-    COMMAND bash "${_board_hw}" "${_app}" 1800
-  )
-  set_tests_properties (
-    "${PLATFORM_NAME}-${_app}-hwsh"
-    PROPERTIES ENVIRONMENT "BUILD=${CMAKE_CURRENT_BINARY_DIR}/port-tests;UOS_SMP_DIR=${CMAKE_SOURCE_DIR}/.."
-               LABELS "hwsh" TIMEOUT 2400
-  )
   # The hardware run: OpenOCD from CTest (cmake/uos-tests-run.cmake,
   # cmake/uos-hwd.tcl), the PM watchdog reset as its fixture.
   uos_tests_add_hwd (

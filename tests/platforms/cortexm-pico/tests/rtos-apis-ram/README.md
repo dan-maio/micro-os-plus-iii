@@ -25,8 +25,6 @@ Like `cmsis-os-validator-ram`, this test is linked to execute **entirely from in
 |------|---------|
 | `linker-ram.ld` | Dedicated linker script mapping all loadable sections (`.text`, `.rodata`, `.data`) to SRAM `0x20000000` (264 KB). Marks `.bss`, `.heap` and the 8 KB `.stack` as `(NOLOAD)` and discards `.boot2` (the flash second stage, not needed in RAM), so only the loadable sections are downloaded (~91 KB). |
 | `harness-suite.cpp` | Name-only source: the suite is `test::<suite>`, the verdict `board-tests/cortexm/test-end.cpp` on the platform's start-up |
-| `hw.sh` | The former runner, still registered as `<test>-hwsh` for comparison until the OpenOCD run below is proven on the board; then removed. |
-| `load-ram.cfg` | The same RAM load as an OpenOCD script, for a manual session; removed with `hw.sh`. |
 
 ---
 

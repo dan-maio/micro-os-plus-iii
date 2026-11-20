@@ -480,7 +480,7 @@ int os_main(int argc, char* argv[])
 
   // The console is the UART only (UOS_CONSOLE_UART_ONLY, tests.cmake): the
   // verdict goes to the terminal here and, through report_result(), to the
-  // semihosting log the runner greps, followed by the SYS_EXIT.
+  // semihosting log CTest reads, followed by the SYS_EXIT.
   uart1 << "\nRESULT: PASS\n";
   semihosting::report_result (true);
   return 0;

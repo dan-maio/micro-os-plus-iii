@@ -24,7 +24,7 @@
 # RK3506 global reset) is a separate OpenOCD session, a CTest fixture run
 # before this one (uos-hwd-reset.cmake).
 #
-# The steps are the ones test_smpl/run-hw.sh took: halt the cores (cores left
+# The steps are the ones the former test_smpl/run-hw.sh took: halt the cores (cores left
 # running stale code would corrupt RAM during load_image), enable semihosting,
 # the board's hooks, an optional pre-load, load the image, resume.
 #
@@ -49,7 +49,7 @@
 proc uos_hwd_run {elf entry target_fmt cores semihost_cores resume
                   {adapter_khz ""} {preload ""}} {
   # UOS_HW_ADAPTER_KHZ in the environment overrides the clock (slower for
-  # long jumper wires; the same knob test_smpl/run-hw.sh had).
+  # long jumper wires; the same knob the former run-hw.sh had).
   if {[info exists ::env(UOS_HW_ADAPTER_KHZ)]} {
     set adapter_khz $::env(UOS_HW_ADAPTER_KHZ)
   }

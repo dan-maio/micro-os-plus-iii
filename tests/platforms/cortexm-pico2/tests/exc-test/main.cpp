@@ -32,7 +32,7 @@
 
 // exc-test links no libc, so it supplies the exit endpoint hw_result ends
 // through itself, and the verdict line, over ARM semihosting (Cortex-M BKPT
-// 0xAB). The board's hw.sh enables semihosting before the resume, so both are
+// 0xAB). CTest's OpenOCD run enables semihosting before the resume, so both are
 // serviced: the RESULT line reaches the runner's log and SYS_EXIT ends the run.
 namespace
 {
@@ -194,7 +194,7 @@ main (void)
   uart::write (ok ? "PASS" : "FAIL");
   uart::write ("\n");
   uart::write (ok ? "RESULT: PASS\n" : "RESULT: FAIL\n");
-  // Also on the debug channel, which is what the hardware runner greps.
+  // Also on the debug channel, which is what CTest reads.
   semi_write0 (ok ? "RESULT: PASS\n" : "RESULT: FAIL\n");
 
   if (ok)

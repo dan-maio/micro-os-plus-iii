@@ -75,8 +75,9 @@ the configure stops with "`<package>` is not linked into this build folder".
 Everything else — CMake, Ninja, the host GCC/clang versions,
 `arm-none-eabi-gcc`, `aarch64-none-elf-gcc`, `qemu-arm`, `openocd` — is
 pinned per configuration and installed by xpm. The QEMU and OpenOCD tests
-use the newest `qemu-arm` / `openocd` xPack in `~/.local/xPacks/` when there
-is one, else the one on `PATH`.
+use the configuration's `build/<configuration>/xpacks/.bin` copy, which xpm
+puts first on `PATH` during configure; if the configuration has none, the
+one on `PATH` is used.
 
 The install commands are in [`COMMANDS.md`](COMMANDS.md) §2.
 
@@ -152,7 +153,7 @@ Name pattern: **`<platform>-cmake-<toolchain>-<debug|release>`**.
     "shortConfigurationName": "a64p4d"
   },
   "actions": {
-    "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE \"hwd|hwsh\""
+    "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -LE \"hwd\""
   }
 }
 ```
@@ -351,7 +352,7 @@ image), plus additions to `UOS_TESTS_STORAGE`.
 
 `ctest -R` is a regular-expression **substring** match: anchor the full name
 (`-R '^cortexm-pico2-smp-test1-qemu$'`). The configuration's `test` action
-excludes the hardware labels (`ctest -LE "hwd|hwsh"`).
+excludes the hardware label (`ctest -LE hwd`).
 
 ### 7.2 The verdict
 
@@ -411,9 +412,9 @@ boards on different probes can run side by side from two build folders
 (OpenOCD's Tcl and telnet ports are off), except the Lyra, whose WCH-Link
 loses its link beside another CMSIS-DAP probe.
 
-Until every board has proven this route, each hardware test also exists as
-`<test>-hwsh` (label `hwsh`): the same test through the board's former
-`hw.sh` script. Both the twins and the scripts go after the proof.
+The OpenOCD route has been proven on the boards and is the only hardware
+route; the former `<test>-hwsh` twins and the boards' `hw.sh` scripts have
+been removed.
 
 ---
 

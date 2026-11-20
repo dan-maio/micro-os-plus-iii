@@ -26,7 +26,7 @@ extern "C" std::uint32_t __vector_table[];
 
 // pico2-pizero smp-test0 links neither the kernel nor its libc, so it supplies
 // the exit endpoint hw_result ends through itself over ARM semihosting
-// (Cortex-M BKPT 0xAB). hw.sh enables semihosting, so SYS_EXIT ends the run.
+// (Cortex-M BKPT 0xAB). CTest's OpenOCD run enables semihosting, so SYS_EXIT ends the run.
 namespace
 {
   void
@@ -166,7 +166,7 @@ main (void)
   uart::write (ok ? "PASS" : "FAIL");
   uart::write ("\n");
   uart::write (ok ? "RESULT: PASS\n" : "RESULT: FAIL\n");
-  // Also on the debug channel, which is what the hardware runner greps.
+  // Also on the debug channel, which is what CTest reads.
   semi_write0 (ok ? "RESULT: PASS\n" : "RESULT: FAIL\n");
 
   if (ok)

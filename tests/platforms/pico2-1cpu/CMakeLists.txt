@@ -11,16 +11,11 @@ message (VERBOSE "Processing 'tests/platforms/${PLATFORM_NAME}'...")
 # -----------------------------------------------------------------------------
 include ("cmake/platform-library.cmake")
 
-# The QEMU binary, from the newest installed qemu-arm xpack (same discovery as
+# The QEMU binary, from the configuration's xpm .bin (the per-config pin) (same discovery as
 # the cortexm-pico2 platform); it is used as an absolute path in add_test, so
 # PATH does not matter.
-file (GLOB _qemu_bins
-      "$ENV{HOME}/.local/xPacks/@xpack-dev-tools/qemu-arm/*/.content/bin")
-if (_qemu_bins)
-  list (SORT _qemu_bins COMPARE NATURAL ORDER DESCENDING)
-  list (GET _qemu_bins 0 _qemu_bin)
-  set (_qemu "${_qemu_bin}/qemu-system-arm")
-else ()
+find_program (_qemu qemu-system-arm)
+if (NOT _qemu)
   set (_qemu "qemu-system-arm")
 endif ()
 

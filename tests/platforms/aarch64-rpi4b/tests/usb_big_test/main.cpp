@@ -25,7 +25,7 @@
  *   - at the end the file read back: its size and CRC-32 must be those
  *     received.
  *
- * Run:  tests/platforms/aarch64-rpi4b/hw.sh usb_big_test 240, then on the PC (the cable
+ * Run the `usb_big_test-hwd` case, then on the PC (the cable
  * in the Pi 4's USB-C socket), once 1d6b:0104 is on the bus:
  *       host/output/usb_test_host --big <file>
  * The board waits at most 100 s for the transfer. Board only: QEMU's raspi4b

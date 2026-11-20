@@ -439,7 +439,7 @@ int os_main(int argc, char* argv[])
     }
 
   // uart1 << putc() also writes the semihosting channel, so this reaches both
-  // the terminal and the OpenOCD log the runner greps; the return goes through
+  // the terminal and the OpenOCD log CTest reads; the return goes through
   // the port's strong _Exit() (semihosting SYS_EXIT).
   uart1 << "\nRESULT: PASS\n";
   return 0;

@@ -38,7 +38,7 @@
 
 #define PORT_BANNER_ISA   "AArch32"
 
-// SEMIHOST is defined only by the hardware-run build (see hw.sh / CMakeLists).
+// SEMIHOST is defined only by the hardware-run build (see CMakeLists).
 // When set, every console byte is ALSO echoed through the ARM semihosting
 // channel, so OpenOCD ("arm semihosting enable") prints the test console to
 // its log even though the board has no USB-serial connected to the host.

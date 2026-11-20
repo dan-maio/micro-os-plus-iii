@@ -132,18 +132,14 @@ endfunction ()
 
 # -----------------------------------------------------------------------------
 # Hardware tests: CTest runs OpenOCD directly, as upstream's hardware tests
-# do; no shell script in between. The newest OpenOCD xPack, else the PATH's.
+# do; no shell script in between. OpenOCD comes from the configuration's
+# xpm .bin, which xpm puts first on PATH during prepare/build/test (this is
+# the per-configuration pinned xPack). If it is not there, the PATH's copy
+# is used.
 
-file (GLOB _uos_ocd_bins
-      "$ENV{HOME}/.local/xPacks/@xpack-dev-tools/openocd/*/.content/bin/openocd")
-if (_uos_ocd_bins)
-  list (SORT _uos_ocd_bins COMPARE NATURAL ORDER DESCENDING)
-  list (GET _uos_ocd_bins 0 UOS_TESTS_OPENOCD)
-  get_filename_component (_uos_ocd_dir "${UOS_TESTS_OPENOCD}" DIRECTORY)
-  set (UOS_TESTS_OPENOCD_SCRIPTS "${_uos_ocd_dir}/../openocd/scripts")
-else ()
-  find_program (UOS_TESTS_OPENOCD openocd)
-  set (UOS_TESTS_OPENOCD_SCRIPTS "")
+find_program (UOS_TESTS_OPENOCD openocd)
+if (NOT UOS_TESTS_OPENOCD)
+  set (UOS_TESTS_OPENOCD "openocd")
 endif ()
 
 # uos_tests_add_hwd (
@@ -170,9 +166,6 @@ function (uos_tests_add_hwd)
     "CORES;SEMIHOST_CORES;PRE_CFG;PRELOAD;RESET_COMMAND" ${ARGN})
   get_filename_component (_cfg_dir "${_a_CFG}" DIRECTORY)
   set (_ocd_args -s "${_cfg_dir}")
-  if (UOS_TESTS_OPENOCD_SCRIPTS)
-    list (APPEND _ocd_args -s "${UOS_TESTS_OPENOCD_SCRIPTS}")
-  endif ()
   foreach (_c IN LISTS _a_PRE_CFG)
     list (APPEND _ocd_args -c "${_c}")
   endforeach ()
@@ -238,9 +231,6 @@ function (uos_tests_add_openocd)
                          ${ARGN})
   get_filename_component (_cfg_dir "${_a_CFG}" DIRECTORY)
   set (_ocd_args -s "${_cfg_dir}")
-  if (UOS_TESTS_OPENOCD_SCRIPTS)
-    list (APPEND _ocd_args -s "${UOS_TESTS_OPENOCD_SCRIPTS}")
-  endif ()
   foreach (_c IN LISTS _a_PRE_CFG)
     list (APPEND _ocd_args -c "${_c}")
   endforeach ()

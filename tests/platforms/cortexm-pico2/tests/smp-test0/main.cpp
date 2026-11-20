@@ -26,7 +26,7 @@ extern "C" std::uint32_t __vector_table[];
 
 // smp-test0 links neither the kernel nor its libc, so it supplies the exit
 // endpoint hw_result ends through itself, and the verdict line, directly over
-// ARM semihosting (Cortex-M BKPT 0xAB). The board's hw.sh enables semihosting
+// ARM semihosting (Cortex-M BKPT 0xAB). CTest's OpenOCD run enables semihosting
 // before the resume, so both are serviced by OpenOCD: the RESULT line reaches
 // the runner's log (the UART alone does not) and SYS_EXIT ends the run.
 namespace
@@ -169,11 +169,11 @@ main (void)
   uart::write (ok ? "PASS" : "FAIL");
   uart::write ("\n");
   uart::write (ok ? "RESULT: PASS\n" : "RESULT: FAIL\n");
-  // Also on the debug channel, which is what the hardware runner greps.
+  // Also on the debug channel, which is what CTest reads.
   semi_write0 (ok ? "RESULT: PASS\n" : "RESULT: FAIL\n");
 
   // Ends the run through the strong _Exit() -> semihosting SYS_EXIT, which the
-  // board's hw.sh is waiting for (and which carries the verdict).
+  // CTest is waiting for (and which carries the verdict).
   if (ok)
     {
       hw_result::ok ();

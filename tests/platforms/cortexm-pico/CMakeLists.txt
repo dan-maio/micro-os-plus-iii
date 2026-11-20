@@ -8,7 +8,7 @@
 # registers what it produced, every test named `<platform>-<app>-<variant>`.
 #
 # hwd tests need the board: they carry the `hwd` label, which the
-# configuration's `test` action skips (`ctest -LE "hwd|hwsh"`), and run one at
+# configuration's `test` action skips (`ctest -LE hwd`), and run one at
 # a time (RUN_SERIAL); OpenOCD programs and resets the board for each.
 #
 # The `qemu` images end themselves: each test prints a RESULT line and, under
@@ -42,20 +42,14 @@ set (UOS_TESTS_BOARD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/tests")
 add_subdirectory ("${CMAKE_SOURCE_DIR}/board-tests" "port-tests/test")
 
 set (_port_bin "${CMAKE_CURRENT_BINARY_DIR}/port-tests")
-set (_board_hw "${CMAKE_CURRENT_SOURCE_DIR}/hw.sh")
 
 # The QEMU binary, for the tests the board can run emulated. QEMU has no
 # RP2040 and no Cortex-M0 machine; the images are built for the Cortex-M0
 # (ARMv6-M, a subset of what the M3 runs) and run on QEMU's mps2-an385 with a
 # Cortex-M3, as the harness's qemu-cortex-m0 platform does. The RP2040-only
 # blocks (SIO, USB) are listed HWD_ONLY and never get a `qemu` image.
-file (GLOB _qemu_bins
-      "$ENV{HOME}/.local/xPacks/@xpack-dev-tools/qemu-arm/*/.content/bin")
-if (_qemu_bins)
-  list (SORT _qemu_bins COMPARE NATURAL ORDER DESCENDING)
-  list (GET _qemu_bins 0 _qemu_bin)
-  set (_qemu "${_qemu_bin}/qemu-system-arm")
-else ()
+find_program (_qemu qemu-system-arm)
+if (NOT _qemu)
   set (_qemu "qemu-system-arm")
 endif ()
 
@@ -67,7 +61,7 @@ endif ()
 # One CTest case per test the builder built (board-tests/: UOS_TESTS_APPS).
 include ("${CMAKE_SOURCE_DIR}/cmake/uos-tests-run.cmake")
 
-# The hardware run's OpenOCD commands (they were the board's hw.sh): program,
+# The hardware run's OpenOCD commands (the board's own commands): program,
 # reset, semihosting on, run.
 set (_hwd_flash
      "init" "reset init" "program {@ELF@} verify" "reset init"
@@ -85,7 +79,7 @@ set (_hwd_ram
      [=[reg pc [expr {[lindex $v 1] & ~1}]]=]
      "resume")
 # The Pico's SWD clock: UOS_HW_ADAPTER_KHZ in the environment, else 15000
-# (its hw.sh did the same).
+#.
 set (_hwd_pre_cfg
      [=[set ADAPTER_KHZ [expr {[info exists ::env(UOS_HW_ADAPTER_KHZ)] ? $::env(UOS_HW_ADAPTER_KHZ) : 15000}]]=])
 
@@ -105,18 +99,8 @@ foreach (_app IN LISTS UOS_TESTS_APPS)
     )
   endif ()
 
-  # A board run gets 4 minutes (hw.sh's own limit); CTest's allows one more
-  # for flashing and tear-down, so hw.sh reports the TIMEOUT, not CTest.
-  # The same run through the board's hw.sh, label hwsh: kept until the
-  # OpenOCD runs are proven on the board (step 7).
-  add_test (
-    NAME "${PLATFORM_NAME}-${_app}-hwsh"
-    COMMAND bash "${_board_hw}" "${_app}" 240
-  )
-  set_tests_properties (
-    "${PLATFORM_NAME}-${_app}-hwsh"
-    PROPERTIES ENVIRONMENT "BUILD=${_port_bin}" LABELS "hwsh" TIMEOUT 300
-  )
+  # A board run gets 4 minutes; CTest's allows one more
+  # for flashing and tear-down.
   # The hardware run: OpenOCD from CTest (cmake/uos-tests-run.cmake), the
   # board's commands above (the -ram variants run from RAM).
   if (_app MATCHES "-ram$")

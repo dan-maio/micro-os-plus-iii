@@ -13,12 +13,12 @@ board through OpenOCD.
 | `git`, Node.js + `npm` | from the distribution |
 | `xpm` | `npm install -g xpm@latest` |
 | internet | the first `xpm install` downloads CMake, Ninja, GCC and QEMU into `~/.local/xPacks` |
-| **OpenOCD, for `-hwd` only** | `xpm install -g @xpack-dev-tools/openocd@0.12.0-7.1` |
+| **OpenOCD, for `-hwd` only** | installed per configuration by `xpm run install --config <C>` (`@xpack-dev-tools/openocd@0.12.0-6.1`) |
 | probe, for `-hwd` only | CMSIS-DAP JTAG probe with user access (udev); a USB-serial on the Pi UART (GPIO14/15) |
 
-The hardware tests use the newest OpenOCD in
-`~/.local/xPacks/@xpack-dev-tools/openocd/`, otherwise `openocd` from `PATH`
-(`UOS_TESTS_OPENOCD` in the build folder's cache says which).
+The hardware tests use the configuration's
+`build/<configuration>/xpacks/.bin/openocd`; if it has none, `openocd` from
+`PATH` is used (`UOS_TESTS_OPENOCD` in the build folder's cache says which).
 
 ## 1. Get the sources
 
@@ -144,7 +144,7 @@ ctest --test-dir build/$C -R "^aarch64-rpi4b-$T-qemu\$" --output-on-failure
 
 | Goal | Command |
 |---|---|
-| all QEMU tests (does not build) | `xpm run test --config $C` (= `ctest -V -LE "hwd\|hwsh"`) |
+| all QEMU tests (does not build) | `xpm run test --config $C` (= `ctest -V -LE hwd`) |
 | all board tests, back to back | `UOS_HW_ADAPTER_KHZ=15000 ctest --test-dir build/$C -L hwd` |
 
 ## 5a. The Ethernet tests

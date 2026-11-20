@@ -419,17 +419,16 @@ message (STATUS "µOS++ III ${UOS_TESTS_PORT} board tests: ${_n} targets, board=
 # cores in AArch64, so an AArch32 image is loaded at an address and this shim
 # drops to AArch32 and jumps there. Built with the aarch64 toolchain.
 if (UOS_TESTS_PORT STREQUAL "aarch32")
-  file (GLOB _a64_bins "$ENV{HOME}/.local/xPacks/@xpack-dev-tools/aarch64-none-elf-gcc/*/.content/bin")
-  if (_a64_bins AND EXISTS "${_boards_dir}/qemu-raspi3-shim/shim.S")
-    list (SORT _a64_bins COMPARE NATURAL ORDER DESCENDING)
-    list (GET _a64_bins 0 _a64_bin)
+  find_program (_a64_gcc aarch64-none-elf-gcc)
+  find_program (_a64_objcopy aarch64-none-elf-objcopy)
+  if (_a64_gcc AND _a64_objcopy AND EXISTS "${_boards_dir}/qemu-raspi3-shim/shim.S")
     set (_shim_src "${_boards_dir}/qemu-raspi3-shim")
     add_custom_command (
       OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/shim8.img"
-      COMMAND "${_a64_bin}/aarch64-none-elf-gcc" -nostdlib
+      COMMAND "${_a64_gcc}" -nostdlib
               "-Wl,-T,${_shim_src}/shim.ld" "${_shim_src}/shim.S"
               -o "${CMAKE_CURRENT_BINARY_DIR}/shim.elf"
-      COMMAND "${_a64_bin}/aarch64-none-elf-objcopy" -O binary
+      COMMAND "${_a64_objcopy}" -O binary
               "${CMAKE_CURRENT_BINARY_DIR}/shim.elf"
               "${CMAKE_CURRENT_BINARY_DIR}/shim8.img"
       DEPENDS "${_shim_src}/shim.S" "${_shim_src}/shim.ld"

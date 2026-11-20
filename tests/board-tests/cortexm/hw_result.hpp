@@ -10,11 +10,11 @@
  *
  *   QEMU        the semihosting SYS_EXIT ends the process, and CTest reads the
  *               exit code.
- *   hardware    OpenOCD is attached and semihosting is enabled (every board's
- *               hw.sh issues `arm semihosting enable` before it resumes), so
+ *   hardware    OpenOCD is attached and semihosting is enabled (CTest issues
+ *               `arm semihosting enable` before it resumes), so
  *               the SYS_EXIT stops the run instead of leaving the core
  *               spinning until the runner times out; the verdict is also the
- *               "RESULT: PASS|FAIL" line the runner greps.
+ *               "RESULT: PASS|FAIL" line CTest reads.
  *
  * The idle loop that follows the call is therefore only reached when
  * semihosting is NOT available -- a bare build run without a debugger.
@@ -33,7 +33,7 @@
 
 namespace hw_result
 {
-  // The board's console is the UART, but the runner (hw.sh) greps OpenOCD's
+  // The board's console is the UART, but CTest reads OpenOCD's
   // output, which only sees semihosting. Emit the verdict there too, so a
   // passing test is not reported as a timeout. Semihosting is already required
   // to end the run cleanly: _Exit() below is a semihosting SYS_EXIT.

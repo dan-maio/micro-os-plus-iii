@@ -7,7 +7,7 @@
 # appears here, and registers each as `<platform>-<app>-hwd`.
 #
 # hwd tests need the board: they carry the `hwd` label, which the
-# configuration's `test` action skips (`ctest -LE "hwd|hwsh"`), and run one at
+# configuration's `test` action skips (`ctest -LE hwd`), and run one at
 # a time (RUN_SERIAL); a reset fixture precedes each, so no power cycle.
 # -----------------------------------------------------------------------------
 
@@ -55,13 +55,12 @@ add_subdirectory ("${CMAKE_SOURCE_DIR}/board-tests" "port-tests/test")
 
 set (_port_bin "${CMAKE_CURRENT_BINARY_DIR}/port-tests")
 set (_port_test_dir "${CMAKE_CURRENT_SOURCE_DIR}/tests")
-set (_board_hw "${CMAKE_CURRENT_SOURCE_DIR}/hw.sh")
 
 # -----------------------------------------------------------------------------
 # One CTest case per test the builder built (board-tests/: UOS_TESTS_APPS).
 include ("${CMAKE_SOURCE_DIR}/cmake/uos-tests-run.cmake")
 
-# The hardware run's facts (they were the board's hw.sh): core 0 alone (the
+# The hardware run's facts (the board's own commands): core 0 alone (the
 # secondaries are held in reset until the kernel releases them), resumed at the
 # entry with no register touched (the RK3506's loader leaves SVC), 4 MHz SWD,
 # the RK3506 full global reset as a fixture, and the pre-load that turns the
@@ -89,23 +88,13 @@ endfunction ()
 
 foreach (_app IN LISTS UOS_TESTS_APPS)
 
-  # The same run through the board's hw.sh, label hwsh: kept until the
-  # OpenOCD runs are proven on the board (step 7).
-  add_test (
-    NAME "${PLATFORM_NAME}-${_app}-hwsh"
-    COMMAND bash "${_board_hw}" "${_app}" 600
-  )
-  set_tests_properties (
-    "${PLATFORM_NAME}-${_app}-hwsh"
-    PROPERTIES ENVIRONMENT "BUILD=${_port_bin};UOS_SMP_DIR=${CMAKE_SOURCE_DIR}/.." LABELS "hwsh" TIMEOUT 1200
-  )
   lyra_add_hwd ("${_app}" "$<TARGET_FILE:${_app}-hwd>")
 endforeach ()
 
 # -----------------------------------------------------------------------------
 # The harness suites, on the same board. They supply no main() and no startup
-# hooks, so they link micro-os-plus::platform-support. The image lands where
-# the board's hw.sh looks for it, <bin>/port-tests/test/<name>-hwd.
+# hooks, so they link micro-os-plus::platform-support. The image lands in
+# <bin>/port-tests/test/<name>-hwd.
 #
 # The board's shared SMP bring-up (tests/src/test-smp-boot.cpp:
 # smp_install_boot_threads() and test_wait_secondaries()) is compiled in here
@@ -137,16 +126,6 @@ function (add_harness_suite _suite _name)
     COMMAND ${CMAKE_OBJCOPY} -O binary "$<TARGET_FILE:${_name}>"
             "$<TARGET_FILE:${_name}>.bin"
     VERBATIM
-  )
-  # The same run through the board's hw.sh, label hwsh: kept until the
-  # OpenOCD runs are proven on the board (step 7).
-  add_test (
-    NAME "${PLATFORM_NAME}-${_name}-hwsh"
-    COMMAND bash "${_board_hw}" "${_name}" 600
-  )
-  set_tests_properties (
-    "${PLATFORM_NAME}-${_name}-hwsh"
-    PROPERTIES ENVIRONMENT "BUILD=${_port_bin};UOS_SMP_DIR=${CMAKE_SOURCE_DIR}/.." LABELS "hwsh" TIMEOUT 1200
   )
   lyra_add_hwd ("${_name}" "$<TARGET_FILE:${_name}>")
 endfunction ()

@@ -32,7 +32,7 @@
 //
 // HARDWARE VERDICT. A hardware run has no process status to compare: OpenOCD
 // is a debugger, not a parent. So before exiting, the trampoline prints the
-// "RESULT: PASS|FAIL" line the runner greps, exactly like the port's own board
+// "RESULT: PASS|FAIL" line CTest reads, exactly like the port's own board
 // tests. (Under QEMU the same code would just return the exit code.)
 
 #include <cmsis-plus/rtos/os.h>

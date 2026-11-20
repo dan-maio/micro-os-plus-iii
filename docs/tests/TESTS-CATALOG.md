@@ -31,11 +31,10 @@ the kernel's `tests/`:
 
 The verdict is the test's `RESULT: PASS|FAIL|SKIP` line; the test then ends
 the run through semihosting. `-hwd` cases are excluded from the
-configuration's `test` action (`ctest -LE "hwd|hwsh"`) and run one at a time,
+configuration's `test` action (`ctest -LE hwd`) and run one at a time,
 with OpenOCD only (no GDB). Before each AArch hardware test CTest adds
-`<test>-hwd-reset`, the board's reset in its own OpenOCD session. Until the
-OpenOCD route is proven on every board, each `-hwd` case also has a `-hwsh`
-twin (the former `hw.sh` script; label `hwsh`).
+`<test>-hwd-reset`, the board's reset in its own OpenOCD session. The former
+`-hwsh` twins and `hw.sh` scripts have been removed.
 
 **Scheduling** (the "Mode" column below):
 

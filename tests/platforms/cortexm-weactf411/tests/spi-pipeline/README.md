@@ -71,7 +71,6 @@ lines, then `spi-pipeline: PASS` or `FAIL, n`, and last the harness's
 | `pipeline.hpp/.cpp` | sizes, the two hand-off slots, the eight semaphores, the verdict record, the console |
 | `base64.hpp/.cpp` | RFC 4648 §4 with **per-chunk** padding, and the §10 vectors it checks itself against at start-up |
 | `store.hpp/.cpp` | `Storage`: the two partitions + the writer, and the RAM backend QEMU takes |
-| `check.sh` | asserts the transcript's gates on either machine |
 
 From the board, `platforms/cortexm-weactf411/`:
 
@@ -273,8 +272,8 @@ Two design points hang off this:
   which is a function of the image length (141 chunks on silicon, 32 under
   QEMU). A fixed per-chunk delay right for one machine would be eleven times
   wrong for the other. Without the pacing the whole file lands before T4's
-  first blink and every snapshot reports the same finished length — which is
-  why `check.sh` insists T4 saw **at least three distinct** file lengths.
+  first blink and every snapshot reports the same finished length — the
+  transcript must show T4 saw **at least three distinct** file lengths.
 
 ### 7. `sysclock.now()` is the timestamp, and format strings must not lie
 
@@ -380,13 +379,9 @@ semihosting output: the CRC witness lines (the `CRC0`/`CRC1`/`OK` triplet),
 which is why the board's OpenOCD commands enable semihosting before
 `reset run`. Expect `SPI transport dma`,
 `JEDEC 0xef …`, the partition layout, eight clean iterations and
-`RESULT: PASS`. Capture the UART to a file and check it:
-
-```sh
-./check.sh uart.log dma
-```
-
-`check.sh` strips `\r` itself.
+`RESULT: PASS`. Capture the UART to a file and check the transcript's gates:
+`SPI transport dma`, the `JEDEC 0xef …` line, the partition layout, eight
+clean iterations, at least three distinct T4 lengths, and `RESULT: PASS`.
 
 ---
 

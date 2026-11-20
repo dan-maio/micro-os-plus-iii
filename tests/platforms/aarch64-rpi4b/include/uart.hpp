@@ -14,7 +14,7 @@
  * (OpenOCD reads 33 registers over a full-speed USB link per trap), and the
  * tests print hundreds of lines. The full console is on the UART (your own
  * terminal on the USB-serial adapter); only a line carrying "RESULT", "FAIL"
- * or "FATAL" -- what test_smpl/run-hw.sh greps in the OpenOCD log -- is
+ * or "FATAL" -- what CTest's PASS/FAIL expressions read from the OpenOCD log -- is
  * mirrored. PORT_SEMIHOST_MIRROR tells src/rtos/os-core.cpp's trace::write()
  * the same thing.
  *

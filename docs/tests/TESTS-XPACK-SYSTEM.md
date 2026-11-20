@@ -234,11 +234,12 @@ tests/build/<config>/xpacks/
 ```
 
 `.bin` is prepended to `PATH` by xpm when it runs an action, which is how the
-CMake build finds `qemu-system-arm`, `openocd`, `arm-none-eabi-gcc`, etc. The
-CMake test commands deliberately call these by **bare name**
-(`qemu-system-arm`, `openocd`, `arm-none-eabi-*`), relying on the xpm-provided
-`PATH` — see `tests/platforms/qemu-cortex-m7f/CMakeLists.txt:64` and
-`tests/platforms/nucleo-f767zi/CMakeLists.txt:69`.
+CMake build finds `qemu-system-arm`, `openocd`, `arm-none-eabi-gcc`, etc.
+The platform files resolve QEMU and OpenOCD with `find_program()` during
+configure, so the generated CTest commands carry the configuration's
+`build/<configuration>/xpacks/.bin` path (the pinned xPack); if the
+configuration does not install one, the copy on `PATH` is used. See
+`tests/cmake/uos-tests-run.cmake` and the platform `CMakeLists.txt` files.
 
 ### 5.4 `local: "link"` and development
 
@@ -655,7 +656,7 @@ on `PATH`.
 | Host GCC 11–14 | `@xpack-dev-tools/gcc` | 11.5.0-2.1 … 14.2.0-2.1 |
 | Host clang 13–19 | `@xpack-dev-tools/clang` | 13.0.1-1.1 … 19.1.7-1.1 |
 | Arm cross GCC | `@xpack-dev-tools/arm-none-eabi-gcc` | 15.2.1-1.1.1 |
-| QEMU Arm | `@xpack-dev-tools/qemu-arm` | 8.2.6-1.1 |
+| QEMU Arm | `@xpack-dev-tools/qemu-arm` | 8.2.6-1.1 (Cortex-M); 9.2.4-1.1 (AArch32/AArch64, `raspi4b`) |
 | OpenOCD | `@xpack-dev-tools/openocd` | 0.12.0-6.1 |
 | CMake | `@xpack-dev-tools/cmake` | 3.26.5-1.1 |
 | Ninja | `@xpack-dev-tools/ninja-build` | 1.11.1-3.1 |

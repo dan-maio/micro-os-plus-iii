@@ -77,11 +77,11 @@ def pattern(seed, n):
 def make_partition(part):
     with open(part, "wb") as f:
         f.truncate(PART_SECTORS * SECTOR)
-    subprocess.run(["/usr/bin/mkfs.fat", "-F", "32", "-n", "BOOT", part],
+    subprocess.run(["mkfs.fat", "-F", "32", "-n", "BOOT", part],
                    check=True, capture_output=True)
     # The pyfatfs host writer leaves a stale FSInfo free count; fix it so the
     # baseline itself is fsck-clean before the firmware ever runs.
-    subprocess.run(["/usr/bin/fsck.fat", "-a", part],
+    subprocess.run(["fsck.fat", "-a", part],
                    check=True, capture_output=True)
     from fs import open_fs
     fs = open_fs("fat://" + part)
@@ -169,7 +169,7 @@ def verify(test, scratch):
     gap_ok = head[SECTOR:] == bytes((PART_START - 1) * SECTOR)
     print(f"{test}: MBR + pre-partition region untouched: {mbr_ok and gap_ok}")
 
-    fsck = subprocess.run(["/usr/bin/fsck.fat", "-n", part],
+    fsck = subprocess.run(["fsck.fat", "-n", part],
                           capture_output=True, text=True)
     out = fsck.stdout
     # FatFs deliberately does not keep FSInfo's free-count cache in sync, so

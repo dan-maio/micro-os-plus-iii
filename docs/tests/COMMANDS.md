@@ -1,5 +1,8 @@
 # µOS++ III SMP — the commands, from the workspace to every test run
 
+> For the complete guide to running all tests, one architecture, one board or
+> one selected case, see [`RUNNING-TESTS.md`](RUNNING-TESTS.md).
+
 How to install, build and run every test of µOS++ IIIe SMP, after the
 alignment with upstream (2026-11). Every test lives in the kernel's
 `tests/`: the portable ones in `tests/sources/`, the board-only ones and the

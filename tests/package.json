@@ -1495,7 +1495,7 @@
           "shortConfigurationName": "cpzd"
         },
         "actions": {
-          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -L hwd",
+          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -L hwd -E \"(smp-test-usb-cdc-acm|smp-test-usb-hid)-hwd$\"",
           "test-hwd": "cd {{ properties.buildFolderRelativePath }} && ctest -V -L hwd"
         }
       },
@@ -1800,7 +1800,7 @@
           "commandCMakeReconfigure": "cmake -S . -B {{ properties.buildFolderRelativePathPosix }} -G Ninja -D CMAKE_BUILD_TYPE={{ properties.buildType }} -D PLATFORM_NAME={{ properties.platformName }} -D ENABLE_HW_TESTS=ON"
         },
         "actions": {
-          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -L hwd",
+          "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -L hwd -E \"(smp_test_int3|smp_test_int4|smp_test7)-hwd$\"",
           "test-hwd": "cd {{ properties.buildFolderRelativePath }} && ctest -V -L hwd"
         }
       },

@@ -54,6 +54,11 @@ function (board_test_defines _app _out)
   # the board's uart.hpp): only the verdict goes through semihosting.
   if (_app STREQUAL "smp_test6" OR _app STREQUAL "smp_test7")
     set (_d UOS_CONSOLE_UART_ONLY)
+  elseif (_app STREQUAL "smp_test_int")
+    # The UART RX echo is interrupt-driven; a console byte mirrored through
+    # semihosting while the IRQ runs can drop the WCH-Link. Keep the console
+    # on the UART, only the verdict goes through semihosting.
+    set (_d UOS_CONSOLE_UART_ONLY)
   elseif (_app STREQUAL "smp_test_int3")
     set (_d SMP_TEST_INT3_DIAG SMP_TEST_INT3_DYNAMIC_AFFINITY
             UOS_CONSOLE_UART_ONLY)

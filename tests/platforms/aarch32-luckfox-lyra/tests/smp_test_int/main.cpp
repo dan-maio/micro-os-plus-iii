@@ -5,6 +5,7 @@
 #include <gic.hpp>
 #include <exception_handler.hpp>
 #include <smp.hpp>
+#include <semihosting.hpp>
 
 extern "C" unsigned port_cpu_id(void);
 
@@ -302,10 +303,11 @@ int os_main(int argc, char* argv[])
             << static_cast<int>(g_uart_rx_count) << "\n";
     }
 
-  // uart1 << putc() also writes the semihosting channel, so this reaches both
-  // the terminal and the OpenOCD log CTest reads; the return goes through
-  // the port's strong _Exit() (semihosting SYS_EXIT).
+  // The console is UART-only (UOS_CONSOLE_UART_ONLY): mirroring every beat
+  // through semihosting while the UART RX IRQ runs can drop the WCH-Link.
+  // Only the verdict goes through semihosting, followed by SYS_EXIT.
   uart1 << "\nRESULT: PASS\n";
+  semihosting::report_result (true);
   return 0;
 }
 

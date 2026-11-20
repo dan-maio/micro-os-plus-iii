@@ -86,6 +86,7 @@ built but not run. Every test is a CTest case named
 | `-host` | `host` | the native test program on the PC (POSIX port) |
 | `-qemu` | `qemu` | QEMU, with semihosting |
 | `-hwd` | `hwd` | the board, through OpenOCD (section 5) |
+| `-hwd` manual | `hwd-manual` | the board, by hand (PSRAM 200/250 MHz clock tests) |
 
 The verdict is the test's own `RESULT: PASS` / `FAIL` / `SKIP` line (CTest's
 regular expressions), and each test has a time limit. In a built
@@ -133,7 +134,13 @@ cd build/<configuration>
 ctest -L hwd                                       # every hardware test, one after another
 ctest -R '^aarch64-rpi4b-smp_test0-hwd$' --output-on-failure   # one
 ctest -L hwd -E '(usb_big_test|eth-net|eth-tcp-server)-hwd$'   # without some
+ctest -R '^cortexm-pico2-rp2350b-psram-smp-test-nested-clock_200-hwd$'  # manual
 ```
+
+`-L hwd` skips cases labelled `hwd-manual`: the PSRAM 200/250 MHz clock
+tests need the potentiometer and a `y` on the UART, and their reboot drops
+the debug/semihosting state, so their verdict is read on the UART rather
+than by CTest.
 
 Before a test, a board without a reset line is reset through its debug port
 in a separate OpenOCD session: the Pi's PM watchdog, then a few seconds for

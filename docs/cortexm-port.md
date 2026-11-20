@@ -391,6 +391,12 @@ Each platform's `CMakeLists.txt` lists the OpenOCD commands of its run
 (`uos_tests_add_openocd`, `tests/cmake/uos-tests-run.cmake`); the test's
 semihosting exit ends OpenOCD and its `RESULT` line is the verdict.
 
+The PSRAM board's OpenOCD runs at **100 kHz**: higher SWD clocks fail to
+connect or halt it. Its `smp-test-nested-clock_200` and `_250` cases carry
+the `hwd-manual` label — they need the potentiometer and `y` on the UART,
+and their clock reboot drops the debug state, so their `RESULT` is read on
+the UART rather than by CTest; `ctest -L hwd` skips them.
+
 The STM32 boards: `init`, `reset halt`, program, `arm semihosting enable`,
 `reset run`. Semihosting
 must be enabled **before** the image runs — `os::trace::printf()` issues

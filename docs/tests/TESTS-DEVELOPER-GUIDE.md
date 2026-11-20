@@ -346,6 +346,7 @@ image), plus additions to `UOS_TESTS_STORAGE`.
 | platform shape | CTest name | label |
 |---|---|---|
 | board platforms | `<platform>-<test>-qemu` / `-hwd` / `-host` | `qemu` / `hwd` / `host` |
+| board platforms, by-hand case | `<platform>-<test>-hwd` | `hwd-manual` (excluded from `-L hwd`) |
 | upstream platforms | `<platform>-<suite>-test` | `qemu` |
 | the debug-link reset before a hardware test | `<platform>-<test>-hwd-reset` | `hwd-reset` |
 | a per-run SD image (QEMU, host) | `<name>-sd-make`, `<name>-sd-remove` | as the test |
@@ -353,6 +354,11 @@ image), plus additions to `UOS_TESTS_STORAGE`.
 `ctest -R` is a regular-expression **substring** match: anchor the full name
 (`-R '^cortexm-pico2-smp-test1-qemu$'`). The configuration's `test` action
 excludes the hardware label (`ctest -LE hwd`).
+
+The PSRAM `smp-test-nested-clock_200` and `_250` cases are labelled
+`hwd-manual`: they need the potentiometer and `y` on the UART, and their
+clock reboot clears the debug/semihosting state, so CTest cannot read their
+verdict. Run them explicitly with `ctest -R` and read `RESULT` on the UART.
 
 ### 7.2 The verdict
 

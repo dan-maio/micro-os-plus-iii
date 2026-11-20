@@ -27,6 +27,7 @@ the kernel's `tests/`:
 | `-qemu` | QEMU | `qemu-system-arm` / `qemu-system-aarch64` with semihosting |
 | `-host` | the Linux host (POSIX port) | the native program |
 | `-hwd` | the real board | OpenOCD with the board's configuration (label `hwd`) |
+| `-hwd` manual | the real board, driven by hand | label `hwd-manual`; excluded from `-L hwd` |
 | `-test` (no variant) | the upstream platforms: QEMU | the command in the platform's `CMakeLists.txt` |
 
 The verdict is the test's `RESULT: PASS|FAIL|SKIP` line; the test then ends
@@ -101,7 +102,7 @@ local generic M33 core, `micro-os-plus::cortexm-qemu-m33`.)
 | Luckfox Lyra B | WCH-Link in ARM mode (CMSIS-DAP) | `1a86:8011` | SWD, 4000 kHz | `aarch32-luckfox-lyra/openocd.cfg` |
 | Pico 2 | any CMSIS-DAP (no vid_pid pinned) | — | SWD, 1000 kHz | `cortexm-pico2/openocd.cfg` |
 | Pi-Zero RP2350B | XV-Link CMSIS-DAP | `0416:5951` | SWD, 2000 kHz | `cortexm-pico2-pizero/openocd.cfg` |
-| WeAct RP2350B + PSRAM | CMSIS-DAP | `c251:f001` | SWD, 1000 kHz | `cortexm-pico2-rp2350b-psram/openocd.cfg` |
+| WeAct RP2350B + PSRAM | CMSIS-DAP | `c251:f001` | SWD, 100 kHz (higher speeds fail to connect/halt) | `cortexm-pico2-rp2350b-psram/openocd.cfg` |
 | Pico (RP2040) | JTAGprobe (JTAGprobe_smp firmware on a second Pico), CMSIS-DAP v2 | `2e8a:000c` | SWD, 15000 kHz (`UOS_HW_ADAPTER_KHZ`) | `cortexm-pico/openocd.cfg` |
 | Nucleo-F411RE | on-board ST-Link v2.1 | — | SWD, `connect_assert_srst` | `cortexm-nucleof411/openocd.cfg` |
 | WeAct F411CE | DAPLink CMSIS-DAP (override: WCH-Link `1a86:8011` through `DAP_VID_PID`) | `0d28:0204` | SWD, 1000 kHz (`ADAPTER_KHZ`) | `cortexm-weactf411/openocd.cfg` |
@@ -270,7 +271,7 @@ QEMU linker script. 21 tests, all `-hwd`, all SMP 3.
 | `smp_test5` | Three pinned threads: an SD card thread on core 0 (FatFs mount, formatting FAT32 if none), an LED blinker on core 1 and a logger on core 2. |
 | `smp_test6` | USB-to-UART logger on three cores: a DWC2 gadget task, a heartbeat logger and an LED task; driven from the host with `usb_test_host`. |
 | `smp_test7` | USB vendor gadget receives a file, the SD task writes it as `received.dat`, then asks on the UART whether to delete it; the LED reflects the answer. |
-| `smp_test_int` | First external interrupt: UART1 RX on the GIC (ID 99), with an ISR echo and a TX line lock shared with the ISR. |
+| `smp_test_int` | First external interrupt: UART1 RX on the GIC (ID 99), with an ISR echo and a TX line lock shared with the ISR. Its console is UART-only (`UOS_CONSOLE_UART_ONLY`); only the verdict goes through semihosting, so typing on the UART cannot drop the WCH-Link. |
 | `smp_test_int2` | Interrupt-driven TX through a THRE ring, and the UART1 interrupt routed to core 1 via `GICD_ITARGETSR`. |
 | `smp_test_int3` | PC keyboard → board: USB OTG1 as an interrupt-driven vendor gadget on core 0 (GIC ID discovered at runtime), UART1 interrupt-driven on core 1. Needs the host tool `kbd_forward`. |
 | `smp_test_int4` | Keystroke logger with three IRQs on three cores: USB (core 0) → ring → `keys.log` on the card, written with the DW-MMC data-transfer-over IRQ (core 2); UART on core 1. |
@@ -314,14 +315,14 @@ Three boards on the same silicon (2× Cortex-M33): `pico2`, `pico2-pizero` and
 | `psram-mat-test-250` | `smp-mat-test` with PSRAM brought up by the app itself, at 250 MHz, from an SRAM-boot linker script. | SMP 2 | — | hwd | — |
 | `smp-test-nested` | Nested interrupts on both cores (SysTick, UART0, TIMER0 IRQ 2/3 at different priorities) with thread migration and a lock-free trace. Passes once both workers have run 20 beats and all three nesting interrupts have fired. | SMP 2 | — | — | hwd |
 | `smp-test-nested-clock` | `smp-test-nested` plus a clock tree driven from a potentiometer (ADC) and the on-die temperature sensor; data in PSRAM, 250 MHz enabled. **Interactive**: waits for `y` on the UART (a pot position other than the current clock reboots into it first), then the same 20-beat verdict. | SMP 2 | — | — | hwd |
-| `smp-test-nested-clock_200` | The same, without `PICO2_ENABLE_250MHZ` (the clock tree at its default). | SMP 2 | — | — | hwd |
-| `smp-test-nested-clock_250` | The same, with 250 MHz enabled. | SMP 2 | — | — | hwd |
+| `smp-test-nested-clock_200` | The same, without `PICO2_ENABLE_250MHZ` (the clock tree at its default). The pot/`y` reboot drops the debug state, so this is a **manual UART-verified** case (label `hwd-manual`). | SMP 2 | — | — | hwd-manual |
+| `smp-test-nested-clock_250` | The same, with 250 MHz enabled; also **manual** (label `hwd-manual`). | SMP 2 | — | — | hwd-manual |
 | `rtos-apis`, `mutex-stress`, `cmsis-os-validator` | The harness suites (§4). | single | qemu, hwd | — | — |
 | `fp-switch` | The harness suite (§4): six unpinned threads at three priorities keep their own s0–s31 and FPSCR flags across preemptive switches. | single | qemu, hwd | — | qemu, hwd |
 | `cmsis-os-validator-ram`, `mutex-stress-ram`, `rtos-apis-ram` | RAM-resident harness suites executing entirely from internal SRAM (no flash writes). | single | hwd | — | — |
 | `smp-mat-test-ram` | Parallel block solver executing entirely from internal SRAM (no flash writes). | SMP 2 | hwd | — | — |
 
-Case counts: `pico2` 27 (6 qemu, 21 hwd), `pico2-pizero` 14, `pico2-rp2350b-psram` 18 (3 qemu, 15 hwd).
+Case counts: `pico2` 27 (6 qemu, 21 hwd), `pico2-pizero` 14, `pico2-rp2350b-psram` 18 (3 qemu, 15 hwd: 13 automatic + 2 `hwd-manual`).
 
 ### 7.1a RP2040 board
 

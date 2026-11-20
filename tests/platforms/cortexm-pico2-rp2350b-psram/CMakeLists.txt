@@ -90,6 +90,17 @@ foreach (_app IN LISTS UOS_TESTS_APPS)
     ELF "$<TARGET_FILE:${_app}-hwd>" CFG "${CMAKE_CURRENT_SOURCE_DIR}/openocd.cfg"
     COMMANDS ${_hwd_flash} TIMEOUT 1200
   )
+
+  # The 200/250 MHz variants need the potentiometer and a 'y' on the UART,
+  # then reboot the chip. The reboot drops the debug/semihosting state, so
+  # CTest cannot capture their verdict; they are run by hand and read on the
+  # UART. Keep them out of the automatic `-L hwd` batch.
+  if (_app STREQUAL "smp-test-nested-clock_200"
+      OR _app STREQUAL "smp-test-nested-clock_250")
+    set_tests_properties (
+      "${PLATFORM_NAME}-${_app}-hwd" PROPERTIES LABELS "hwd-manual"
+    )
+  endif ()
 endforeach ()
 
 # -----------------------------------------------------------------------------

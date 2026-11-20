@@ -176,9 +176,11 @@ Labels:
 | `hwd-manual` | a board case run by hand (PSRAM 200/250 MHz clocks) |
 
 The configuration's `test` action normally excludes hardware
-(`ctest -V -LE hwd`). Hardware-only configurations run their `hwd` set
-instead; Lyra and Pi-Zero's default action skips their PC-driven cases, and
-`test-hwd` runs every hardware case.
+(`ctest -V -LE hwd`). On a mixed board configuration it therefore runs the
+QEMU cases; `test-hwd` runs the board cases (`ctest -V -L hwd`).
+Hardware-only configurations run their `hwd` set as `test`; Lyra and
+Pi-Zero's default action skips their PC-driven cases, while `test-hwd` runs
+every hardware case.
 
 Useful selections:
 

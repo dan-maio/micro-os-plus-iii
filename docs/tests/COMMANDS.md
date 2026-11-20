@@ -92,6 +92,10 @@ built but not run. Every test is a CTest case named
 | `-hwd` | `hwd` | the board, through OpenOCD (section 5) |
 | `-hwd` manual | `hwd-manual` | the board, by hand (PSRAM 200/250 MHz clock tests) |
 
+Board configurations also provide a `test-hwd` action (`ctest -V -L hwd`).
+On a mixed board, `test` runs the QEMU cases and `test-hwd` runs the board
+cases; on a hardware-only board, `test` already runs the automatic board set.
+
 The verdict is the test's own `RESULT: PASS` / `FAIL` / `SKIP` line (CTest's
 regular expressions), and each test has a time limit. In a built
 configuration:

@@ -78,7 +78,9 @@ Lyra 21/21, Nucleo F411 4/4, WeAct F411 5/5, WeAct F412 5/5.
 the CDC-ACM and HID cases driven from the PC host); Luckfox Lyra 21/21
 (17 automatic, plus `smp_test6` and `smp_test7` with `usb_test_host` and the
 `y` delete confirmation on the UART, and `smp_test_int3`/`_int4` with the key
-records the PC forwarder sends).
+records the PC forwarder sends); AArch32 Zero 2 W 18/18 (15 automatic, plus
+`usb_test` with `send_file.py`, `wifi-tcp-server` with `wifi-tcp-host.py`, and
+`wifi-net`), at a 15 MHz CMSIS-DAP JTAG clock.
 
 The PSRAM 200/250 MHz clock tests reboot the chip after the pot/`y`
 confirmation; the reboot drops the debug state, so their `RESULT` is read on

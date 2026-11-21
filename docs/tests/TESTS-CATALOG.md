@@ -97,7 +97,7 @@ local generic M33 core, `micro-os-plus::cortexm-qemu-m33`.)
 |---|---|---|---|---|
 | Pi Zero 2 W, Pi 3 B (both ports) — default, `PROBE=jlink` | SEGGER J-Link | — | JTAG | `<arch>-rpi-zero-2w/openocd-jlink-rpi3.cfg` |
 | the same, `PROBE=olimex` | Olimex ARM-USB-OCD (FTDI) | — | JTAG, 1000 kHz | `<arch>-rpi-zero-2w/openocd-olimex.cfg` |
-| the same, `PROBE=cmsis-dap` | any CMSIS-DAP (Raspberry Pi Debug Probe, a Pico with the debugprobe firmware) | `2e8a:000c` | JTAG (15000 kHz AArch64, 1000 kHz AArch32) | `<arch>-rpi-zero-2w/openocd-cmsisdap-rpi3.cfg` |
+| the same, `PROBE=cmsis-dap` | any CMSIS-DAP (Raspberry Pi Debug Probe, a Pico with the debugprobe firmware) | `2e8a:000c` | JTAG, 15000 kHz | `<arch>-rpi-zero-2w/openocd-cmsisdap-rpi3.cfg` |
 | Pi 4 B | CMSIS-DAP (a Pico as JTAG probe) | `2e8a:000c` | JTAG, 4000 kHz | `aarch64-rpi4b/openocd-cmsis-dap-rpi4b.cfg` |
 | Luckfox Lyra B | WCH-Link in ARM mode (CMSIS-DAP) | `1a86:8011` | SWD, 4000 kHz | `aarch32-luckfox-lyra/openocd.cfg` |
 | Pico 2 | any CMSIS-DAP (no vid_pid pinned) | — | SWD, 1000 kHz | `cortexm-pico2/openocd.cfg` |
@@ -439,7 +439,9 @@ with `usb_test_host --big`); Pico 2 **21/21** (19 automatic, plus the CDC-ACM
 and HID cases driven from the PC host); Luckfox Lyra **21/21** (17 automatic,
 plus `smp_test6` and `smp_test7` with `usb_test_host` and the `y` delete
 confirmation on the UART, and `smp_test_int3`/`_int4` with the key records
-the PC forwarder sends).
+the PC forwarder sends); AArch32 Zero 2 W **18/18** (15 automatic, plus
+`usb_test` with `send_file.py`, `wifi-tcp-server` with `wifi-tcp-host.py`,
+and `wifi-net`), at a 15 MHz CMSIS-DAP JTAG clock.
 
 The upstream `nucleo-f411re`, `nucleo-f767zi`, `nucleo-h743zi` and
 `raspberrypi-pico` platforms do not configure (the Cortex-M port does not find

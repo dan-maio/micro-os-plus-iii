@@ -81,7 +81,8 @@ the CDC-ACM and HID cases driven from the PC host); Luckfox Lyra 21/21
 records the PC forwarder sends); AArch32 Zero 2 W 18/18 (15 automatic, plus
 `usb_test` with `send_file.py`, `wifi-tcp-server` with `wifi-tcp-host.py`, and
 `wifi-net`), at a 15 MHz CMSIS-DAP JTAG clock; AArch64 Zero 2 W 18/18 with the
-same set and clock.
+same set and clock; Pi-Zero RP2350B 14/14 (12 automatic, plus the CDC-ACM and
+HID cases driven from the PC host).
 
 The PSRAM 200/250 MHz clock tests reboot the chip after the pot/`y`
 confirmation; the reboot drops the debug state, so their `RESULT` is read on

@@ -442,7 +442,8 @@ confirmation on the UART, and `smp_test_int3`/`_int4` with the key records
 the PC forwarder sends); AArch32 Zero 2 W **18/18** (15 automatic, plus
 `usb_test` with `send_file.py`, `wifi-tcp-server` with `wifi-tcp-host.py`,
 and `wifi-net`), at a 15 MHz CMSIS-DAP JTAG clock; AArch64 Zero 2 W
-**18/18** with the same set and clock.
+**18/18** with the same set and clock; Pi-Zero RP2350B **14/14** (12
+automatic, plus the CDC-ACM and HID cases driven from the PC host).
 
 The upstream `nucleo-f411re`, `nucleo-f767zi`, `nucleo-h743zi` and
 `raspberrypi-pico` platforms do not configure (the Cortex-M port does not find

@@ -1,8 +1,8 @@
 # -----------------------------------------------------------------------------
 # micro-os-plus-iii-smp — the common half of the unified µOS++ III SMP project.
 #
-# This repository is the RTOS kernel (src/, include/) and the runners that
-# drive a build on QEMU or on hardware (test_smpl/). Nothing else.
+# This repository is the RTOS kernel (src/, include/) and the shared test
+# scaffolding both silicon ports use (tests/smp-support/). Nothing else.
 #
 # The test APPLICATIONS are not here. Every board owns its own, in
 # boards/<id>/test/ of the architecture project that has that board, because a
@@ -211,44 +211,32 @@ target_include_directories (
 add_library (micro-os-plus::port-smp-decls ALIAS micro-os-plus-iii-port-smp-decls-interface)
 
 # -----------------------------------------------------------------------------
-# Optional: the test scaffolding both silicon ports need and neither owns.
+# The test scaffolding both silicon ports need and neither owns.
 # Opt-in, exactly like port-smp-decls above, and for the same reason: these
 # were duplicate copies in two repositories, which is what
 # tools/verify-no-duplicate-sources.py exists to catch.
 #
-#   test_smpl/include/hw_result.hpp      how a test ends a run with a verdict
-#   test_smpl/src/board-contract.cpp     no code; turns "this board never said
-#                                        X" into a compile error rather than a
-#                                        silent inheritance of the previous
-#                                        board's answer
+#   tests/smp-support/include/hw_result.hpp     how a test ends a run with a
+#                                               verdict
+#   tests/smp-support/src/board-contract.cpp    no code; turns "this board
+#                                               never said X" into a compile
+#                                               error rather than a silent
+#                                               inheritance of the previous
+#                                               board's answer
 #
-# Only the HEADER comes through this target. board-contract.cpp is named
-# directly by each port, in the position its own copy used to occupy in the
-# source list -- an INTERFACE source would be appended somewhere else and
-# would change link order, and the point of this move is that it changes
-# nothing: all 24 images per board stay byte-identical across it.
+# Both come through this target: the header on the include path, the contract
+# as an INTERFACE source, so every consumer compiles it exactly as it did when
+# the file lived in its own port.
 #
 # The POSIX host port uses neither: no semihosting, and no board contract of
 # this shape.
 add_library (micro-os-plus-iii-test-support-interface INTERFACE)
-if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/smp-support/include")
-  target_include_directories (
-    micro-os-plus-iii-test-support-interface INTERFACE
-    "${CMAKE_CURRENT_SOURCE_DIR}/tests/smp-support/include"
-  )
-else ()
-  target_include_directories (
-    micro-os-plus-iii-test-support-interface INTERFACE
-    "${CMAKE_CURRENT_SOURCE_DIR}/test_smpl/include"
-  )
-endif ()
-if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/smp-support/src/board-contract.cpp")
-  target_sources (micro-os-plus-iii-test-support-interface INTERFACE
-    "${CMAKE_CURRENT_SOURCE_DIR}/tests/smp-support/src/board-contract.cpp")
-else ()
-  target_sources (micro-os-plus-iii-test-support-interface INTERFACE
-    "${CMAKE_CURRENT_SOURCE_DIR}/test_smpl/src/board-contract.cpp")
-endif ()
+target_include_directories (
+  micro-os-plus-iii-test-support-interface INTERFACE
+  "${CMAKE_CURRENT_SOURCE_DIR}/tests/smp-support/include"
+)
+target_sources (micro-os-plus-iii-test-support-interface INTERFACE
+  "${CMAKE_CURRENT_SOURCE_DIR}/tests/smp-support/src/board-contract.cpp")
 add_library (micro-os-plus::test-support ALIAS micro-os-plus-iii-test-support-interface)
 
 # -----------------------------------------------------------------------------

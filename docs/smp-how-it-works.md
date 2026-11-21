@@ -334,7 +334,7 @@ The AArch ports now say, in `include/cmsis-plus/rtos/port/os-c-decls.h`:
 #endif
 ```
 
-`test_smpl/src/board-contract.cpp` adds the non-preprocessor checks: the RAM
+`tests/smp-support/src/board-contract.cpp` adds the non-preprocessor checks: the RAM
 window is ordered, `OS_NCPU` is between 1 and 8, the board has a greeting and
 a banner, and a semihosting build has chosen a trap. Adding a board that has
 not answered every question does not compile.
@@ -1717,7 +1717,7 @@ No design is free. These are the deliberate limits of this one.
 | AArch64 port | `micro-os-plus-iii-aarch64/include/cmsis-plus/rtos/port/*`, `src/rtos/os-core.cpp`; the Pi 4 B's `tests/platforms/aarch64-rpi4b/src/startup.S` (kernel) |
 | Cortex-M port | `micro-os-plus-iii-cortexm/include-*`, `src/rtos/os-core-*.cpp` |
 | POSIX host port | `micro-os-plus-iii-posix-arch/src/rtos/os-core.cpp`, `src/host_cpu.cpp` |
-| Board facts and contract | `tests/platforms/<platform>/cmake/board.cmake`, `test_smpl/src/board-contract.cpp` |
+| Board facts and contract | `tests/platforms/<platform>/cmake/board.cmake`, `tests/smp-support/src/board-contract.cpp` |
 | Shared SMP test scaffolding | `tests/platforms/<platform>/tests/src/test-smp-boot.cpp` |
 
 ## 17.2 Glossary

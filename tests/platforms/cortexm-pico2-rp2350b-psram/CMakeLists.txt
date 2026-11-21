@@ -47,7 +47,10 @@ set (_port_bin "${CMAKE_CURRENT_BINARY_DIR}/port-tests")
 # core bring-up and kernel-object tests; the RP2350-only blocks (SIO, PSRAM,
 # ADC) are listed HWD_ONLY and never get a `qemu` image.
 unset (_qemu CACHE)
-find_program (_qemu qemu-system-arm)
+find_program (
+  _qemu qemu-system-arm
+  HINTS "${CMAKE_BINARY_DIR}/xpacks/.bin"
+)
 if (NOT _qemu)
   set (_qemu "qemu-system-arm")
 endif ()

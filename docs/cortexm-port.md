@@ -364,7 +364,9 @@ true before any scheduler — plus the kernel and the ISA scheduler on top. The
 board half is exported on its own as `micro-os-plus::cortexm-bare`, a test
 named in `BOARD_TEST_NO_KERNEL` links that instead, and the shared
 `uos_add_app()` grew a `NO_KERNEL` option that skips the kernel and `OS_NCPU`
-— there is nothing there to configure.
+— there is nothing there to configure. Upstream's `micro-os-plus::iii-cortexm`,
+the name the four upstream platform files still link, stays as an alias for
+the base core.
 
 It is visible in the images: `smp-test0` and `exc-test` carry **zero**
 `os::rtos` symbols and no `_Exit`, at 2.6 KB and 2.3 KB of text, where

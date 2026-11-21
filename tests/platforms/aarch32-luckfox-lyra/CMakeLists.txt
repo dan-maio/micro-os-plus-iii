@@ -32,6 +32,8 @@ set (UOS_TESTS_SOURCES smp_test0 smp_test1 smp_test2 smp_test3 smp_test4
 set (UOS_TESTS_PORTABLE smp_test0 smp_test1 smp_test2 smp_test3 smp_test4
      smp-num-test smp-pipeline-test smp-pro-cons-test smp-mat-test sd_test
      smp-mat-sdcard-test clock-test)
+# Upstream's suites this board runs: the same path every other board uses.
+set (UOS_TESTS_SUITES mutex-stress)
 # The platform start-up's needs (src/platform-support.cpp): the C library's
 # system calls (semihosting), its reentrancy and the POSIX I/O layer.
 # The console stays on the UART (the board's uart.hpp): every semihosting
@@ -52,9 +54,6 @@ set (UOS_TESTS_PORT aarch32)
 # one folder per test).
 set (UOS_TESTS_BOARD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/tests")
 add_subdirectory ("${CMAKE_SOURCE_DIR}/board-tests" "port-tests/test")
-
-set (_port_bin "${CMAKE_CURRENT_BINARY_DIR}/port-tests")
-set (_port_test_dir "${CMAKE_CURRENT_SOURCE_DIR}/tests")
 
 # -----------------------------------------------------------------------------
 # One CTest case per test the builder built (board-tests/: UOS_TESTS_APPS).
@@ -90,47 +89,6 @@ foreach (_app IN LISTS UOS_TESTS_APPS)
 
   lyra_add_hwd ("${_app}" "$<TARGET_FILE:${_app}-hwd>")
 endforeach ()
-
-# -----------------------------------------------------------------------------
-# The harness suites, on the same board. They supply no main() and no startup
-# hooks, so they link micro-os-plus::platform-support. The image lands in
-# <bin>/port-tests/test/<name>-hwd.
-#
-# The board's shared SMP bring-up (tests/src/test-smp-boot.cpp:
-# smp_install_boot_threads() and test_wait_secondaries()) is compiled in here
-# too. The port's own builder adds test/<board>/src/*.cpp to every test it
-# builds, which is how the Pi harness suites get these symbols; this platform
-# registers its harness suites itself, so it names the file directly.
-function (add_harness_suite _suite _name)
-  cmake_parse_arguments (T "" "" "LIBRARIES" ${ARGN})
-  add_executable (${_name})
-  target_include_directories (
-    ${_name} PRIVATE "${_port_test_dir}/include"
-  )
-  target_sources (
-    ${_name} PRIVATE "${_port_test_dir}/src/test-smp-boot.cpp"
-  )
-  target_link_libraries (
-    ${_name}
-    PRIVATE micro-os-plus::common-options test::${_suite} micro-os-plus::iii
-            micro-os-plus::platform micro-os-plus::platform-support
-            ${T_LIBRARIES}
-  )
-  set_target_properties (
-    ${_name} PROPERTIES OUTPUT_NAME "${_name}-hwd" SUFFIX ""
-    RUNTIME_OUTPUT_DIRECTORY "${_port_bin}/test"
-  )
-  add_custom_command (
-    TARGET ${_name}
-    POST_BUILD
-    COMMAND ${CMAKE_OBJCOPY} -O binary "$<TARGET_FILE:${_name}>"
-            "$<TARGET_FILE:${_name}>.bin"
-    VERBATIM
-  )
-  lyra_add_hwd ("${_name}" "$<TARGET_FILE:${_name}>")
-endfunction ()
-
-add_harness_suite (mutex-stress mutex-stress-test)
 
 # -----------------------------------------------------------------------------
 message (STATUS "AArch32 Luckfox Lyra: port tests + harness suites registered")

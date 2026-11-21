@@ -142,7 +142,7 @@ Where each suite runs:
 | Platform | `rtos-apis` | `mutex-stress` | `cmsis-os-validator` | Mode |
 |---|---|---|---|---|
 | `aarch32-rpi-zero-2w`, `aarch32-rpi3b`, `aarch64-rpi-zero-2w`, `aarch64-rpi3b`, `aarch64-rpi4b` | qemu, hwd | qemu, hwd | qemu, hwd | SMP 4 |
-| `aarch32-luckfox-lyra` | — | hwd (`mutex-stress-test`) | — | SMP 3 |
+| `aarch32-luckfox-lyra` | — | hwd | — | SMP 3 |
 | `cortexm-pico2` | qemu, hwd, ram | qemu, hwd, ram | qemu, hwd, ram | SMP 2 on hwd; single on qemu & ram (SRAM load) |
 | `cortexm-pico` | qemu, hwd, ram | qemu, hwd, ram | qemu, hwd, ram | as `cortexm-pico2` |
 | `cortexm-nucleof411`, `cortexm-weactf411`, `cortexm-weactf412` | hwd | hwd | hwd | SMP ×1 |
@@ -277,7 +277,7 @@ QEMU linker script. 21 tests, all `-hwd`, all SMP 3.
 | `smp_test_int4` | Keystroke logger with three IRQs on three cores: USB (core 0) → ring → `keys.log` on the card, written with the DW-MMC data-transfer-over IRQ (core 2); UART on core 1. |
 | `smp_test_int5` | AMP doorbell: the RK3506's Cortex-M0 fires Mailbox interrupts every ~40 ms to A7 cores 1 and 2, which report to core 0 over a shared ring. |
 | `clock-test` | The kernel's clocks against the generic timer's counter read directly (CNTPCT, 24 MHz; the RK3506 has no BCM System Timer): 5000 ticks keep its time, `hrclock.sleep_until (now () + 100 ms)` lasts 100 ms on cores 0 and 1. Its console is the UART alone, sent through semihosting once at the end. |
-| `mutex-stress-test` | Upstream's `mutex-stress` suite, built and registered by the platform itself. |
+| `mutex-stress` | Upstream's `mutex-stress` suite, built and registered by the shared builder like every other board's. |
 
 Every Lyra test ends with a `RESULT:` line and a semihosting exit. The four
 USB tests (`smp_test6`, `smp_test7`, `smp_test_int3`, `smp_test_int4`) wait

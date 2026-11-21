@@ -172,7 +172,7 @@
         "xpm run link-deps --config native-cmake-gcc12-release",
         "xpm run link-deps --config native-cmake-gcc13-debug",
         "xpm run link-deps --config native-cmake-gcc13-release",
-        "xpm run link-deps --config native-cmake-gcc13-debug",
+        "xpm run link-deps --config native-cmake-gcc14-debug",
         "xpm run link-deps --config native-cmake-gcc14-release",
         "xpm run link-deps --config native-cmake-clang-debug",
         "xpm run link-deps --config native-cmake-clang-release",
@@ -215,7 +215,27 @@
         "xpm run link-deps --config aarch64-rpi-zero-2w-cmake-gcc-debug",
         "xpm run link-deps --config aarch64-rpi-zero-2w-cmake-gcc-release",
         "xpm run link-deps --config aarch64-rpi3b-cmake-gcc-debug",
-        "xpm run link-deps --config aarch64-rpi3b-cmake-gcc-release"
+        "xpm run link-deps --config aarch64-rpi3b-cmake-gcc-release",
+        "xpm run link-deps --config aarch64-rpi4b-cmake-gcc-debug",
+        "xpm run link-deps --config aarch64-rpi4b-cmake-gcc-release",
+        "xpm run link-deps --config 2xcortex-m33-cmake-gcc-debug",
+        "xpm run link-deps --config 2xcortex-m33-cmake-gcc-release",
+        "xpm run link-deps --config pico2-1cpu-cmake-gcc-debug",
+        "xpm run link-deps --config pico2-1cpu-cmake-gcc-release",
+        "xpm run link-deps --config cortexm-pico2-cmake-gcc-debug",
+        "xpm run link-deps --config cortexm-pico2-cmake-gcc-release",
+        "xpm run link-deps --config cortexm-pico-cmake-gcc-debug",
+        "xpm run link-deps --config cortexm-pico-cmake-gcc-release",
+        "xpm run link-deps --config cortexm-pico2-pizero-cmake-gcc-debug",
+        "xpm run link-deps --config cortexm-pico2-pizero-cmake-gcc-release",
+        "xpm run link-deps --config cortexm-pico2-rp2350b-psram-cmake-gcc-debug",
+        "xpm run link-deps --config cortexm-pico2-rp2350b-psram-cmake-gcc-release",
+        "xpm run link-deps --config cortexm-nucleof411-cmake-gcc-debug",
+        "xpm run link-deps --config cortexm-nucleof411-cmake-gcc-release",
+        "xpm run link-deps --config cortexm-weactf411-cmake-gcc-debug",
+        "xpm run link-deps --config cortexm-weactf411-cmake-gcc-release",
+        "xpm run link-deps --config cortexm-weactf412-cmake-gcc-debug",
+        "xpm run link-deps --config cortexm-weactf412-cmake-gcc-release"
       ],
       "test-all": [
         "xpm run test-native-cmake",
@@ -1805,8 +1825,7 @@
           "buildType": "Debug",
           "platformName": "aarch32-luckfox-lyra",
           "toolchainFileName": "arm-none-eabi-gcc.cmake",
-          "shortConfigurationName": "lyd",
-          "commandCMakeReconfigure": "cmake -S . -B {{ properties.buildFolderRelativePathPosix }} -G Ninja -D CMAKE_BUILD_TYPE={{ properties.buildType }} -D PLATFORM_NAME={{ properties.platformName }} -D ENABLE_HW_TESTS=ON"
+          "shortConfigurationName": "lyd"
         },
         "actions": {
           "test": "cd {{ properties.buildFolderRelativePath }} && ctest -V -L hwd -E \"(smp_test_int3|smp_test_int4|smp_test7)-hwd(-reset)?$\"",

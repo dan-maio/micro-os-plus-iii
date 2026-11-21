@@ -1,19 +1,14 @@
 # -----------------------------------------------------------------------------
 # Platform library — µOS++ III AArch64 on the Raspberry Pi Zero 2 W.
 #
-# Two interface libraries:
+# One interface library:
 #
 #   micro-os-plus::platform          the base: include dirs, compile/link
 #                                    options, the linker script, and the port.
-#                                    Port tests link this and bring their own
-#                                    strong main()/startup hooks.
-#   micro-os-plus::platform-support  adds the startup hooks + strong main()
-#                                    (src/platform-support.cpp), the strong
-#                                    semihosting _Exit(), and _gettimeofday,
-#                                    for the harness suites.
 #
-# Keeping them apart is what lets the port's own tests (which define their own
-# strong main()/hooks) link the base without colliding with the harness's.
+# The tests' builder (tests/board-tests/CMakeLists.txt) compiles the platform's
+# src/platform-support.cpp into <platform>-test-startup, with that image's own
+# variant defines and linker script; there is no separate support target.
 # -----------------------------------------------------------------------------
 
 message (
@@ -52,9 +47,6 @@ target_compile_definitions (
     OS_USE_SMP_SCHEDULER=1
     TRACE
     SEMIHOST
-    # This is the QEMU variant (the AArch64 port uses HLT either way, but the
-    # board code may branch on it).
-    QEMU_BUILD
     __ARM_EABI__
     __ARM_ARCH_8A__
     _GNU_SOURCE
@@ -83,31 +75,6 @@ add_library (micro-os-plus::platform
 message (
   VERBOSE
   "> micro-os-plus::platform -> platform-aarch64-rpi-zero-2w-interface"
-)
-
-# -----------------------------------------------------------------------------
-# Support for the harness suites: startup hooks, strong main(), the strong
-# semihosting _Exit() and _gettimeofday. Port tests provide their own main()
-# and hooks, and terminate via hw_result, so they link only the base.
-add_library (platform-aarch64-rpi-zero-2w-support-interface INTERFACE
-             EXCLUDE_FROM_ALL)
-
-target_sources (
-  platform-aarch64-rpi-zero-2w-support-interface
-  INTERFACE "src/platform-support.cpp"
-)
-
-target_link_libraries (
-  platform-aarch64-rpi-zero-2w-support-interface
-  INTERFACE platform-aarch64-rpi-zero-2w-interface
-)
-
-add_library (micro-os-plus::platform-support
-             ALIAS platform-aarch64-rpi-zero-2w-support-interface)
-message (
-  VERBOSE
-  "> micro-os-plus::platform-support -> "
-  "platform-aarch64-rpi-zero-2w-support-interface"
 )
 
 # -----------------------------------------------------------------------------

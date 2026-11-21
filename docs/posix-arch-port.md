@@ -1696,6 +1696,7 @@ target_sources (… INTERFACE
 target_compile_definitions (… INTERFACE _XOPEN_SOURCE=700 _GNU_SOURCE)
 target_link_libraries (… INTERFACE micro-os-plus::iii pthread rt)
 add_library (micro-os-plus::posix-arch ALIAS …)
+add_library (micro-os-plus::iii-posix-arch ALIAS …)   # upstream's name
 ```
 
 An INTERFACE library, so every application compiles its own copy of the port

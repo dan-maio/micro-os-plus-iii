@@ -13,7 +13,10 @@ message (VERBOSE "Processing 'tests/platforms/${PLATFORM_NAME}'...")
 include ("cmake/platform-library.cmake")
 
 unset (_qemu CACHE)
-find_program (_qemu qemu-system-arm)
+find_program (
+  _qemu qemu-system-arm
+  HINTS "${CMAKE_BINARY_DIR}/xpacks/.bin"
+)
 if (NOT _qemu)
   set (_qemu "qemu-system-arm")
 endif ()

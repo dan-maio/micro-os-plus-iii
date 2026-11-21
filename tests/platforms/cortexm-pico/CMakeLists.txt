@@ -49,7 +49,10 @@ set (_port_bin "${CMAKE_CURRENT_BINARY_DIR}/port-tests")
 # Cortex-M3, as the harness's qemu-cortex-m0 platform does. The RP2040-only
 # blocks (SIO, USB) are listed HWD_ONLY and never get a `qemu` image.
 unset (_qemu CACHE)
-find_program (_qemu qemu-system-arm)
+find_program (
+  _qemu qemu-system-arm
+  HINTS "${CMAKE_BINARY_DIR}/xpacks/.bin"
+)
 if (NOT _qemu)
   set (_qemu "qemu-system-arm")
 endif ()

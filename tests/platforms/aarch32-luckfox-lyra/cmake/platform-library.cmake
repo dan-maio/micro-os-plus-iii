@@ -8,10 +8,9 @@
 #                             test links this and brings its own strong
 #                             main()/startup hooks.
 #
-# There is no micro-os-plus::platform-support here. That exists for the
-# harness suites, which supply neither a main() nor startup hooks; the Lyra
-# platform runs a port test, and the port test supplies both. Adding a support
-# library would only create a second strong main() to collide with it.
+# There is no micro-os-plus::platform-support target: the tests' builder
+# (tests/board-tests/CMakeLists.txt) compiles the platform's
+# src/platform-support.cpp into <platform>-test-startup.
 #
 # The build is HARDWARE (HW_BUILD), never QEMU_BUILD: the trap the port's
 # semihosting uses is the debugger's (SVC 0x123456, the cortex_a Angel trap),
@@ -92,38 +91,3 @@ message (
   VERBOSE
   "> micro-os-plus::platform -> platform-aarch32-luckfox-lyra-interface"
 )
-
-# -----------------------------------------------------------------------------
-# Support for the HARNESS suites: startup hooks + strong main()
-# (src/platform-support.cpp) and the kernel's C-library groups, for the suites,
-# which provide neither a main() nor the syscalls.
-#
-# The port's own board tests bring their own main()/hooks and link only the
-# base, so this stays separate and does not collide with them.
-add_library (platform-aarch32-luckfox-lyra-support-interface INTERFACE
-             EXCLUDE_FROM_ALL)
-
-target_sources (
-  platform-aarch32-luckfox-lyra-support-interface
-  INTERFACE "src/platform-support.cpp"
-)
-
-target_link_libraries (
-  platform-aarch32-luckfox-lyra-support-interface
-  INTERFACE platform-aarch32-luckfox-lyra-interface
-            # The C library: newlib reentrant syscalls (_write_r, ...) -> the
-            # semihosting __posix_* layer. printf() and gettimeofday() in the
-            # harness suites need these.
-            micro-os-plus::iii-newlib-reent
-            micro-os-plus::iii-semihosting
-)
-
-add_library (micro-os-plus::platform-support
-             ALIAS platform-aarch32-luckfox-lyra-support-interface)
-message (
-  VERBOSE
-  "> micro-os-plus::platform-support -> "
-  "platform-aarch32-luckfox-lyra-support-interface"
-)
-
-# -----------------------------------------------------------------------------

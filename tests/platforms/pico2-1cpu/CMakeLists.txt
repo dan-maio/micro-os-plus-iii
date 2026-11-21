@@ -15,7 +15,10 @@ include ("cmake/platform-library.cmake")
 # the cortexm-pico2 platform); it is used as an absolute path in add_test, so
 # PATH does not matter.
 unset (_qemu CACHE)
-find_program (_qemu qemu-system-arm)
+find_program (
+  _qemu qemu-system-arm
+  HINTS "${CMAKE_BINARY_DIR}/xpacks/.bin"
+)
 if (NOT _qemu)
   set (_qemu "qemu-system-arm")
 endif ()

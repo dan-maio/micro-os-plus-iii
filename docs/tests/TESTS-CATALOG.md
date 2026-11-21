@@ -433,10 +433,13 @@ The OpenOCD route (`-hwd`) is proven on every local board. The PSRAM
 `smp-test-nested-clock_200`/`_250` cases remain manual: their clock reboot
 drops the debug state, so the `RESULT` is read on the UART.
 
-**2026-11-21, Pi 4 B and Pico 2:** Pi 4 B **22/22** (19 automatic, plus
-`eth-net`, `eth-tcp-server` with `eth-tcp-host.py`, and `usb_big_test` with
-`usb_test_host --big`); Pico 2 **21/21** (19 automatic, plus the CDC-ACM and
-HID cases driven from the PC host).
+**2026-11-21, Pi 4 B, Pico 2 and Lyra:** Pi 4 B **22/22** (19 automatic,
+plus `eth-net`, `eth-tcp-server` with `eth-tcp-host.py`, and `usb_big_test`
+with `usb_test_host --big`); Pico 2 **21/21** (19 automatic, plus the CDC-ACM
+and HID cases driven from the PC host); Luckfox Lyra **21/21** (17 automatic,
+plus `smp_test6` and `smp_test7` with `usb_test_host` and the `y` delete
+confirmation on the UART, and `smp_test_int3`/`_int4` with the key records
+the PC forwarder sends).
 
 The upstream `nucleo-f411re`, `nucleo-f767zi`, `nucleo-h743zi` and
 `raspberrypi-pico` platforms do not configure (the Cortex-M port does not find

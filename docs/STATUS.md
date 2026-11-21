@@ -72,10 +72,13 @@ board 12 automatic plus the interactive `smp-test-nested-clock` and the two
 `hwd-manual` clock tests, AArch64 Zero 2 W 18/18, AArch32 Zero 2 W 18/18,
 Lyra 21/21, Nucleo F411 4/4, WeAct F411 5/5, WeAct F412 5/5.
 
-**2026-11-21, Pi 4 B and Pico 2 through CTest/OpenOCD:** Pi 4 B 22/22
+**2026-11-21, Pi 4 B, Pico 2 and Lyra through CTest/OpenOCD:** Pi 4 B 22/22
 (19 automatic, plus `eth-net`, `eth-tcp-server` with `eth-tcp-host.py`, and
 `usb_big_test` with `usb_test_host --big`); Pico 2 21/21 (19 automatic, plus
-the CDC-ACM and HID cases driven from the PC host).
+the CDC-ACM and HID cases driven from the PC host); Luckfox Lyra 21/21
+(17 automatic, plus `smp_test6` and `smp_test7` with `usb_test_host` and the
+`y` delete confirmation on the UART, and `smp_test_int3`/`_int4` with the key
+records the PC forwarder sends).
 
 The PSRAM 200/250 MHz clock tests reboot the chip after the pot/`y`
 confirmation; the reboot drops the debug state, so their `RESULT` is read on
